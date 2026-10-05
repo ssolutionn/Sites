@@ -241,7 +241,10 @@ export class Game {
 
   _openPanel(station) {
     this.panel = station;
-    if (station === 'phone') this.phone.sessionTime = 0;
+    if (station === 'phone') {
+      this.phone.sessionTime = 0;
+      this._removeAlert('phone');
+    }
     this._emit('open', { station });
   }
 
@@ -686,7 +689,10 @@ export class Game {
     while (this.pot.idx < ev.pot.at.length && ev.pot.at[this.pot.idx] < target) this.pot.idx++;
     if (ev.garland.at < target) this.garland.triggered = true;
     this.pot.active = false;
-    if (this.cat.state === 'active') this.cat.state = 'waiting';
+    if (this.cat.state === 'active') {
+      this.cat.state = 'waiting';
+      this._emit('catGone');
+    }
     if (this.cat.nextAt < target) this.cat.nextAt = target + 5;
     this.alerts = this.alerts.filter((a) => a.type === 'garland' && this.garland.broken);
     this.t = Math.min(target, this.cfg.roundDuration - 0.01);

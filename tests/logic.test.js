@@ -123,7 +123,7 @@ test('картофель: в 269 с недоступен, при пересеч�
   assert.equal(ready.length, 1);
   run(g, 1);
   assert.equal(g.drain().filter((e) => e.type === 'potatoReady').length, 0);
-  close(g.remaining, 300 - 269.97 - 0.1 - 1, 0.02);
+  close(g.remaining, 300 - 269.97 - CONFIG.maxFrameDt - 1, 0.02);
 });
 
 test('расписание: после 255 с новых помех нет, 300 с — поражение и блокировка действий', () => {
@@ -332,4 +332,24 @@ test('новые попытки независимы: одинаковый си�
     times.push(seen.join(','));
   }
   assert.equal(new Set(times).size, 1);
+});
+
+test('конец времени во время перемешивания — поражение, прогресс не засчитывается', () => {
+  const g = new Game({ seed: 1 });
+  startRound(g);
+  g.devPrepare();
+  g.devJumpTo(268);
+  run(g, 2.1);
+  arrive(g, 'stove');
+  g.takePotato();
+  run(g, 4);
+  cutPerfect(g);
+  assert.ok(g.transfer());
+  arrive(g, 'bowl');
+  g.devJumpTo(CONFIG.roundDuration - 1);
+  assert.ok(g.setHold('mix', true));
+  run(g, 3);
+  assert.equal(g.phase, 'fail');
+  assert.equal(g.bowl.mixed, false);
+  assert.equal(g.getResult().title, 'Заказываем пиццу');
 });

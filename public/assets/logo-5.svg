@@ -1,0 +1,8 @@
+<!-- ВРЕМЕННЫЙ логотип-заглушка в стиле «5». Заменить официальным исходником «Пятёрочки» с тем же именем файла. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <circle cx="128" cy="128" r="122" fill="#e30613"/>
+  <circle cx="128" cy="128" r="104" fill="#ffffff"/>
+  <circle cx="128" cy="128" r="92" fill="#e30613"/>
+  <path d="M168 36 C 205 40, 222 70, 214 96 C 190 90, 172 70, 168 36 Z" fill="#39a935"/>
+  <text x="124" y="176" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="150" fill="#ffffff">5</text>
+</svg>
