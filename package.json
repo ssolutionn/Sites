@@ -1,15 +1,17 @@
 {
   "name": "novogodnyaya-sueta",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
-  "description": "Браузерный прототип «Симулятор новогодней суеты»: оливье за пять минут",
+  "description": "«Симулятор новогодней суеты» 0.4: кампания из семи дней и десяти блюд",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
-    "export:models": "node scripts/export-models.mjs"
+    "export:models": "node scripts/export-models.mjs",
+    "pacing": "node scripts/pacing-sim.mjs",
+    "calibrate": "node scripts/calibrate-trims.mjs"
   },
   "dependencies": {
     "three": "0.186.1"

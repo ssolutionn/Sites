@@ -403,6 +403,8 @@ function boot() {
 
   // --- главный цикл ---
   let last = performance.now();
+  let fpsN = 0, fpsT0 = performance.now();
+  const stats = {};
   function frame(now) {
     const real = Math.max(0, (now - last) / 1000);
     last = now;
@@ -427,6 +429,21 @@ function boot() {
     }
     ui.render(session, animDt, mode);
     sv.render();
+    if (devMode) {
+      fpsN++;
+      if (now - fpsT0 > 1000) {
+        const info = sv.renderer.info;
+        stats.fps = Math.round((fpsN * 1000) / (now - fpsT0));
+        stats.calls = info.render.calls;
+        stats.tris = info.render.triangles;
+        stats.geometries = info.memory.geometries;
+        stats.textures = info.memory.textures;
+        const el = document.getElementById('dev-stats');
+        if (el) el.textContent = `${stats.fps} FPS · ${stats.calls} вызовов · ${Math.round(stats.tris / 1000)}k треуг. · геом. ${stats.geometries} · текст. ${stats.textures}`;
+        fpsN = 0;
+        fpsT0 = now;
+      }
+    }
     requestAnimationFrame(frame);
   }
 
@@ -444,7 +461,7 @@ function boot() {
   ui.showMenu(save);
   booted = true;
   requestAnimationFrame(frame);
-  window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save };
+  window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save, stats };
 }
 
 boot();

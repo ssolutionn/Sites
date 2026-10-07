@@ -28,7 +28,7 @@ async function goStation(text, id) {
   if (cur === id) return true;
   if (cur === 'phone') await page.locator('#phone button', { hasText: 'Закрыть' }).first().click();
   else if (cur) await page.locator('#panel button', { hasText: 'Назад' }).first().click();
-  await waitFor(() => !window.__sueta.session.panel && window.__sueta.sv.camT >= 1, 10000);
+  await waitFor(() => !window.__sueta.session.panel && window.__sueta.sv.camT >= 1 && document.getElementById('phone').classList.contains('hidden') && document.getElementById('panel').classList.contains('hidden'), 10000);
   const l = page.locator('.st-label', { hasText: text }).first();
   await l.waitFor({ state: 'visible', timeout: 15000 });
   for (let i = 0; i < 20; i++) {

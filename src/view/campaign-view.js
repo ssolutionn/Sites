@@ -806,6 +806,7 @@ export class CampaignView {
           const n = Math.min(40, c.pieces?.length ?? 12);
           const geo = new THREE.BoxGeometry(0.014, 0.014, 0.014);
           const inst = new THREE.InstancedMesh(geo, F.m(col, 0.6), n);
+          inst.frustumCulled = false;
           const mtx = new THREE.Matrix4();
           for (let i = 0; i < n; i++) {
             const a = i * 2.4 + layer, r = 0.015 + Math.sqrt(i / n) * 0.12;
@@ -940,9 +941,10 @@ export class CampaignView {
           tm.userData.cut.visible = !q.cap;
           tm.userData.hollow.visible = !q.cap;
           tm.userData.pulp.visible = !q.cap && q.core > 0;
-          tm.userData.pulp.scale.set(0.022 * Math.max(0.3, q.core), 0.008 * q.core + 0.001, 0.022 * Math.max(0.3, q.core));
+          const oR = tm.userData.openR;
+          tm.userData.pulp.scale.set(oR * 0.7 * Math.max(0.3, q.core), 0.008 * q.core + 0.001, oR * 0.7 * Math.max(0.3, q.core));
           tm.userData.fill.visible = q.fill > 0.02;
-          tm.userData.fill.scale.set(0.026, Math.max(0.002, q.fill * 0.014), 0.026);
+          tm.userData.fill.scale.set(oR * 0.95, Math.max(0.002, q.fill * 0.014), oR * 0.95);
           tm.userData.sprig.visible = q.garnish;
         });
         break;

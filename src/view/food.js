@@ -152,6 +152,7 @@ export function caviarInstances(max = 600) {
   const inst = new THREE.InstancedMesh(geo, mat, max);
   inst.count = 0;
   inst.castShadow = true;
+  inst.frustumCulled = false; // число и положение шариков меняются; сфера по пустому набору отсекала бы икру
   return inst;
 }
 
@@ -184,12 +185,12 @@ export function tartlet() {
   const pts = [];
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
-    pts.push(new THREE.Vector2(0.018 + t * 0.016 + Math.sin(t * Math.PI) * 0.002, t * 0.022));
+    pts.push(new THREE.Vector2(0.018 + t * 0.016 + Math.sin(t * Math.PI) * 0.002, 0.003 + t * 0.022));
   }
   const cup = add(g, new THREE.LatheGeometry(pts, 24), new THREE.MeshStandardMaterial({ color: COL.tart, roughness: 0.75, side: THREE.DoubleSide }));
-  const base = add(g, new THREE.CircleGeometry(0.018, 20), m(0xc48a44, 0.8), 0, 0.001, 0);
+  const base = add(g, new THREE.CircleGeometry(0.018, 20), m(0xc48a44, 0.8), 0, 0.004, 0);
   base.rotation.x = -Math.PI / 2;
-  const rim = add(g, new THREE.TorusGeometry(0.034, 0.0032, 6, 24), m(0xc98e46, 0.7), 0, 0.022, 0);
+  const rim = add(g, new THREE.TorusGeometry(0.034, 0.0032, 6, 24), m(0xc98e46, 0.7), 0, 0.025, 0);
   rim.rotation.x = Math.PI / 2;
   const fill = add(g, new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), m(COL.filling, 0.85), 0, 0.012, 0);
   fill.scale.set(0.028, 0.012, 0.028);
@@ -213,33 +214,39 @@ export function herbSprig() {
 
 export function tomato() {
   const g = new THREE.Group();
-  const body = add(g, new THREE.SphereGeometry(1, 28, 18), m(COL.tomato, 0.35));
-  body.scale.set(0.042, 0.036, 0.042);
-  body.position.y = 0.036;
-  const cut = add(g, new THREE.CircleGeometry(0.033, 28), m(0xd9473a, 0.6), 0, 0.058, 0);
+  const R = 0.042, H = 0.036, TH = 0.62; // радиус, полувысота, угол среза крышечки
+  const topY = H + Math.cos(TH) * H;
+  const openR = Math.sin(TH) * R;
+  // тело с открытой верхушкой: после среза крышечки видна полость
+  const body = add(g, new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, TH, Math.PI - TH), new THREE.MeshStandardMaterial({ color: COL.tomato, roughness: 0.35, side: THREE.DoubleSide }));
+  body.scale.set(R, H, R);
+  body.position.y = H;
+  const cut = add(g, new THREE.RingGeometry(openR * 0.72, openR, 28), m(0xd9473a, 0.6), 0, topY - 0.0005, 0);
   cut.rotation.x = -Math.PI / 2;
-  const hollow = add(g, new THREE.CircleGeometry(0.024, 24), m(0x8f1d14, 0.8), 0, 0.0585, 0);
+  const hollow = add(g, new THREE.CircleGeometry(openR * 0.74, 24), m(0x6e130d, 0.9), 0, topY - 0.006, 0);
   hollow.rotation.x = -Math.PI / 2;
-  const pulp = add(g, new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), m(COL.pulp, 0.4), 0, 0.054, 0);
-  pulp.scale.set(0.022, 0.008, 0.022);
+  const pulp = add(g, new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), m(COL.pulp, 0.4), 0, topY - 0.008, 0);
+  pulp.scale.set(openR * 0.7, 0.008, openR * 0.7);
+  // крышечка — верхний сегмент той же сферы с плодоножкой
   const cap = new THREE.Group();
-  const capBody = add(cap, new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2.6), m(COL.tomato, 0.35));
-  capBody.scale.set(0.035, 0.03, 0.035);
+  const capBody = add(cap, new THREE.SphereGeometry(1, 28, 8, 0, Math.PI * 2, 0, TH), m(COL.tomato, 0.35));
+  capBody.scale.set(R, H, R);
+  capBody.position.y = H;
   for (let i = 0; i < 5; i++) {
-    const s = add(cap, new THREE.ConeGeometry(0.004, 0.018, 4), m(0x2f7d32, 0.7));
-    s.rotation.z = Math.PI / 2;
-    s.rotation.y = (i / 5) * Math.PI * 2;
-    s.position.set(Math.cos((i / 5) * Math.PI * 2) * 0.008, 0.03, -Math.sin((i / 5) * Math.PI * 2) * 0.008);
+    const a = (i / 5) * Math.PI * 2;
+    const sl = add(cap, new THREE.ConeGeometry(0.004, 0.018, 4), m(0x2f7d32, 0.7));
+    sl.rotation.z = Math.PI / 2;
+    sl.rotation.y = a;
+    sl.position.set(Math.cos(a) * 0.008, H * 2 + 0.001, -Math.sin(a) * 0.008);
   }
-  add(cap, new THREE.CylinderGeometry(0.0018, 0.0022, 0.012, 6), m(0x2f7d32, 0.7), 0, 0.036, 0);
-  cap.position.y = 0.05;
+  add(cap, new THREE.CylinderGeometry(0.0018, 0.0022, 0.012, 6), m(0x2f7d32, 0.7), 0, H * 2 + 0.006, 0);
   g.add(cap);
-  const fill = add(g, new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), m(COL.filling, 0.85), 0, 0.054, 0);
-  fill.scale.set(0.026, 0.012, 0.026);
+  const fill = add(g, new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), m(COL.filling, 0.85), 0, topY - 0.004, 0);
+  fill.scale.set(openR * 0.95, 0.012, openR * 0.95);
   const sprig = herbSprig();
-  sprig.position.y = 0.068;
+  sprig.position.y = topY + 0.012;
   g.add(sprig);
-  g.userData = { cap, cut, hollow, pulp, fill, sprig, body };
+  g.userData = { cap, cut, hollow, pulp, fill, sprig, body, openR };
   return g;
 }
 
