@@ -2,23 +2,49 @@
 import { CoverageMask } from './coverage.js';
 import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS } from './layout.js';
 import { PRODUCTS, DISH_ORDER } from './data.js';
+import { TEMPTING } from './st-extra.js';
 
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
 
 export const homeMethods = {
-  // ---------- плита ----------
-  stoveTask() {
+  // ---------- плита: несколько конфорок, у каждой своя кастрюля и срок ----------
+  // Шаги варки, которые ещё не стоят на огне и не сделаны.
+  stoveTasks() {
+    const out = [];
     for (const [dishId, dish] of Object.entries(this.dishes)) {
-      const s = dish.recipe.steps.find((x) => x.type === 'boil');
-      if (s && !dish.steps[s.id].done) return { dishId, stepId: s.id, product: s.product };
+      if (dish.done) continue;
+      for (const s of dish.recipe.steps) {
+        if (s.type !== 'boil' || dish.steps[s.id].done) continue;
+        if (this.burners.some((b) => b.owner === dishId && b.step === s.id && b.state !== 'empty')) continue;
+        out.push({ dishId, stepId: s.id, product: s.product });
+      }
     }
-    return null;
+    return out;
   },
 
-  placePot() {
+  stoveTask() {
+    return this.stoveTasks()[0] ?? null;
+  },
+
+  usableBurners() {
+    return this.mods.oneBurner ? this.burners.slice(0, 1) : this.burners;
+  },
+
+  boilTime(product) {
+    return this.cfg.boilTimes?.[product] ?? this.cfg.potatoReadyAfter;
+  },
+
+  placePot(burner = null, stepKey = null) {
     if (!this._isIdleAt('stove') || this.action) return false;
-    const task = this.stoveTask();
-    if (!task || this.stove.state !== 'empty') return false;
+    const tasks = this.stoveTasks();
+    const task = stepKey ? tasks.find((t) => `${t.dishId}:${t.stepId}` === stepKey) : tasks[0];
+    if (!task) return false;
+    const free = this.usableBurners().filter((b) => b.state === 'empty');
+    const b = burner != null ? free.find((x) => x.i === burner) : free[0];
+    if (!b) {
+      this.setHint(this.mods.oneBurner ? 'Конфорка занята — дождись, пока сварится' : 'Обе конфорки заняты', 2);
+      return false;
+    }
     const block = this.stepBlock(task.dishId, task.stepId);
     if (block) {
       this.setHint(block);
@@ -26,72 +52,87 @@ export const homeMethods = {
     }
     if (!this._reserveStep(task.dishId, task.stepId)) return false;
     return this._startAction('placePot', this.cfg.durations.placePot, () => {
-      this.stove = { state: 'boiling', owner: task.dishId, step: task.stepId, startT: this.t, readyAt: this.t + this.cfg.potatoReadyAfter, overflow: null };
-      this._emit('potPlaced', { dishId: task.dishId });
-      this.setHint(`Картофель варится. Будет готов через ${Math.round(this.cfg.potatoReadyAfter / 60)}:00 — пока режь остальное`, 4);
+      const time = this.boilTime(task.product);
+      this.burners[b.i] = { i: b.i, state: 'boiling', owner: task.dishId, step: task.stepId, product: task.product, startT: this.t, readyAt: this.t + time, overflow: null };
+      this._emit('potPlaced', { dishId: task.dishId, burner: b.i, product: task.product });
+      const m = Math.floor(time / 60), sec = String(Math.round(time % 60)).padStart(2, '0');
+      this.setHint(`${this.productName(task.product)} варится. Будет готов через ${m}:${sec} — пока займись остальным`, 4);
     });
+  },
+
+  _potKey(i) {
+    return i === 0 ? 'pot' : 'pot' + (i + 1);
   },
 
   _updateStove() {
-    const s = this.stove;
-    if (s.state === 'boiling' && this.t >= s.readyAt) {
-      s.state = 'ready';
-      if (s.overflow) {
+    for (const s of this.burners) {
+      if (s.state === 'boiling' && this.t >= s.readyAt) {
+        s.state = 'ready';
+        if (s.overflow) {
+          s.overflow = null;
+          this._removeAlert(this._potKey(s.i));
+        }
+        const name = this.productName(s.product);
+        this._alert('potReady' + (s.i || ''), `${name} — сварилось, достань из кастрюли`, { station: 'stove' });
+        this._emit('potatoReady', { burner: s.i, product: s.product });
+      }
+      if (s.overflow && this.t >= s.overflow.deadline) {
         s.overflow = null;
-        this._removeAlert('pot');
+        this._removeAlert(this._potKey(s.i));
+        if (this.action?.type === 'reduceHeat') this._cancelAction();
+        this._addPuddle('pot', CLAYOUT.potPuddle);
+        this.penalties.push({ kind: 'spill', points: this.cfg.scoring.order.spillEvent, label: 'Кастрюля выкипела' });
+        const dish = this.dishes[s.owner];
+        if (dish && !dish.penalty.prepSpill) {
+          dish.penalty.prepSpill = true;
+          dish.penalty.prep += 15;
+        }
+        this.stats.spills++;
+        this._emit('spill', { burner: s.i });
       }
-      this._alert('potReady', 'Картофель сварился — достань из кастрюли', { station: 'stove' });
-      this._emit('potatoReady');
-    }
-    if (s.overflow && this.t >= s.overflow.deadline) {
-      s.overflow = null;
-      this._removeAlert('pot');
-      if (this.action?.type === 'reduceHeat') this._cancelAction();
-      this._addPuddle('pot', CLAYOUT.potPuddle);
-      this.penalties.push({ kind: 'spill', points: this.cfg.scoring.order.spillEvent, label: 'Кастрюля выкипела' });
-      const dish = this.dishes[s.owner];
-      if (dish && !dish.penalty.prepSpill) {
-        dish.penalty.prepSpill = true;
-        dish.penalty.prep += 15;
-      }
-      this.stats.spills++;
-      this._emit('spill');
     }
   },
 
-  _startOverflow() {
+  _startOverflow(i = null) {
+    const b = i != null ? this.burners[i] : this.burners.find((x) => x.state === 'boiling');
+    if (!b) return;
     const w = rand(this.rng, this.cfg.events.potWindow);
-    this.stove.overflow = { deadline: this.t + w };
-    this._alert('pot', 'Кастрюля выкипает! Убавь огонь', { deadline: this.t + w, window: w, station: 'stove' });
+    b.overflow = { deadline: this.t + w };
+    this._alert(this._potKey(b.i), `Кастрюля выкипает (${this.productName(b.product).toLowerCase()})! Убавь огонь`, { deadline: this.t + w, window: w, station: 'stove' });
     this._markUrgent();
-    this._emit('potBoil');
+    this._emit('potBoil', { burner: b.i });
   },
 
-  reduceHeat() {
-    if (!this._isIdleAt('stove') || !this.stove.overflow) return false;
+  reduceHeat(i = null) {
+    if (!this._isIdleAt('stove')) return false;
+    const b = i != null ? this.burners[i] : this.burners.find((x) => x.overflow);
+    if (!b?.overflow) return false;
     return this._startAction('reduceHeat', this.cfg.durations.reduceHeat, () => {
-      if (!this.stove.overflow) return;
-      this.stove.overflow = null;
-      this._removeAlert('pot');
-      this._emit('potSaved');
+      if (!b.overflow) return;
+      b.overflow = null;
+      this._removeAlert(this._potKey(b.i));
+      this._emit('potSaved', { burner: b.i });
     });
   },
 
-  takePot() {
+  takePot(i = null) {
     if (!this._isIdleAt('stove') || this.action) return false;
-    if (this.stove.state === 'boiling') {
-      this.setHint(`Картофель ещё варится — осталось ${Math.ceil(this.stove.readyAt - this.t)} с`);
+    const b = i != null ? this.burners[i] : this.burners.find((x) => x.state === 'ready') ?? this.burners.find((x) => x.state === 'boiling');
+    if (!b) return false;
+    if (b.state === 'boiling') {
+      this.setHint(`${this.productName(b.product)} ещё варится — осталось ${Math.ceil(b.readyAt - this.t)} с`);
       return false;
     }
-    if (this.stove.state !== 'ready') return false;
+    if (b.state !== 'ready') return false;
     return this._startAction('takePot', this.cfg.durations.takePot, () => {
-      const s = this.stove;
-      if (s.state !== 'ready') return;
-      s.state = 'taken';
-      this._removeAlert('potReady');
-      this._completeStep(s.owner, s.step, 1);
-      this._emit('potatoTaken', { dishId: s.owner });
-      this.setHint('Картофель на доске — его можно нарезать или натереть', 3);
+      if (b.state !== 'ready') return;
+      const { owner, step, product } = b;
+      this.burners[b.i] = { ...b, state: 'empty', owner: null, step: null, readyAt: 0, overflow: null, startT: b.startT };
+      this._removeAlert('potReady' + (b.i || ''));
+      this._completeStep(owner, step, 1);
+      if (!this.practice) this.hot[product] = this.t + this.cfg.cool.time;
+      this._emit('potatoTaken', { dishId: owner, burner: b.i, product });
+      this.setHint(`${this.productName(product)} горячий — остынет за ${this.cfg.cool.time} с, или остуди у раковины`, 3.5);
     });
   },
 
@@ -238,6 +279,7 @@ export const homeMethods = {
   // ---------- лужи ----------
   _addPuddle(source, at) {
     if (this.puddles.some((p) => p.source === source)) return;
+    this.stats.puddlesMade = (this.stats.puddlesMade ?? 0) + 1;
     const stand = this._puddleStand(at);
     const pd = { id: this._id(), source, x: at.x, z: at.z, r: at.r, stand, mask: new CoverageMask({ ...this.cfg.wipe, width: PUDDLE.w, depth: PUDDLE.d, shape: 'ellipse' }) };
     this.puddles.push(pd);
@@ -311,10 +353,10 @@ export const homeMethods = {
   },
 
   // ---------- кот ----------
-  _startCatTheft() {
+  _startCatTheft(product = 'sausage') {
     const w = rand(this.rng, this.cfg.events.catWindow);
-    this.cat = { state: 'theft', deadline: this.t + w, startedAt: this.t };
-    this._alert('cat', 'Кот тянется к колбасе! Прогони его', { deadline: this.t + w, window: w, action: 'shoo' });
+    this.cat = { state: 'theft', deadline: this.t + w, startedAt: this.t, product };
+    this._alert('cat', `Кот тянется ${TEMPTING[product] ?? 'к еде'}! Прогони его`, { deadline: this.t + w, window: w, action: 'shoo' });
     this._markUrgent();
     this._emit('catStart', { kind: 'theft' });
   },
@@ -339,6 +381,7 @@ export const homeMethods = {
     this._removeAlert('cat');
     this._removeAlert('spillWarn');
     this.stats.shoos++;
+    this.catNeeds.hunger = Math.max(0, this.catNeeds.hunger + this.cfg.cat.afterShoo);
     if (this.action && this.action.type !== 'shoo') this._cancelAction();
     this.action = { type: 'shoo', duration: this.cfg.durations.shooReaction, elapsed: 0, data: {} };
     this._emit('catShooed', { kind });
@@ -350,11 +393,16 @@ export const homeMethods = {
     if (c.state === 'theft' && this.t >= c.deadline) {
       this._removeAlert('cat');
       this.cat = { state: 'home' };
-      if (this._stealFromBoard()) {
+      const stolen = this._stealFromBoard(c.product);
+      if (stolen) {
         this.stats.thefts++;
-        this.penalties.push({ kind: 'theft', points: this.cfg.scoring.order.theft, label: 'Кот утащил колбасу' });
-        this._emit('catStole', { from: 'board' });
-        this.setHint('Кот унёс кусок колбасы. Возьми замену на доске', 4);
+        this.catNeeds.hunger = 0;
+        this.catNeeds.warned = false;
+        this._removeAlert('catHungry');
+        const name = this.productName(stolen).toLowerCase();
+        if (!this.penalties.some((p) => p.kind === 'theft')) this.penalties.push({ kind: 'theft', points: this.cfg.scoring.order.theft, label: `Кот утащил: ${name}` });
+        this._emit('catStole', { from: 'board', product: stolen });
+        this.setHint(`Кот унёс кусок (${name}). Возьми замену на доске`, 4);
       } else this._emit('catGone');
     } else if (c.state === 'spill' && this.t >= c.deadline) {
       this._removeAlert('spillWarn');
@@ -364,6 +412,9 @@ export const homeMethods = {
       this._addPuddle('spill', CLAYOUT.spillPuddle);
       this._emit('catSpill');
     } else if (c.state === 'visit' && this.t >= c.visitUntil) {
+      this.cat = { state: 'home' };
+      this._emit('catGone');
+    } else if ((c.state === 'eat' || c.state === 'play') && this.t >= c.until) {
       this.cat = { state: 'home' };
       this._emit('catGone');
     }

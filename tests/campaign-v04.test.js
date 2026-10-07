@@ -11,7 +11,7 @@ import { dishScore, dayScore } from '../src/campaign/scoring.js';
 import { initialPieces, cutAcross, totalVolume, rotatePieces } from '../src/game/cutting.js';
 import { TRAY, SINK, CANAPE_PILES, FRUIT_PILES, CLAYOUT } from '../src/campaign/layout.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
-import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag, seasonTo } from './helpers-campaign.js';
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps * Math.max(1, Math.abs(b)), `${a} ≈ ${b}`);
 let serial = 50000;
@@ -98,7 +98,7 @@ test('учёт: переключение продуктов на доске не
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
   arrive(s, 'board');
   assert.ok(s.boardSelect('olivier:carrot'));
-  assert.ok(s.boardSelect('olivier:egg'));
+  assert.ok(s.boardSelect('olivier:sausage'));
   assert.ok(s.boardSelect('olivier:carrot'));
   assert.equal(s.inventory.available('carrot'), 1);
   assert.equal(s.inventory.count('carrot'), 2);
@@ -408,9 +408,10 @@ test('сохранение: восстановление, повреждённы
 });
 
 test('оценка: неприменимые характеристики не дают бесплатных баллов', () => {
-  assert.equal(dishScore({ prep: 80, comp: 100, asm: 60 }), Math.round((0.35 * 80 + 0.25 * 100 + 0.25 * 60) / 0.85));
-  assert.equal(dishScore({ prep: 100, comp: 100, asm: 100, wish: 0 }), 85);
-  assert.equal(dayScore([90, 70], 100), Math.round(0.85 * 80 + 15));
+  assert.equal(dishScore({ prep: 80, comp: 100, asm: 60 }), Math.round((0.3 * 80 + 0.2 * 100 + 0.2 * 60) / 0.7));
+  assert.equal(dishScore({ prep: 100, comp: 100, asm: 100, wish: 0 }), Math.round(70 / 0.85));
+  assert.equal(dayScore([90, 70], 100), Math.round((0.75 * 80 + 15) / 0.9));
+  assert.equal(dayScore([90, 70], 100, 100), Math.round(0.75 * 80 + 15 + 10));
 });
 
 // ---------- 9. Сброс ----------
@@ -432,16 +433,37 @@ test('сброс: новая попытка не содержит старых �
 test('день 1: оливье от плиты до перемешивания, затем завершение дня', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 3 });
   arrive(s, 'stove');
-  s.placePot();
+  assert.ok(s.placePot()); // картофель — первая конфорка
   waitAction(s);
-  for (const key of ['olivier:carrot', 'olivier:carrot2', 'olivier:sausage', 'olivier:cucumber', 'olivier:cucumber2', 'olivier:egg', 'olivier:egg2']) {
+  assert.ok(s.placePot()); // яйца — вторая
+  waitAction(s);
+  assert.equal(s.burners[1].product, 'egg');
+  for (const key of ['olivier:carrot', 'olivier:carrot2', 'olivier:sausage', 'olivier:cucumber', 'olivier:cucumber2']) {
     arrive(s, 'board');
     s.boardSelect(key);
     cutCubes(s);
     if (s.cat.state === 'theft') s.shoo();
     assert.ok(s.boardTransfer(), s.hint?.text);
   }
-  run(s, s.stove.readyAt - s.t + 0.5);
+  run(s, Math.max(0, s.burners[1].readyAt - s.t + 0.5));
+  for (const b of s.burners) if (b.overflow) { arrive(s, 'stove'); s.reduceHeat(b.i); waitAction(s); }
+  arrive(s, 'stove');
+  assert.ok(s.takePot(1));
+  waitAction(s);
+  // горячие яйца не режутся, пока не остынут
+  arrive(s, 'board');
+  assert.equal(s.boardSelect('olivier:egg'), false);
+  arrive(s, 'sink');
+  assert.ok(s.coolProduct('egg'));
+  waitAction(s);
+  for (const key of ['olivier:egg', 'olivier:egg2']) {
+    arrive(s, 'board');
+    assert.ok(s.boardSelect(key), s.hint?.text);
+    cutCubes(s);
+    if (s.cat.state === 'theft') s.shoo();
+    assert.ok(s.boardTransfer(), s.hint?.text);
+  }
+  run(s, Math.max(0, s.stove.readyAt - s.t + 0.5));
   if (s.stove.overflow) {
     arrive(s, 'stove');
     s.reduceHeat();
@@ -450,6 +472,7 @@ test('день 1: оливье от плиты до перемешивания, 
   arrive(s, 'stove');
   s.takePot();
   waitAction(s);
+  run(s, CAMPAIGN.cool.time + 0.5);
   for (const key of ['olivier:potato', 'olivier:potato2']) {
     arrive(s, 'board');
     s.boardSelect(key);
@@ -463,11 +486,16 @@ test('день 1: оливье от плиты до перемешивания, 
   assert.equal(s.dishes.olivier.done, false);
   s.bowlAdd('olivier', 'mayo');
   waitAction(s);
+  assert.equal(s.mixTarget().ok, false); // сначала вкус
+  seasonTo(s, 'olivier');
   stir(s);
   assert.ok(s.dishes.olivier.done);
+  assert.equal(s.dishes.olivier.parts.taste, 100);
   assert.ok(s.dishes.olivier.Q >= 60);
   const r = s.finishDay();
   assert.ok(r && r.D > 0);
+  assert.ok(r.stars >= 1 && Array.isArray(r.medals) && r.pace > 0);
+  assert.ok(r.medals.includes('perfectTaste'));
   assert.equal(s.equipment.bowl.clean, false);
 });
 

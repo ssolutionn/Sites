@@ -9,7 +9,10 @@ export const phoneMethods = {
     const m = { id: this._id(), from, text, t: this.t, read: false, ...extra };
     this.phone.messages.push(m);
     this.phone.unread++;
-    if (extra.request) this.requestKnown = true;
+    if (extra.request) {
+      this.requestKnown = true;
+      for (const r of this.requests ?? []) if (extra.request === true ? r.fixed : r.id === extra.request) r.known = true;
+    }
     this._alert('phone', `${from}: ${text.length > 42 ? text.slice(0, 40) + '…' : text}`, { station: 'phone', until: this.t + 12, phone: true });
     this._emit('phoneMsg', { from });
     return m;
@@ -53,7 +56,8 @@ export const phoneMethods = {
   },
 
   // Подтверждение: один активный заказ; повторный клик не создаёт второй.
-  confirmOrder() {
+  // mode: express — быстро и дорого, standard — обычная, self — сходить самой (бесплатно, но долго без присмотра).
+  confirmOrder(mode = 'standard') {
     if (this.delivery.order || this.delivery.bag) {
       this.setHint('Предыдущий заказ ещё не разобран', 2);
       return false;
@@ -63,11 +67,33 @@ export const phoneMethods = {
       this.setHint('Добавь в заказ хотя бы один продукт', 2);
       return false;
     }
-    const wait = rand(this.rng, this.cfg.events.deliveryWait);
-    this.delivery.order = { id: this._id(), items, t0: this.t, wait, status: 'accepted' };
+    const m = this.deliveryModes().find((x) => x.id === mode);
+    if (!m) {
+      this.setHint('Такой доставки сегодня нет', 2);
+      return false;
+    }
+    const cost = this.orderCost(items, mode);
+    if (!this.practice && cost.total > this.wallet.budget - this.wallet.spent) {
+      this.setHint(`Не хватает денег: нужно ${cost.total} ₽, осталось ${this.wallet.budget - this.wallet.spent} ₽`, 3);
+      this._emit('noMoney');
+      return false;
+    }
+    this.wallet.spent += cost.total;
+    this._emit('paid', { total: cost.total });
+    if (mode === 'self') {
+      this.delivery.order = { id: this._id(), items, t0: this.t, wait: 0, status: 'arrived', self: true, mode };
+      this.delivery.draft = {};
+      this._emit('orderPlaced', { items, mode });
+      const ok = this.collectOrder(true);
+      if (ok === true) this.setHint(`Бегу в магазин — ${m.away} с. Плита и духовка без присмотра!`, 4);
+      else this._alert('delivery', 'Сходить в магазин — путь к двери', { action: 'collect', dismissable: false });
+      return true;
+    }
+    const wait = rand(this.rng, m.wait ?? this.cfg.events.deliveryWait);
+    this.delivery.order = { id: this._id(), items, t0: this.t, wait, status: 'accepted', mode };
     this.delivery.draft = {};
-    this.pushMessage('Доставка', 'Заказ принят. Собираем пакет.');
-    this._emit('orderPlaced', { items });
+    this.pushMessage('Доставка', `Заказ принят (${m.label.toLowerCase()}). Собираем пакет.`);
+    this._emit('orderPlaced', { items, mode });
     return true;
   },
 
@@ -112,6 +138,7 @@ export const phoneMethods = {
       return 'warn';
     }
     if (!this._canMove()) return false;
+    if (o.self) this.heroine.target = null;
     const path = this.nav.findPath(this.heroine, CLAYOUT.exit);
     if (!path) {
       this.setHint('К двери не пройти — мешает лужа', 2.5);

@@ -2,7 +2,7 @@
 // Это стартовые проектные параметры (раздел 2.2 ТЗ): меняются здесь, без правки логики.
 
 export const CAMPAIGN = {
-  version: '0.4.0',
+  version: '0.5.0',
   saveVersion: 1,
 
   // --- Время и общие параметры ---
@@ -11,6 +11,9 @@ export const CAMPAIGN = {
   walkSpeed: 2.2,
   knifeDuration: 0.3,
   potatoReadyAfter: 120, // 2:00 после установки кастрюли (поправка тестового билда)
+  boilTimes: { potato: 120, egg: 60, beet: 150 }, // у каждой кастрюли свой срок; конфорок две
+  burners: 2,
+  cool: { time: 25, sinkCool: 1.5 }, // сваренное горячее: ждать или остудить под холодной водой
   minCutFraction: 0.2,
   maxPiecesPerProduct: 150,
   edgeTrimAllowance: 0.1, // до 10 % исходного объёма порции — краевые обрезки без штрафа;
@@ -32,6 +35,11 @@ export const CAMPAIGN = {
     ovenTake: 1.2,
     awayForDelivery: 3, // героиня за кадром
     unpackItem: 0.6,
+    pinch: 0.35, // щепотка соли или перца
+    taste: 1.2, // попробовать ложкой
+    dilute: 3.5, // разбавить пересоленное
+    feedCat: 1.5,
+    playCat: 1,
   },
 
   // Ручные механики
@@ -44,6 +52,24 @@ export const CAMPAIGN = {
   wipe: { cols: 14, rows: 10, brush: 0.035, complete: 0.92, autoFinish: 0.92 },
   fill: { scoop: 0.34, normalMin: 0.75, normalMax: 1.25, overflow: 1.35 },
   dose: { scoop: 1, normal: 2, max: 3 },
+  season: { salt: [2, 4], pepper: [1, 2] }, // скрытая «норма» блюда в щепотках
+
+  // Кот как система: голод растёт, сытый кот спит, голодный ищет еду без присмотра
+  cat: { hungerStart: 35, rate: 0.42, rateFirstDay: 0.3, theftAt: 70, warnAt: 50, calm: 30, playTime: 45, afterShoo: -12 },
+
+  // Деньги и доставка
+  money: {
+    modes: {
+      express: { label: 'Экспресс', fee: 199, wait: [20, 30] },
+      standard: { label: 'Обычная', fee: 79, wait: [45, 75] },
+      self: { label: 'Сходить самой', fee: 0, away: 35 },
+    },
+    thrifty: 0.6, // медаль «экономно» — потрачено не больше 60 % бюджета
+  },
+
+  // Темп: ориентир дня — targetMinutes; в пределах ориентира 100, к двойному — 40
+  pace: { floor: 40 },
+  stars: [55, 75, 90],
 
   // Помехи кампании (раздел 11.3)
   events: {
@@ -59,40 +85,40 @@ export const CAMPAIGN = {
   oven: { bake: 150, burnAfter: 60 }, // 2:30 запекания, после окна — перегрев, ещё через 60 с — порча
 
   scoring: {
-    weights: { prep: 0.35, comp: 0.25, asm: 0.25, wish: 0.15 },
-    day: { dishes: 0.85, order: 0.15 },
-    order: { theft: 5, spillEvent: 5, puddleLeft: 15, garlandLeft: 10, radioLeft: 8, dirtyLeft: 4 },
+    weights: { prep: 0.3, comp: 0.2, asm: 0.2, taste: 0.15, wish: 0.15 },
+    day: { dishes: 0.75, order: 0.15, pace: 0.1 },
+    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
   },
 };
 
 // --- Продукты ---
 // unit — игровые порции; storage — где хранится; cut — профиль для доски.
 export const PRODUCTS = {
-  potato: { name: 'Картофель', unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 4, d: 3, profile: 'oval' }, grate: true, note: 'варится в кастрюле' },
-  carrot: { name: 'Морковь', unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 4, d: 2, profile: 'carrot', trim: 0.39 }, grate: true, note: 'варёная' },
-  sausage: { name: 'Колбаса', unit: 'порц.', storage: 'fridge', color: 0xe7909a, cut: { w: 3, d: 3, profile: 'rectangle' }, round: { length: 5, radius: 0.9 } },
-  cucumber: { name: 'Огурец', unit: 'порц.', storage: 'fridge', color: 0x8cc84b, cut: { w: 5, d: 2, profile: 'oval' }, round: { length: 5, radius: 0.75 } },
-  egg: { name: 'Яйцо', unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 4, d: 3, profile: 'egg', trim: 0.28 }, note: 'сварено и очищено' },
-  peas: { name: 'Горошек', unit: 'банка', storage: 'pantry', color: 0x6dbb3a },
-  mayo: { name: 'Майонез', unit: 'порц.', storage: 'fridge', color: 0xfffbea },
-  crab: { name: 'Крабовые палочки', unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 5, d: 2, profile: 'rectangle' } },
-  corn: { name: 'Кукуруза', unit: 'банка', storage: 'pantry', color: 0xf4c430 },
-  bread: { name: 'Хлеб', unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 4, d: 2, profile: 'rectangle' } },
-  butter: { name: 'Сливочное масло', unit: 'пачка', storage: 'fridge', color: 0xfff1a8 },
-  caviar: { name: 'Красная икра', unit: 'банка', storage: 'fridge', color: 0xe8461f },
-  tartlet: { name: 'Корзинки', unit: 'шт.', storage: 'pantry', color: 0xd9a35a },
-  cheese: { name: 'Сыр', unit: 'порц.', storage: 'fridge', color: 0xf7d55b, cut: { w: 4, d: 2, profile: 'rectangle' }, grate: true },
-  greens: { name: 'Зелень', unit: 'пучок', storage: 'fridge', color: 0x3f9b3a },
-  tomato: { name: 'Помидор', unit: 'шт.', storage: 'fridge', color: 0xe23b2e },
-  onion: { name: 'Лук', unit: 'шт.', storage: 'pantry', color: 0xf3ecd6, cut: { w: 3, d: 2, profile: 'oval' } },
-  herring: { name: 'Сельдь', unit: 'филе', storage: 'fridge', color: 0xc9b6a6, cut: { w: 4, d: 2, profile: 'rectangle' } },
-  beet: { name: 'Свёкла', unit: 'порц.', storage: 'fridge', color: 0x8e1b4a, grate: true, note: 'варёная' },
-  skewer: { name: 'Шпажки', unit: 'шт.', storage: 'pantry', color: 0xd8b07a },
-  mandarin: { name: 'Мандарин', unit: 'шт.', storage: 'pantry', color: 0xff8c1a },
-  apple: { name: 'Яблоко', unit: 'порц.', storage: 'fridge', color: 0xc8e06a, note: 'дольки подготовлены' },
-  grapes: { name: 'Виноград', unit: 'гроздь', storage: 'fridge', color: 0x7b3fa0 },
-  chicken: { name: 'Курица', unit: 'шт.', storage: 'fridge', color: 0xf6d7b0, note: 'подготовлена' },
-  marinade: { name: 'Маринад со специями', unit: 'порц.', storage: 'fridge', color: 0xb5501e },
+  potato: { name: 'Картофель', price: 40, unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 4, d: 3, profile: 'oval' }, grate: true, note: 'варится в кастрюле' },
+  carrot: { name: 'Морковь', price: 30, unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 4, d: 2, profile: 'carrot', trim: 0.39 }, grate: true, note: 'варёная' },
+  sausage: { name: 'Колбаса', price: 180, unit: 'порц.', storage: 'fridge', color: 0xe7909a, cut: { w: 3, d: 3, profile: 'rectangle' }, round: { length: 5, radius: 0.9 } },
+  cucumber: { name: 'Огурец', price: 60, unit: 'порц.', storage: 'fridge', color: 0x8cc84b, cut: { w: 5, d: 2, profile: 'oval' }, round: { length: 5, radius: 0.75 } },
+  egg: { name: 'Яйцо', price: 15, unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 4, d: 3, profile: 'egg', trim: 0.28 }, note: 'варится в кастрюле' },
+  peas: { name: 'Горошек', price: 90, unit: 'банка', storage: 'pantry', color: 0x6dbb3a },
+  mayo: { name: 'Майонез', price: 110, unit: 'порц.', storage: 'fridge', color: 0xfffbea },
+  crab: { name: 'Крабовые палочки', price: 150, unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 5, d: 2, profile: 'rectangle' } },
+  corn: { name: 'Кукуруза', price: 90, unit: 'банка', storage: 'pantry', color: 0xf4c430 },
+  bread: { name: 'Хлеб', price: 10, unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 4, d: 2, profile: 'rectangle' } },
+  butter: { name: 'Сливочное масло', price: 160, unit: 'пачка', storage: 'fridge', color: 0xfff1a8 },
+  caviar: { name: 'Красная икра', price: 350, unit: 'банка', storage: 'fridge', color: 0xe8461f },
+  tartlet: { name: 'Корзинки', price: 20, unit: 'шт.', storage: 'pantry', color: 0xd9a35a },
+  cheese: { name: 'Сыр', price: 170, unit: 'порц.', storage: 'fridge', color: 0xf7d55b, cut: { w: 4, d: 2, profile: 'rectangle' }, grate: true },
+  greens: { name: 'Зелень', price: 60, unit: 'пучок', storage: 'fridge', color: 0x3f9b3a },
+  tomato: { name: 'Помидор', price: 35, unit: 'шт.', storage: 'fridge', color: 0xe23b2e },
+  onion: { name: 'Лук', price: 15, unit: 'шт.', storage: 'pantry', color: 0xf3ecd6, cut: { w: 3, d: 2, profile: 'oval' } },
+  herring: { name: 'Сельдь', price: 220, unit: 'филе', storage: 'fridge', messy: true, color: 0xc9b6a6, cut: { w: 4, d: 2, profile: 'rectangle' } },
+  beet: { name: 'Свёкла', price: 35, unit: 'порц.', storage: 'fridge', messy: true, color: 0x8e1b4a, grate: true, note: 'варится дольше всех' },
+  skewer: { name: 'Шпажки', price: 5, unit: 'шт.', storage: 'pantry', color: 0xd8b07a },
+  mandarin: { name: 'Мандарин', price: 30, unit: 'шт.', storage: 'pantry', color: 0xff8c1a },
+  apple: { name: 'Яблоко', price: 40, unit: 'порц.', storage: 'fridge', color: 0xc8e06a, note: 'дольки подготовлены' },
+  grapes: { name: 'Виноград', price: 180, unit: 'гроздь', storage: 'fridge', color: 0x7b3fa0 },
+  chicken: { name: 'Курица', price: 400, unit: 'шт.', storage: 'fridge', color: 0xf6d7b0, note: 'подготовлена' },
+  marinade: { name: 'Маринад со специями', price: 120, unit: 'порц.', storage: 'fridge', color: 0xb5501e },
 };
 
 // Каталог доставки: всё, что можно заказать.
@@ -116,14 +142,16 @@ export const RECIPES = {
     look: 'Разноцветные мелкие кусочки в кремовой заправке',
     steps: [
       { id: 'boil', type: 'boil', product: 'potato', qty: 2, label: 'Поставить картофель вариться' },
+      { id: 'boilEgg', type: 'boil', product: 'egg', qty: 2, label: 'Поставить яйца вариться' },
       ...twice({ id: 'carrot', type: 'cut', product: 'carrot', shape: 'cube', dest: 'bowl', label: 'Нарезать морковь кубиками' }),
       { id: 'sausage', type: 'cut', product: 'sausage', shape: 'cube', dest: 'bowl', label: 'Нарезать колбасу кубиками' },
       ...twice({ id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'cube', dest: 'bowl', label: 'Нарезать огурец кубиками' }),
-      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' }),
+      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать яйцо кубиками' }),
       ...twice({ id: 'potato', type: 'cut', product: 'potato', shape: 'cube', dest: 'bowl', requires: ['boil'], label: 'Нарезать картофель кубиками' }),
       { id: 'peas', type: 'add', product: 'peas', label: 'Открыть горошек и добавить' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Заправить майонезом' },
-      { id: 'mix', type: 'mix', requires: ['carrot', 'carrot2', 'sausage', 'cucumber', 'cucumber2', 'egg', 'egg2', 'potato', 'potato2', 'peas', 'mayo'], label: 'Перемешать круговыми движениями' },
+      { id: 'season', type: 'season', requires: ['carrot', 'carrot2', 'sausage', 'cucumber', 'cucumber2', 'egg', 'egg2', 'potato', 'potato2', 'peas', 'mayo'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать круговыми движениями' },
     ],
   },
   crab: {
@@ -133,12 +161,14 @@ export const RECIPES = {
     uses: ['bowl'],
     look: 'Бело-красные кусочки и жёлтая кукуруза',
     steps: [
+      { id: 'boilEgg', type: 'boil', product: 'egg', qty: 2, label: 'Поставить яйца вариться' },
       ...twice({ id: 'crab', type: 'cut', product: 'crab', shape: 'cube', dest: 'bowl', label: 'Нарезать крабовые палочки' }),
-      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' }),
+      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать яйцо кубиками' }),
       { id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'cube', dest: 'bowl', label: 'Нарезать огурец кубиками' },
       { id: 'corn', type: 'add', product: 'corn', label: 'Открыть кукурузу и добавить' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Заправить майонезом' },
-      { id: 'mix', type: 'mix', requires: ['crab', 'crab2', 'egg', 'egg2', 'cucumber', 'corn', 'mayo'], label: 'Перемешать' },
+      { id: 'season', type: 'season', requires: ['crab', 'crab2', 'egg', 'egg2', 'cucumber', 'corn', 'mayo'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать' },
     ],
   },
   sandwiches: {
@@ -161,10 +191,12 @@ export const RECIPES = {
     look: 'Ровные половинки с порцией начинки',
     count: 6,
     steps: [
-      { id: 'halves', type: 'halves', product: 'egg', items: 3, label: 'Разрезать 3 яйца пополам и вынуть желтки' },
+      { id: 'boilEgg', type: 'boil', product: 'egg', qty: 3, label: 'Поставить яйца вариться' },
+      { id: 'halves', type: 'halves', product: 'egg', items: 3, requires: ['boilEgg'], label: 'Разрезать 3 яйца пополам и вынуть желтки' },
       { id: 'mayo', type: 'add', product: 'mayo', requires: ['halves'], label: 'Добавить майонез к желткам' },
       { id: 'greens', type: 'add', product: 'greens', requires: ['halves'], label: 'Добавить зелень' },
-      { id: 'mix', type: 'mix', requires: ['mayo', 'greens'], label: 'Перемешать начинку' },
+      { id: 'season', type: 'season', requires: ['mayo', 'greens'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать начинку' },
       { id: 'fill', type: 'fill', containers: 'eggHalf', items: 6, requires: ['mix'], label: 'Наполнить 6 половинок' },
     ],
   },
@@ -176,10 +208,12 @@ export const RECIPES = {
     look: 'Заполненные корзинки с зеленью',
     count: 8,
     steps: [
+      { id: 'boilEgg', type: 'boil', product: 'egg', qty: 2, label: 'Поставить яйца вариться' },
       ...twice({ id: 'cheese', type: 'grate', product: 'cheese', dest: 'bowl', label: 'Натереть сыр' }),
-      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' }),
+      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать яйцо кубиками' }),
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Добавить майонез' },
-      { id: 'mix', type: 'mix', requires: ['cheese', 'cheese2', 'egg', 'egg2', 'mayo'], label: 'Перемешать начинку' },
+      { id: 'season', type: 'season', requires: ['cheese', 'cheese2', 'egg', 'egg2', 'mayo'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать начинку' },
       { id: 'fill', type: 'fill', containers: 'tartlet', items: 8, requires: ['mix'], label: 'Разложить начинку по 8 корзинкам' },
       { id: 'garnish', type: 'garnish', product: 'greens', requires: ['fill'], label: 'Украсить зеленью' },
     ],
@@ -197,7 +231,8 @@ export const RECIPES = {
       { id: 'cheese', type: 'grate', product: 'cheese', dest: 'bowl', label: 'Натереть сыр' },
       { id: 'onion', type: 'cut', product: 'onion', shape: 'cube', dest: 'bowl', onion: true, label: 'Нарезать лук (если с луком)' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Добавить майонез' },
-      { id: 'mix', type: 'mix', requires: ['cheese', 'mayo', 'onion'], label: 'Перемешать начинку' },
+      { id: 'season', type: 'season', requires: ['cheese', 'mayo', 'onion'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать начинку' },
       { id: 'fill', type: 'fill', containers: 'tomato', items: 4, requires: ['prep', 'mix'], label: 'Наполнить помидоры' },
       { id: 'garnish', type: 'garnish', product: 'greens', requires: ['fill'], label: 'Украсить зеленью' },
     ],
@@ -211,11 +246,12 @@ export const RECIPES = {
     onionOption: true,
     steps: [
       { id: 'boil', type: 'boil', product: 'potato', qty: 2, label: 'Поставить картофель вариться' },
+      { id: 'boilBeet', type: 'boil', product: 'beet', qty: 2, label: 'Поставить свёклу вариться' },
       ...twice({ id: 'herring', type: 'cut', product: 'herring', shape: 'cube', dest: 'prepared', label: 'Нарезать сельдь' }),
       { id: 'onion', type: 'cut', product: 'onion', shape: 'cube', dest: 'prepared', onion: true, label: 'Нарезать лук (если с луком)' },
       ...twice({ id: 'potato', type: 'grate', product: 'potato', dest: 'prepared', requires: ['boil'], label: 'Натереть картофель' }),
       { id: 'carrot', type: 'grate', product: 'carrot', dest: 'prepared', label: 'Натереть морковь' },
-      ...twice({ id: 'beet', type: 'grate', product: 'beet', dest: 'prepared', label: 'Натереть свёклу' }),
+      ...twice({ id: 'beet', type: 'grate', product: 'beet', dest: 'prepared', requires: ['boilBeet'], label: 'Натереть свёклу' }),
       { id: 'layers', type: 'layers', requires: ['herring', 'herring2', 'onion', 'potato', 'potato2', 'carrot', 'beet', 'beet2'], label: 'Собрать слои' },
     ],
     layers: ['herring', 'onion', 'potato', 'mayo', 'carrot', 'mayo', 'beet', 'mayo'],
@@ -259,13 +295,18 @@ export const RECIPES = {
 };
 
 // Какие продукты расходует каждый шаг (одна порция, если не указано иначе).
+// Продукт варится в этом же рецепте — его порции списаны при установке кастрюли.
+export function boiledHere(recipeId, product) {
+  return !!RECIPES[recipeId]?.steps.some((x) => x.type === 'boil' && x.product === product);
+}
+
 export function stepProducts(recipeId, step, variant) {
   if (step.onion && variant && variant.onion === false) return {};
+  if (step.opt && variant && variant[step.opt] === false) return {};
   switch (step.type) {
     case 'cut':
     case 'grate':
-      // варёный в этой же кастрюле продукт уже списан при установке кастрюли
-      if (RECIPES[recipeId]?.steps.some((x) => x.type === 'boil' && x.product === step.product)) return {};
+      if (boiledHere(recipeId, step.product)) return {};
       return { [step.product]: 1 };
     case 'boil':
     case 'add':
@@ -275,7 +316,7 @@ export function stepProducts(recipeId, step, variant) {
     case 'dose':
       return { caviar: 1 };
     case 'halves':
-      return { egg: step.items };
+      return boiledHere(recipeId, 'egg') ? {} : { egg: step.items };
     case 'fill':
       return step.containers === 'tartlet' ? { tartlet: step.items } : {};
     case 'tomato':
@@ -299,6 +340,8 @@ export function stationOfStep(step) {
   switch (step.type) {
     case 'boil':
       return 'stove';
+    case 'season':
+      return 'bowl';
     case 'cut':
     case 'grate':
       return 'board';
@@ -319,9 +362,11 @@ export const DAYS = [
     id: 1,
     title: 'Начинаем подготовку',
     dishes: ['olivier'],
-    intro: 'Первый салат года. Учимся резать на глаз: полоски, поворот R, затем кубики. Картошка готова через 2:00 после установки кастрюли.',
-    newSkills: ['Клик — разрез', 'R — поворот', 'Миска и майонез', 'Перемешивание кругами', 'Плита'],
+    intro: 'Первый салат года. Учимся резать на глаз: полоски, поворот R, затем кубики. Конфорок две: поставь картошку (2:00) и яйца (1:00), режь, пока варятся. Сваренное горячее — подожди или остуди под холодной водой. В конце посоли и попробуй.',
+    newSkills: ['Клик — разрез', 'R — поворот', 'Две конфорки', 'Остывание', 'Соль и вкус', 'Перемешивание кругами'],
     targetMinutes: 8,
+    budget: 300,
+    wishes: 0,
     stock: { potato: 2, carrot: 2, sausage: 2, cucumber: 2, egg: 2, peas: 1, mayo: 1 },
     dirty: [],
     events: [
@@ -336,8 +381,10 @@ export const DAYS = [
     title: 'Ещё один салат',
     dishes: ['crab'],
     intro: 'Крабовый салат: другой набор продуктов. Миска со вчера грязная — помой её у раковины. Кукурузы дома нет: закажи в телефоне и режь, пока едет курьер.',
-    newSkills: ['Мытьё посуды', 'Телефон', 'Первый заказ'],
+    newSkills: ['Мытьё посуды', 'Телефон', 'Первый заказ и бюджет', 'Корм для кота', 'Пожелания гостей'],
     targetMinutes: 8,
+    budget: 400,
+    wishes: 1,
     stock: { crab: 2, egg: 2, cucumber: 1, corn: 0, mayo: 1 },
     dirty: ['bowl'],
     events: [{ type: 'radio', at: 140 }],
@@ -353,6 +400,8 @@ export const DAYS = [
     intro: 'Бутерброды с икрой и фаршированные яйца. Намазываем удержанием мыши, наполняем ложкой. Икры дома нет — закажи доставку в телефоне.',
     newSkills: ['Намазывание', 'Половинки яиц', 'Наполнение', 'Заказ и разбор пакета'],
     targetMinutes: 8,
+    budget: 700,
+    wishes: 1,
     stock: { bread: 6, butter: 1, caviar: 0, egg: 3, mayo: 1, greens: 1 },
     dirty: [],
     events: [{ type: 'cat', when: 'idle', at: 200 }],
@@ -365,6 +414,8 @@ export const DAYS = [
     intro: 'Тарталетки и фаршированные помидоры. Сердцевину вынимаем ложкой, начинку дозируем. Зелени для украшения нет — закажи. Проверь сообщения от гостей.',
     newSkills: ['Тёрка', 'Удаление сердцевины', 'Дозирование', 'Пожелание без лука'],
     targetMinutes: 9,
+    budget: 500,
+    wishes: 1,
     stock: { cheese: 3, egg: 2, mayo: 2, tartlet: 8, greens: 0, tomato: 4, onion: 1 },
     dirty: [],
     request: { recipe: 'tomatoes', onion: false },
@@ -376,8 +427,10 @@ export const DAYS = [
     title: 'Слой за слоем',
     dishes: ['shuba'],
     intro: 'Селёдка под шубой: тёрка, порядок слоёв и майонез. Последний слой можно отменить. Майонеза на все слои не хватит — закажи.',
-    newSkills: ['Слои', 'Распределение соуса', 'Отмена слоя'],
+    newSkills: ['Слои', 'Свёкла варится 2:30', 'Грязная доска после сельди', 'Отмена слоя'],
     targetMinutes: 10,
+    budget: 500,
+    wishes: 1,
     stock: { potato: 2, herring: 2, onion: 1, carrot: 1, beet: 2, mayo: 1 },
     dirty: [],
     events: [
@@ -393,6 +446,8 @@ export const DAYS = [
     intro: 'Канапе на шпажках и фруктовая тарелка. Режем кружочки, перетаскиваем кусочки на шпажки. Винограда нет — закажи. Осторожно со стаканом компота — кот рядом.',
     newSkills: ['Кружочки', 'Сборка шпажек', 'Выкладка', 'Уборка лужи'],
     targetMinutes: 8,
+    budget: 600,
+    wishes: 1,
     stock: { bread: 1, cheese: 1, sausage: 2, cucumber: 1, skewer: 8, mandarin: 3, apple: 1, grapes: 0 },
     dirty: [],
     events: [
@@ -409,6 +464,8 @@ export const DAYS = [
     intro: 'Маринад закончился — закажи его, а пока курьер едет, начни сервировку стола. Курица запекается 2:30 — не пропусти сигнал духовки!',
     newSkills: ['Маринад', 'Духовка', 'Финальная сервировка'],
     targetMinutes: 9,
+    budget: 600,
+    wishes: 0,
     stock: { chicken: 2, marinade: 0 },
     dirty: [],
     finalServe: true,

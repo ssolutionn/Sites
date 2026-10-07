@@ -7,8 +7,10 @@ export const SAVE_KEY = 'novogodnyaya-sueta.campaign';
 export function emptySave() {
   return {
     version: CAMPAIGN.saveVersion,
-    days: DAYS.map((d, i) => ({ id: d.id, unlocked: i === 0, completed: false, best: null, last: null })),
+    days: DAYS.map((d, i) => ({ id: d.id, unlocked: i === 0, completed: false, best: null, last: null, medals: [], stars: 0, bestTime: null })),
     settings: { quality: 'high' },
+    challenges: {}, // дата испытания → лучший результат
+    speed: { best: null }, // скоростная нарезка: лучшее время
     lastCompletedAt: null,
     finished: false,
   };
@@ -33,7 +35,12 @@ export function parseSave(raw) {
     d.completed = !!src.completed;
     d.best = validResult(src.best) ? src.best : null;
     d.last = validResult(src.last) ? src.last : null;
+    d.medals = Array.isArray(src.medals) ? src.medals.filter((m) => typeof m === 'string') : [];
+    d.stars = Number.isFinite(src.stars) ? src.stars : d.best?.stars ?? 0;
+    d.bestTime = Number.isFinite(src.bestTime) ? src.bestTime : null;
   }
+  if (data.challenges && typeof data.challenges === 'object') base.challenges = data.challenges;
+  if (data.speed && typeof data.speed === 'object') base.speed = { best: Number.isFinite(data.speed.best) ? data.speed.best : null };
   base.days[0].unlocked = true;
   // открыт день после каждого завершённого
   base.days.forEach((d, i) => {
@@ -56,6 +63,9 @@ export function recordDay(save, dayId, result, now = Date.now()) {
   d.completed = true;
   d.last = result;
   if (!d.best || result.D > d.best.D) d.best = result;
+  d.medals = [...new Set([...(d.medals ?? []), ...(result.medals ?? [])])];
+  d.stars = Math.max(d.stars ?? 0, result.stars ?? 0);
+  if (Number.isFinite(result.time)) d.bestTime = d.bestTime == null ? result.time : Math.min(d.bestTime, result.time);
   const i = save.days.indexOf(d);
   if (save.days[i + 1]) save.days[i + 1].unlocked = true;
   save.lastCompletedAt = now;

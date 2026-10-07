@@ -194,6 +194,11 @@ export const trayMethods = {
     if (this.tool === 'knife') {
       const egg = w.eggs.find((e) => !e.split && inEllipse(x, z, e));
       if (!egg) return 'miss';
+      const eb = this.stepState(id, 'halves') === 'locked' ? this.stepBlock(id, 'halves') : this._hotBlock('egg');
+      if (eb) {
+        this.setHint(eb, 2.5);
+        return 'blocked';
+      }
       if (!this.inventory.isReserved(this._opId(id, 'halves')) && !this._reserveStep(id, 'halves')) return 'short';
       this._startAction('cutEgg', 0.4, () => {
         egg.split = true;
@@ -699,7 +704,9 @@ export const trayMethods = {
       const cov = w.breads.map((b) => b.mask.coverage());
       const even = w.breads.map((b) => b.mask.evenness());
       const asm = w.breads.reduce((s, b, i) => s + Math.min(1, cov[i] / 0.95) * (0.75 + 0.25 * even[i]), 0) / w.breads.length;
-      const doseScore = w.breads.reduce((s, b) => s + (b.doses === 2 ? 1 : b.doses === 1 ? 0.65 : b.doses === 3 ? 0.8 : 0.55), 0) / w.breads.length;
+      const want = dish.wantDoses ?? 2;
+      const doseQ = (n) => (n === want ? 1 : Math.abs(n - want) === 1 ? (n < want ? 0.65 : 0.8) : 0.55);
+      const doseScore = w.breads.reduce((s, b) => s + doseQ(b.doses), 0) / w.breads.length;
       parts = { asm: asm * 100, comp: doseScore * 100 };
       const thin = cov.filter((c) => c < 0.85).length;
       notes.push(thin ? `На ${thin} ломт. масла маловато` : 'Масло лежит ровным слоем');

@@ -1,6 +1,7 @@
 // Доска: нарезка кубиками (по реальному контуру), кружочки, тёрка.
 import { PRODUCTS } from './data.js';
 import { initialPieces, cutAcross, rotatePieces, pieceAt, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
+import { TEMPTING } from './st-extra.js';
 import { makeRoundLog, cutRound, roundSlices, roundQuality, cutQuality, Grater } from './mechanics.js';
 
 export const BOARD_UNIT = 0.042; // метров на целевой кубик
@@ -41,7 +42,7 @@ export const boardMethods = {
     const [dishId, stepId] = key.split(':');
     const step = this.stepDef(dishId, stepId);
     if (!step) return false;
-    const block = this.stepBlock(dishId, stepId);
+    const block = this.stepBlock(dishId, stepId) || this._hotBlock(step.product) || this._boardDirtyBlock(step.product);
     if (block) {
       this.setHint(block);
       return false;
@@ -67,6 +68,13 @@ export const boardMethods = {
       this._emit('tutorial', { topic: step.type === 'grate' ? 'grate' : step.shape === 'round' ? 'round' : 'cube' });
     }
     return true;
+  },
+
+  // Доска после сельди или свёклы: другой продукт на ней не режем, пока не помоешь.
+  _boardDirtyBlock(product) {
+    const b = this.equipment.board;
+    if (!b || b.clean || this.practice || b.by === product) return null;
+    return `Доска ${b.by === 'beet' ? 'в свёкле' : 'пахнет селёдкой'} — помой её у раковины`;
   },
 
   _boardPointer(type, x, z) {
@@ -195,6 +203,11 @@ export const boardMethods = {
       return true;
     }
     this._completeStep(it.dishId, it.stepId, q, info);
+    if (PRODUCTS[it.product].messy && !this.practice) {
+      this.equipment.board.clean = false;
+      this.equipment.board.by = it.product;
+      this._emit('dirty', { item: 'board', by: it.product });
+    }
     delete this.board.items[it.key];
     this.board.current = null;
     this._emit('transfer', { dishId: it.dishId, stepId: it.stepId, product: it.product, dest: step.dest, pieces: moved, q });
@@ -250,9 +263,10 @@ export const boardMethods = {
     });
   },
 
-  // Кот уносит конкретный крупнейший фрагмент колбасы с доски.
-  _stealFromBoard() {
-    const it = Object.values(this.board.items).find((x) => x.product === 'sausage' && this._boardHasMaterial(x) && !x.grater);
+  // Кот уносит конкретный крупнейший фрагмент соблазнительного продукта с доски.
+  _stealFromBoard(product = 'sausage') {
+    const items = Object.values(this.board.items).filter((x) => this._boardHasMaterial(x) && !x.grater);
+    const it = items.find((x) => x.product === product) ?? items.find((x) => TEMPTING[x.product]);
     if (!it) return false;
     if (it.log) {
       let best = null;
@@ -267,6 +281,6 @@ export const boardMethods = {
       this.stats.stolenVolume = (this.stats.stolenVolume ?? 0) + pieceVolume(victim);
     }
     if (this.action?.type === 'cut' && this.action.data?.key === it.key) this._cancelAction();
-    return true;
+    return it.product;
   },
 };

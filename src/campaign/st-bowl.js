@@ -27,7 +27,7 @@ export const bowlMethods = {
     for (const [dishId, dish] of Object.entries(this.dishes)) {
       if (dish.done) continue;
       for (const s of dish.recipe.steps) {
-        if (s.type !== 'add' && s.type !== 'mix') continue;
+        if (s.type !== 'add' && s.type !== 'mix' && s.type !== 'season') continue;
         const state = this.stepState(dishId, s.id);
         if (state === 'skipped') continue;
         out.push({ dishId, stepId: s.id, type: s.type, product: s.product, label: s.label, state, block: state === 'done' ? null : this.stepBlock(dishId, s.id) || this._bowlBlock(dishId) });
@@ -36,7 +36,8 @@ export const bowlMethods = {
     return out;
   },
 
-  bowlAdd(dishId, stepId) {
+  // amount: для майонеза — 'full' или 'light' (поменьше, по просьбе гостей).
+  bowlAdd(dishId, stepId, amount = 'full') {
     if (!this._isIdleAt('bowl') || this.action) return false;
     const step = this.stepDef(dishId, stepId);
     if (!step || step.type !== 'add') return false;
@@ -49,6 +50,7 @@ export const bowlMethods = {
     return this._startAction('add', this.cfg.durations.addProduct, () => {
       if (this.dishes[dishId].steps[stepId].done) return;
       this._bowlReceive(dishId, { product: step.product, kind: 'add' });
+      if (step.product === 'mayo') this.dishes[dishId].mayo = amount === 'light' ? 'light' : 'full';
       this._completeStep(dishId, stepId, 1);
       this._emit('added', { dishId, product: step.product });
     }, { product: step.product });

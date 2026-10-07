@@ -13,9 +13,10 @@ import { bowlMethods } from './st-bowl.js';
 import { trayMethods } from './st-tray.js';
 import { homeMethods } from './st-home.js';
 import { phoneMethods } from './st-phone.js';
+import { extraMethods } from './st-extra.js';
 
 const EPS = 1e-6;
-export const URGENT = new Set(['cat', 'pot', 'oven', 'spillWarn']);
+export const URGENT = new Set(['cat', 'pot', 'pot2', 'oven', 'spillWarn']);
 
 export function buildNav() {
   const nav = new NavGrid({ ...CLAYOUT.bounds, cell: 0.1, radius: 0.2 });
@@ -25,8 +26,9 @@ export function buildNav() {
 }
 
 export class KitchenSession {
-  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, tableDishes = [] } = {}) {
+  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, tableDishes = [], mods = {} } = {}) {
     this.cfg = cfg;
+    this.mods = mods;
     this.seed = seed;
     this.rng = createRng(seed);
     this.practice = practice;
@@ -54,10 +56,12 @@ export class KitchenSession {
       bowl: { clean: !this.day.dirty?.includes('bowl'), owner: null, label: 'Миска', cleanText: 'Миска чистая' },
       tray: { clean: !this.day.dirty?.includes('tray'), owner: null, label: 'Поднос', cleanText: 'Поднос чистый' },
       form: { clean: true, owner: null, label: 'Форма для запекания', cleanText: 'Форма чистая' },
+      board: { clean: true, owner: null, label: 'Доска', cleanText: 'Доска чистая', by: null },
     };
 
     this.recipes = practice ? { practice: this.day.recipe } : Object.fromEntries(this.day.dishes.map((id) => [id, RECIPES[id]]));
     this.dishes = {};
+    this._seasonRng = createRng((seed * 7919 + 17) >>> 0);
     for (const id of Object.keys(this.recipes)) this.dishes[id] = this._createDish(id);
     this.request = this.day.request ?? null;
     this.requestKnown = false;
@@ -69,11 +73,14 @@ export class KitchenSession {
     this.tool = 'hand';
     this.tray = { owner: null, drag: null };
 
-    this.stove = { state: 'empty', owner: null, startT: 0, readyAt: 0, overflow: null };
+    this.burners = Array.from({ length: cfg.burners ?? 1 }, (_, i) => emptyBurner(i));
+    this.hot = {}; // продукт → время, до которого он горячий
     this.oven = { state: 'empty', owner: null, t: 0, readyAt: 0, windowEnd: 0, doneness: 0 };
     this.radio = { enabled: true, broken: false, progress: 0, repairs: 0, breaks: 0 };
     this.garland = { broken: false, progress: 0, repairs: 0 };
     this.cat = { state: 'home', kind: null, deadline: 0, startedAt: 0, visitUntil: 0 };
+    this.catNeeds = { hunger: practice ? 0 : cfg.cat.hungerStart, warned: false, lastTry: -1e9 };
+    this.wallet = { budget: practice ? 0 : Math.round((this.day.budget ?? 0) * (mods.tightBudget ? 0.6 : 1)), spent: 0 };
     this.glass = { present: !!this.day.events?.some((e) => e.type === 'spill'), spilled: false };
     this.puddles = [];
     this.sinkJob = null;
@@ -83,10 +90,19 @@ export class KitchenSession {
 
     this.triggers = practice ? [] : (this.day.events ?? []).map((e, i) => ({ ...e, id: i, fired: false, since: null }));
     this.msgQueue = practice ? [] : (this.day.messages ?? []).map((m, i) => ({ ...m, id: i, sent: false }));
+    this._initRequests();
     this.lastUrgentT = -1e9;
     this.penalties = []; // однократные происшествия: { kind, points, label }
-    this.stats = { walk: 0, closeup: 0, panel: 0, phone: 0, away: 0, idle: 0, thefts: 0, shoos: 0, spills: 0 };
+    this.stats = { walk: 0, closeup: 0, panel: 0, phone: 0, away: 0, idle: 0, thefts: 0, shoos: 0, spills: 0, puddlesMade: 0, catFed: 0 };
     this.tutorialSeen = new Set();
+  }
+
+  // Совместимость: «плита» — первая конфорка.
+  get stove() {
+    return this.burners[0];
+  }
+  set stove(v) {
+    this.burners[0] = v;
   }
 
   // ---------- служебное ----------
@@ -139,7 +155,9 @@ export class KitchenSession {
     const r = this.recipes[id];
     const steps = {};
     for (const s of r.steps) steps[s.id] = { done: false, q: null, info: null };
-    return { id, recipe: r, variant: { onion: true }, steps, done: false, Q: null, parts: null, notes: [], prepared: {}, pieces: {}, work: null, penalty: { prep: 0 }, attempt: 0 };
+    const dish = { id, recipe: r, variant: { onion: true }, steps, done: false, Q: null, parts: null, notes: [], prepared: {}, pieces: {}, work: null, penalty: { prep: 0 }, attempt: 0, mayo: null };
+    if (r.steps.some((s) => s.type === 'season')) this._initSeason(dish, this._seasonRng);
+    return dish;
   }
 
   stepDef(dishId, stepId) {
@@ -298,6 +316,7 @@ export class KitchenSession {
     this._updateOven(h);
     this._updateDelivery(h);
     this._updateCat(h);
+    this._updateCatNeeds(h);
     this._updateSchedule();
     this._expireAlerts();
     if (this.hint && this.clock > this.hint.until) this.hint = null;
@@ -444,7 +463,7 @@ export class KitchenSession {
         tgt.onArrive?.();
       } else if (tgt.exit) {
         hr.away = true;
-        hr.awayLeft = this.cfg.durations.awayForDelivery;
+        hr.awayLeft = this.delivery.order?.self ? this.cfg.money.modes.self.away : this.cfg.durations.awayForDelivery;
         this._emit('away');
       }
     }
@@ -609,20 +628,24 @@ export class KitchenSession {
       if (e.fired) continue;
       switch (e.type) {
         case 'pot': {
-          if (this.stove.state !== 'boiling') break;
-          if (t < this.stove.startT + (e.delay ?? 0)) break;
-          if (this.stove.readyAt - t < 3) {
+          const b = this.burners.find((x) => x.state === 'boiling' && !x.overflow && t >= x.startT + (e.delay ?? 0));
+          if (!b) {
+            if (this.burners.every((x) => x.state !== 'boiling') && this.burners.some((x) => x.startT > 0) && !this.stoveTask()) e.fired = true;
+            break;
+          }
+          if (b.readyAt - t < 3) {
             e.fired = true; // не успеет до готовности — событие отменяется
             break;
           }
           if (this._canStartUrgent()) {
             e.fired = true;
-            this._startOverflow();
+            this._startOverflow(b.i);
           }
           break;
         }
         case 'radio': {
-          const due = e.after === 'boilStart' ? this.stove.startT > 0 && t >= this.stove.startT + e.delay : t >= (e.at ?? 0);
+          const t0 = Math.min(...this.burners.map((b) => (b.startT > 0 ? b.startT : Infinity)));
+          const due = e.after === 'boilStart' ? Number.isFinite(t0) && t >= t0 + e.delay : t >= (e.at ?? 0);
           if (!due) break;
           e.fired = true;
           if (this.radio.enabled && !this.radio.broken) this.breakRadio();
@@ -641,6 +664,14 @@ export class KitchenSession {
           break;
         case 'cat': {
           if (this.cat.state !== 'home') break;
+          if (e.when !== 'idle' && this.catCalm()) {
+            // сытый кот спит: сценарная кража не случается
+            if (!e.sleptNote) {
+              e.sleptNote = true;
+              this._emit('catSleep');
+            }
+            break;
+          }
           if (e.when === 'sausageOnBoard') {
             const it = this.board.current && this.board.items[this.board.current];
             const ok = it && it.product === 'sausage' && this._boardHasMaterial(it) && this.panel === 'board';
@@ -660,7 +691,7 @@ export class KitchenSession {
           break;
         }
         case 'spill':
-          if (t >= e.at && this.glass.present && !this.glass.spilled && this.cat.state === 'home' && this._canStartUrgent()) {
+          if (t >= e.at && this.glass.present && !this.glass.spilled && this.cat.state === 'home' && !this.catCalm() && this._canStartUrgent()) {
             e.fired = true;
             this._startSpillWarn();
           }
@@ -728,16 +759,26 @@ export class KitchenSession {
       qs.push(d.Q);
     }
     const order = this.orderScore();
-    const D = this.practice ? qs[0] ?? 0 : dayScore(qs, order.score);
+    const pace = this.practice ? null : this.paceScore();
+    const D = this.practice ? qs[0] ?? 0 : dayScore(qs, order.score, pace);
+    const wishes = this.requests.map((r) => ({ recipe: r.recipe, kind: r.kind, label: this.wishLabel(r), met: this.wishMet(r) }));
     this.result = {
       D,
+      stars: this.starsFor(D),
+      pace,
+      par: Math.round(this.par()),
+      medals: this.practice ? [] : this._medals(this.t),
+      spent: this.wallet.spent,
+      budget: this.wallet.budget,
+      wishes,
+      mods: Object.keys(this.mods).filter((k) => this.mods[k]),
       dishes,
       order: order.score,
       orderNotes: order.notes,
       notes: Object.fromEntries(Object.values(this.dishes).map((d) => [d.id, d.notes])),
       time: Math.round(this.t),
       stats: { ...this.stats },
-      wish: this.request ? { recipe: this.request.recipe, met: this.dishes[this.request.recipe]?.variant.onion === this.request.onion } : null,
+      wish: wishes[0] ? { recipe: wishes[0].recipe, met: wishes[0].met } : null,
     };
     this.phase = 'finished';
     this.action = null;
@@ -760,10 +801,22 @@ export class KitchenSession {
   _finishDish(dishId, parts, notes) {
     const dish = this.dishes[dishId];
     if (dish.done) return false;
-    if (this.request && this.request.recipe === dishId) {
-      const met = dish.variant.onion === this.request.onion;
-      parts.wish = met ? 100 : 0;
-      notes.push(met ? 'Просьба без лука выполнена' : 'Гости просили без лука — просьба не выполнена');
+    const reqs = this.requests.filter((r) => r.recipe === dishId);
+    if (reqs.length) {
+      let sum = 0;
+      for (const r of reqs) {
+        const met = this.wishMet(r);
+        sum += met ? 100 : 0;
+        const label = this.wishLabel(r);
+        if (r.kind === 'noOnion') notes.push(met ? 'Просьба без лука выполнена' : 'Гости просили без лука — просьба не выполнена');
+        else notes.push(met ? `Пожелание «${label}» выполнено` : `Гости просили «${label}» — не вышло`);
+      }
+      parts.wish = sum / reqs.length;
+    }
+    if (dish.season && dish.steps.season?.done && parts.taste == null) {
+      const q = dish.steps.season.q;
+      parts.taste = q * 100;
+      notes.splice(1, 0, q >= 0.999 ? 'Посолено идеально' : q >= 0.7 ? 'Вкус почти в норме' : dish.season.salt > dish.season.target.salt ? 'Пересолено' : 'Пресновато');
     }
     if (dish.penalty.prep && parts.prep != null) parts.prep = Math.max(0, parts.prep - dish.penalty.prep);
     if (dish.penalty.prepSpill) notes.unshift('Кастрюля выкипела — картофель разварился');
@@ -789,7 +842,11 @@ export class KitchenSession {
 }
 
 // Методы станций в отдельных модулях — общий источник состояния остаётся один.
-Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods);
+Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods);
+
+export function emptyBurner(i) {
+  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null };
+}
 
 // ---------- практика ----------
 function infiniteStock() {

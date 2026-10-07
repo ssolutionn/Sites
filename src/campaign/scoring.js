@@ -13,7 +13,15 @@ export function dishScore(parts, weights = CAMPAIGN.scoring.weights) {
   return wsum ? Math.round(s / wsum) : 0;
 }
 
-export function dayScore(dishQs, order, w = CAMPAIGN.scoring.day) {
+// Темп (pace) — необязательная характеристика: без него её вес делится между блюдами и порядком.
+export function dayScore(dishQs, order, pace = null, w = CAMPAIGN.scoring.day) {
   const avg = dishQs.length ? dishQs.reduce((a, b) => a + b, 0) / dishQs.length : 0;
-  return Math.round(w.dishes * avg + w.order * Math.max(0, Math.min(100, order)));
+  const clamp = (v) => Math.max(0, Math.min(100, v));
+  let sum = w.dishes * avg + w.order * clamp(order);
+  let ws = w.dishes + w.order;
+  if (pace != null && w.pace) {
+    sum += w.pace * clamp(pace);
+    ws += w.pace;
+  }
+  return Math.round(sum / ws);
 }

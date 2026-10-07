@@ -77,4 +77,23 @@ export function zigzag(s, cx, cz, w, d, rows = 7) {
   s.pointer('up', 0, 0);
 }
 
+// Посолить и поперчить ровно в норму блюда, попробовать и подтвердить (у миски).
+export function seasonTo(s, dishId, { salt = 0, pepper = 0, taste = true } = {}) {
+  const se = s.dishes[dishId].season;
+  arrive(s, 'bowl');
+  for (let i = se.salt; i < se.target.salt + salt; i++) {
+    if (!s.seasonAdd(dishId, 'salt')) throw new Error('соль: ' + s.hint?.text);
+    waitAction(s);
+  }
+  for (let i = se.pepper; i < se.target.pepper + pepper; i++) {
+    s.seasonAdd(dishId, 'pepper');
+    waitAction(s);
+  }
+  if (taste) {
+    s.seasonTaste(dishId);
+    waitAction(s);
+  }
+  if (!s.seasonDone(dishId)) throw new Error('вкус: ' + s.hint?.text);
+}
+
 export { KitchenSession };
