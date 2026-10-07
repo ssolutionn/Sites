@@ -31,6 +31,35 @@ async function day(i) {
   await page.click('[data-ui=enter]'); await wait(1000);
 }
 try {
+  if (process.env.SYS) {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto(url + '?dev&seed=5'); await wait(1500);
+    await S(() => localStorage.clear()); await page.goto(url + '?dev&seed=5'); await wait(2500);
+    await shot('v_1080_menu');
+    await page.click('[data-ui=new]'); await wait(300); await page.click('[data-ui=enter]'); await wait(2500);
+    await shot('v_1080_kitchen');
+    await wait(10000); await shot('v_1080_kitchen_settled');
+    console.log('camT', await S(() => window.__sueta.sv.camT));
+    const t0 = await sess('s.t'); await page.keyboard.press('Escape'); await wait(1500);
+    const paused = await S(() => window.__sueta.mode); const t1 = await sess('s.t'); await wait(2000); const t2 = await sess('s.t');
+    console.log('esc', paused, 'clock frozen', t1 === t2);
+    await page.click('[data-ui=resume]'); await wait(500);
+    const m0 = await S(() => document.querySelector('#btn-mute, [data-ui=mute]')?.textContent ?? ''); await page.keyboard.press('KeyM'); await wait(300);
+    console.log('mute toggled', await S(() => localStorage.getItem('olivie.muted')));
+    await page.keyboard.press('KeyM');
+    await S(() => window.dispatchEvent(new Event('blur'))); await wait(500);
+    console.log('blur ->', await S(() => window.__sueta.mode));
+    await page.click('[data-ui=resume]').catch(() => {}); await wait(300);
+    const mem = [];
+    for (let k = 0; k < 4; k++) {
+      await page.keyboard.press('Escape'); await wait(400);
+      await page.click('[data-ui=restartDay]'); await wait(400);
+      await page.click('[data-ui=enter]').catch(() => {}); await wait(2500);
+      mem.push(await S(() => { const i = window.__sueta.sv.renderer.info.memory; return [i.geometries, i.textures]; }));
+    }
+    console.log('restart memory [geom, tex]', JSON.stringify(mem));
+    throw new Error('sys done');
+  }
   if (process.env.FINAL) {
     // День 7: маринад на коже курицы, затем финальный стол.
     await page.goto(url + '?dev&seed=5'); await wait(1500);
