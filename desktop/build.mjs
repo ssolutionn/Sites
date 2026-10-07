@@ -15,7 +15,7 @@ rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
 cpSync('dist', `${stage}/game`, { recursive: true });
 cpSync('desktop/main.cjs', `${stage}/main.cjs`);
-writeFileSync(`${stage}/package.json`, JSON.stringify({ name: 'novogodnyaya-sueta', productName: 'Novogodnyaya Sueta', version: pkg.version, main: 'main.cjs' }, null, 2));
+writeFileSync(`${stage}/package.json`, JSON.stringify({ name: 'novogodnyaya-sueta', productName: 'Novogodnyaya Sueta', version: pkg.version, description: 'Симулятор новогодней суеты', author: 'Novogodnyaya Sueta team', main: 'main.cjs' }, null, 2));
 
 const icon = existsSync('desktop/icon.icns') && platform === 'darwin' ? 'desktop/icon.icns' : existsSync('desktop/icon.png') ? 'desktop/icon.png' : undefined;
 const out = await packager({
