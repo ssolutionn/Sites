@@ -35,7 +35,7 @@ export function initialPieces(w, d, nextId, profile = null) {
   for (let i = 0; i < 48; i++) {
     const a = (i / 48) * Math.PI * 2;
     const taper = profile === 'carrot' ? 0.8 + 0.2 * Math.cos(a) : profile === 'egg' ? 0.9 + 0.1 * Math.cos(a) : 1;
-    polygon.push({ x: Math.cos(a) * w / 2, z: Math.sin(a) * d / 2 * taper });
+    polygon.push({ x: Math.cos(a) * w / 2, z: Math.sin(a) * d / 2 * taper, o: 1 });
   }
   return [polygonPiece(nextId(), polygon)];
 }
@@ -78,7 +78,7 @@ export function bounds(pieces) {
 // Поворот всего продукта на 90° вокруг центра с повторным центрированием.
 // Точка (x, z) -> (-z, x). Идентификаторы сохраняются.
 export function rotatePieces(pieces) {
-  const rotated = pieces.map((p) => p.polygon ? polygonPiece(p.id, p.polygon.map(q => ({ x: -q.z, z: q.x }))) : ({ ...p, x: -(p.z + p.d), z: p.x, w: p.d, d: p.w }));
+  const rotated = pieces.map((p) => p.polygon ? polygonPiece(p.id, p.polygon.map(q => ({ ...q, x: -q.z, z: q.x }))) : ({ ...p, x: -(p.z + p.d), z: p.x, w: p.d, d: p.w }));
   return recenter(rotated);
 }
 
@@ -87,7 +87,7 @@ export function recenter(pieces) {
   const b = bounds(pieces);
   const cx = (b.minX + b.maxX) / 2;
   const cz = (b.minZ + b.maxZ) / 2;
-  return pieces.map((p) => ({ ...p, x: p.x - cx, z: p.z - cz, ...(p.polygon ? { polygon: p.polygon.map(q => ({ x: q.x - cx, z: q.z - cz })) } : {}) }));
+  return pieces.map((p) => ({ ...p, x: p.x - cx, z: p.z - cz, ...(p.polygon ? { polygon: p.polygon.map(q => ({ ...q, x: q.x - cx, z: q.z - cz })) } : {}) }));
 }
 
 // Свободное место для куска-замены: справа от текущего продукта.
