@@ -111,8 +111,10 @@ try {
 
   // день 1
   check('плита', await goStation('Плита', 'stove'));
-  await btn('Поставить вариться'); await noAction();
-  check('кастрюля поставлена', (await sess('s.stove.state')) === 'boiling');
+  await btn('Картофель'); await noAction(); await wait(300);
+  await btn('Яйцо'); await noAction(); await wait(300);
+  await shot('03b_stove_two');
+  check('две кастрюли на двух конфорках', (await sess("s.burners.map(b => b.state + ':' + b.product).join()")) === 'boiling:potato,boiling:egg');
   check('доска', await goStation('Доска', 'board'));
   await btn('Морковь'); await wait(300);
   await shot('04_board');
@@ -129,16 +131,28 @@ try {
   const q = await sess('s.boardQuality(s.boardCur()).score');
   check('морковь нарезана кубиками', q > 0.5, (q * 100).toFixed(0) + ' %');
   // смена продукта и возврат
-  await btn('Яйцо'); await wait(200);
+  await btn('Колбаса'); await wait(200);
   await btn('Морковь'); await wait(200);
   check('смена продукта сохраняет части', (await sess('s.boardCur().product')) === 'carrot' && (await sess('s.boardCur().pieces.length')) > 4);
   await btn('В миску'); await wait(400);
   check('морковь в миске', await sess("s.stepDone('olivier','carrot')"));
-  for (const name of ['Морковь', 'Колбаса', 'Огурец', 'Огурец', 'Яйцо', 'Яйцо']) {
+  for (const name of ['Морковь', 'Колбаса', 'Огурец', 'Огурец']) {
     await btn(name); await wait(300); await cutCubes();
     if (await sess("s.cat.state === 'theft'")) { await shot('06_cat'); await page.locator('.alert button', { hasText: 'Прогнать' }).click(); }
     await btn('В миску'); await wait(300);
   }
+  check('пять порций нарезаны, пока варится', await sess("['carrot','carrot2','sausage','cucumber','cucumber2'].every(k => s.stepDone('olivier', k))"));
+  // яйца: сварились → горячие → остудить у раковины → резать
+  await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.burners[1].readyAt - window.__sueta.session.t + 0.5)));
+  for (const b of await sess('s.burners.filter(b => b.overflow).map(b => b.i)')) { await goStation('Плита', 'stove'); await btn('Убавить'); await noAction(); }
+  await goStation('Плита', 'stove'); await btn('Достать'); await noAction();
+  await goStation('Доска', 'board');
+  await btn('Яйцо'); await wait(300);
+  check('горячие яйца не режутся', (await sess('s.boardCur()?.product')) !== 'egg', await sess('s.hint?.text'));
+  await goStation('Раковина', 'sink'); await shot('06b_sink_cool'); await btn('Остудить'); await noAction();
+  check('яйца остужены у раковины', !(await sess('s.hot.egg > s.t')));
+  await goStation('Доска', 'board');
+  for (const name of ['Яйцо', 'Яйцо']) { await btn(name); await wait(300); await cutCubes(); await btn('В миску'); await wait(300); }
   check('семь порций нарезаны', await sess("['carrot','carrot2','sausage','cucumber','cucumber2','egg','egg2'].every(k => s.stepDone('olivier', k))"));
   // кот: вызвать и прогнать
   if ((await sess('s.cat.state')) === 'home') {
@@ -147,12 +161,25 @@ try {
   await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.stove.readyAt - window.__sueta.session.t + 0.5)));
   if (await sess('!!s.stove.overflow')) { await goStation('Плита', 'stove'); await btn('Убавить'); await noAction(); }
   check('плита (готово)', await goStation('Плита', 'stove'));
-  await btn('Достать картофель'); await noAction();
+  await btn('Достать'); await noAction();
+  await goStation('Раковина', 'sink'); await btn('Остудить'); await noAction();
   check('доска (картофель)', await goStation('Доска', 'board'));
   for (let i = 0; i < 2; i++) { await btn('Картофель'); await wait(300); await cutCubes(); await btn('В миску'); await wait(300); }
   check('миска', await goStation('Миска', 'bowl'));
   await btn('горошек'); await noAction(); await btn('майонез'); await noAction();
   await shot('07_bowl');
+  // вкус: щепотки по ответам пробы
+  for (let k = 0; k < 8; k++) {
+    await btn('Попробовать'); await noAction(); await wait(200);
+    const v = await sess('s.dishes.olivier.season.last');
+    if (v.ok) break;
+    if (v.salt > 0 || v.pepper > 0) { await btn('Разбавить'); await noAction(); }
+    if (v.salt < 0) { await btn('Соль'); await noAction(); }
+    if (v.pepper < 0) { await btn('Перец'); await noAction(); }
+  }
+  await shot('07b_season');
+  check('вкус по пробам — в самый раз', await sess('s.dishes.olivier.season.last.ok'), await sess('s.dishes.olivier.season.last.verdict'));
+  await btn('Вкус готов'); await noAction();
   // неподвижное удержание не перемешивает
   const c = await local(0.1, 0); await page.mouse.move(c.x, c.y); await page.mouse.down(); await wait(1500); await page.mouse.up();
   check('неподвижное удержание не перемешивает', (await sess('s.mixTurns()')) < 0.1);
@@ -168,6 +195,7 @@ try {
   await page.reload(); await wait(2500);
   check('после перезагрузки день 1 сохранён', await S(() => window.__sueta.save.data.days[0].completed && window.__sueta.save.data.days[1].unlocked));
   await shot('10_menu_after_reload');
+  if (part === 'd1') throw new Error('__done_d1');
 
   }
   // ---------- общие помощники для дней 2–7 ----------
@@ -467,8 +495,10 @@ try {
   check('финальный стол', (await S(() => window.__sueta.mode)) === 'final');
   console.log('TIMINGS ' + JSON.stringify(timings));
 } catch (err) {
-  await shot('99_error');
-  check('сценарий прерван', false, err.message.split('\n')[0]);
+  if (err.message !== '__done_d1') {
+    await shot('99_error');
+    check('сценарий прерван', false, err.message.split('\n')[0]);
+  }
 }
 console.log('--- итог ---\n' + checks.join('\n'));
 if (logs.length) console.log('--- console ---\n' + logs.slice(0, 20).join('\n'));

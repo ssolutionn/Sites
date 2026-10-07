@@ -862,7 +862,13 @@ export const PRACTICE = {
   spread: { label: 'Намазывание', make: () => ({ steps: [{ id: 'spread', type: 'spread', product: 'butter', items: 6, label: 'Намазать хлеб маслом' }, { id: 'dose', type: 'dose', product: 'caviar', items: 6, requires: ['spread'], label: 'Разложить икру' }], trayAs: 'sandwiches' }) },
   fill: { label: 'Наполнение', make: () => ({ steps: [{ id: 'fill', type: 'fill', containers: 'tartlet', items: 8, practiceFilling: true, label: 'Наполнить корзинки' }], trayAs: 'tartlets' }) },
   mix: { label: 'Перемешивание', make: () => ({ steps: [{ id: 'mix', type: 'mix', practiceMix: true, label: 'Перемешать круговыми движениями' }] }) },
+  speed: {
+    label: 'Скоростная нарезка',
+    hidden: true,
+    make: () => ({ steps: ['carrot', 'cucumber', 'potato'].map((product, i) => ({ id: 'p' + (i + 1), type: 'cut', product, shape: 'cube', dest: 'none', label: `${PRODUCTS[product].name} кубиками` })) }),
+  },
 };
+export const SPEED_MIN_Q = 0.75;
 
 function practiceDay({ activity, product }) {
   const p = PRACTICE[activity] ?? PRACTICE.cubes;

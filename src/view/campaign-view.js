@@ -244,6 +244,51 @@ export class CampaignView {
 
     // курица на подносе (до духовки)
     this.trayChicken = null;
+
+    // вторая кастрюля (вторая конфорка) — копия первой, своё содержимое и пар
+    const pot0 = k.pot;
+    const g2 = pot0.group.clone(true);
+    this.scene.add(g2);
+    const ch = g2.children;
+    this.pots = [
+      { group: pot0.group, lid: pot0.lid, foam: pot0.foam, content: pot0.potatoes, steam: pot0.steam, home: k.potHome.clone(), on: k.potOnStove.clone(), move: null, hideHome: false },
+      { group: g2, lid: ch[5], foam: ch[4], content: ch[3], steam: pot0.steam.map((st) => { const c = st.clone(); c.material = st.material.clone(); this.scene.add(c); return c; }), home: k.potHome.clone().add(new THREE.Vector3(-0.05, 0, 0)), on: k.potOnStove.clone().add(new THREE.Vector3(-0.3, 0, 0)), move: null, hideHome: true },
+    ];
+    for (const p of this.pots) p.content.traverse((o) => o.isMesh && (o.material = o.material.clone()));
+    g2.visible = false;
+    tag(g2, 'stove');
+
+    // доска грязная после сельди/свёклы
+    this.boardDirt = new THREE.Mesh(new THREE.CircleGeometry(0.12, 24), new THREE.MeshStandardMaterial({ color: 0x7a1d3c, transparent: true, opacity: 0.4, depthWrite: false }));
+    this.boardDirt.rotation.x = -Math.PI / 2;
+    this.boardDirt.scale.set(1.6, 1, 1);
+    this.boardDirt.position.copy(k.boardCenter).add(new THREE.Vector3(0.05, 0.003, 0.02));
+    this.boardDirt.visible = false;
+    this.root.add(this.boardDirt);
+
+    // миска кота и мячик
+    const cb = CLAYOUT.catBowl;
+    this.catBowl = new THREE.Group();
+    this.catBowl.position.set(cb.x, 0, cb.z);
+    const dish = new THREE.Mesh(new THREE.LatheGeometry([0.05, 0.075, 0.085, 0.09].map((r, i) => new THREE.Vector2(r, i * 0.014)), 24), F.m(0x2f7fd0, 0.4));
+    this.catBowl.add(dish);
+    this.kibble = new THREE.Group();
+    for (let i = 0; i < 12; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), F.m(0x9a5b2a, 0.7));
+      b.position.set(Math.cos(i * 2.1) * 0.035 * (i % 3) / 2, 0.03 + (i % 2) * 0.006, Math.sin(i * 2.1) * 0.035 * (i % 3) / 2);
+      this.kibble.add(b);
+    }
+    this.kibble.visible = false;
+    this.catBowl.add(this.kibble);
+    this.root.add(this.catBowl);
+    tag(this.catBowl, 'catbowl');
+    this.ball = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 10), F.m(0xe8443a, 0.5));
+    this.ball.position.set(cb.x + 0.3, 0.035, cb.z - 0.12);
+    this.root.add(this.ball);
+    tag(this.ball, 'catbowl');
+    this.ballHome = this.ball.position.clone();
+
+    this.particles = new Particles(this.root);
   }
 
   _buildRings() {
@@ -433,10 +478,17 @@ export class CampaignView {
     this.catVis = { segs: [], seg: 0, t: 0, mode: 'home' };
     this.sv.reset();
     this.sv.cat.visible = true;
-    this.k.pot.group.position.copy(this.k.potHome);
-    this.k.pot.potatoes.visible = true;
+    for (const p of this.pots) {
+      p.group.position.copy(p.home);
+      p.group.visible = !p.hideHome;
+      p.content.visible = true;
+      p.move = null;
+    }
     this.k.pot.puddle.scale.setScalar(0.001);
     this.potMove = null;
+    this.particles?.clear();
+    this.kibble.visible = false;
+    this.ball.position.copy(this.ballHome);
     this.facing = Math.PI;
     this.tableKey = null;
   }
@@ -448,13 +500,65 @@ export class CampaignView {
         this.failMark.visible = true;
         this.failT = 0.8;
         break;
-      case 'potPlaced':
-        this.potMove = { from: this.k.pot.group.position.clone(), to: this.k.potOnStove.clone(), t: 0 };
-        this.k.pot.potatoes.visible = true;
+      case 'potPlaced': {
+        const p = this.pots[e.burner ?? 0];
+        p.group.visible = true;
+        p.move = { from: p.group.position.clone(), to: p.on.clone(), t: 0 };
+        p.content.visible = true;
+        const col = { potato: 0xe8c77a, egg: 0xf6f1e6, beet: 0x7a1d3c }[e.product] ?? 0xe8c77a;
+        p.content.traverse((o) => o.isMesh && o.material.color.setHex(col));
         break;
-      case 'potatoTaken':
-        this.k.pot.potatoes.visible = false;
+      }
+      case 'potatoTaken': {
+        const p = this.pots[e.burner ?? 0];
+        p.content.visible = false;
+        p.move = { from: p.group.position.clone(), to: p.home.clone(), t: 0, hideAfter: p.hideHome };
+        this.particles.emit(p.on.clone().add(new THREE.Vector3(0, 0.3, 0)), 0xffffff, 14, { spread: 0.08, up: 0.5, life: 1.2, size: 0.03, gravity: -0.3 });
         break;
+      }
+      case 'catFed':
+        this.kibble.visible = true;
+        this._catTo(new THREE.Vector3(CLAYOUT.catBowl.x + 0.17, 0, CLAYOUT.catBowl.z - 0.02), 'eat', -Math.PI / 2);
+        break;
+      case 'catPlay':
+        this._catTo(new THREE.Vector3(CLAYOUT.catBowl.x + 0.1, 0, CLAYOUT.catBowl.z - 0.25), 'play', 0.6);
+        this.playT = 0;
+        break;
+      case 'cut': {
+        const it = this.session?.board.items[e.key];
+        if (it) this.particles.emit(this.k.boardCenter.clone().add(new THREE.Vector3((e.x ?? 0) * 0.042, 0.03, 0)), PRODUCTS[it.product]?.color ?? 0xffffff, 6, { spread: 0.03, up: 0.35, life: 0.6, size: 0.008 });
+        break;
+      }
+      case 'pinch': {
+        const bp = new THREE.Vector3();
+        this.k.bowl.group.getWorldPosition(bp);
+        this.particles.emit(bp.add(new THREE.Vector3(0, 0.25, 0)), e.kind === 'salt' ? 0xffffff : 0x2a2a2a, 16, { spread: 0.03, up: -0.2, life: 0.8, size: 0.006, gravity: 1.5 });
+        break;
+      }
+      case 'dishDone': {
+        const st = CLAYOUT.stations[this.session?.dishes[e.dishId]?.recipe.uses.includes('tray') ? 'tray' : 'bowl'];
+        const at = new THREE.Vector3(st.anchor.x, ISLAND_H + 0.15, st.anchor.z);
+        for (const c of [0xf4b400, 0xe8443a, 0x3fae49, 0x2f7fd0, 0xffffff]) this.particles.emit(at, c, 10, { spread: 0.1, up: 1.3, life: 1.4, size: 0.012, gravity: 2.2 });
+        break;
+      }
+      case 'washed':
+      case 'cooled': {
+        const a = CLAYOUT.stations.sink.anchor;
+        this.particles.emit(new THREE.Vector3(a.x, ISLAND_H + 0.1, a.z), 0xdff3ff, 18, { spread: 0.1, up: 0.6, life: 1, size: 0.016, gravity: -0.2 });
+        break;
+      }
+      case 'catSpill':
+      case 'spill': {
+        const at = e.type === 'spill' ? CLAYOUT.potPuddle : CLAYOUT.spillPuddle;
+        this.particles.emit(new THREE.Vector3(at.x, 0.1, at.z), e.type === 'spill' ? 0x9fd3ef : 0xb0304a, 24, { spread: 0.15, up: 0.9, life: 0.9, size: 0.014, gravity: 3 });
+        if (e.type === 'catSpill') this._catFlee(false);
+        break;
+      }
+      case 'served': {
+        const T = CLAYOUT.table;
+        this.particles.emit(new THREE.Vector3(T.x, T.h + 0.2, T.z), 0xffe08a, 16, { spread: 0.25, up: 0.6, life: 1, size: 0.01, gravity: 0.5 });
+        break;
+      }
       case 'catStart':
         this._catPath(e.kind === 'spill' ? 'spill' : 'theft');
         break;
@@ -501,6 +605,20 @@ export class CampaignView {
     };
   }
 
+  _catTo(target, mode, face) {
+    const from = this.sv.cat.position.clone();
+    from.y = 0;
+    const segs = [];
+    if (this.sv.cat.position.y > 0.05) {
+      const down = new THREE.Vector3(from.x, 0, 1.3);
+      segs.push({ from: this.sv.cat.position.clone(), to: down, dur: 0.3, arc: 0.2 });
+      segs.push({ from: down.clone(), to: target.clone(), dur: Math.max(0.6, down.distanceTo(target) / 1.8) });
+    } else segs.push({ from, to: target.clone(), dur: Math.max(0.6, from.distanceTo(target) / 1.8) });
+    segs.push({ from: target.clone(), to: target.clone(), dur: 999, mode, face });
+    this.sv.cat.userData.loot.visible = false;
+    this.catVis = { mode, t: 0, seg: 0, segs };
+  }
+
   _catFlee(loot) {
     const cat = this.sv.cat;
     const cur = cat.position.clone();
@@ -523,7 +641,7 @@ export class CampaignView {
     if (!cv.segs.length) {
       cat.position.set(CLAYOUT.catHome.x, 0, CLAYOUT.catHome.z);
       cat.rotation.y = -0.6;
-      animateCat(cat, 'sit', time, 0);
+      animateCat(cat, this.session?.catCalm?.() ? 'sleep' : 'sit', time, 0);
       return;
     }
     cv.t += dt;
@@ -545,7 +663,8 @@ export class CampaignView {
     else if (seg.face != null) cat.rotation.y = seg.face;
     cat.position.copy(p);
     if (seg.mode === 'sit' && cat.userData.loot.visible) cat.userData.loot.visible = false;
-    animateCat(cat, seg.mode ?? 'walk', time, moving ? 1 : 0);
+    const sleepy = seg.mode === 'sit' && this.session?.cat.state === 'home' && this.session.catCalm?.();
+    animateCat(cat, sleepy ? 'sleep' : seg.mode ?? 'walk', time, moving ? 1 : 0);
   }
 
   // ---------- кадр ----------
@@ -563,6 +682,7 @@ export class CampaignView {
     if (s.panel === 'board' && s.boardCur()?.grater) return { pose: 'grate' };
     if (s.panel === 'bag') return { pose: 'unpack' };
     if (s.panel === 'stove' || s.panel === 'oven') return { pose: 'stove' };
+    if (s.panel === 'catbowl') return { pose: 'unpack' };
     if (s.panel === 'bowl' && s.pointerDown) return { pose: 'mix' };
     if (s.panel === 'board') return { pose: 'cut', progress: 0 };
     if (s.panel === 'phone') return { pose: 'phone' };
@@ -642,26 +762,44 @@ export class CampaignView {
   }
 
   _updateStove(s, dt, t) {
-    const pot = this.k.pot;
-    if (this.potMove) {
-      this.potMove.t = Math.min(1, this.potMove.t + dt / 0.5);
-      pot.group.position.lerpVectors(this.potMove.from, this.potMove.to, ease(this.potMove.t));
-      pot.group.position.y += Math.sin(this.potMove.t * Math.PI) * 0.12;
-      if (this.potMove.t >= 1) this.potMove = null;
-    }
-    const boiling = s.stove.state === 'boiling' || s.stove.state === 'ready';
-    const over = !!s.stove.overflow;
-    pot.foam.visible = over;
-    pot.lid.position.y = 0.21 + (over ? Math.abs(Math.sin(t * 22)) * 0.03 : boiling ? Math.abs(Math.sin(t * 6)) * 0.004 : 0);
-    pot.lid.rotation.z = over ? Math.sin(t * 17) * 0.08 : 0;
-    pot.steam.forEach((st, i) => {
-      st.visible = boiling;
-      if (!boiling) return;
-      const ph = (t * (over ? 0.9 : 0.45) + st.userData.phase) % 1;
-      st.position.set(pot.group.position.x + Math.sin(i * 2 + t) * 0.06, pot.group.position.y + 0.25 + ph * 0.6, pot.group.position.z + Math.cos(i * 3) * 0.05);
-      st.scale.setScalar(0.6 + ph * 1.6);
-      st.material.opacity = (1 - ph) * (over ? 0.6 : 0.3);
+    this.pots.forEach((pot, bi) => {
+      const b = s.burners[bi];
+      if (pot.move) {
+        pot.move.t = Math.min(1, pot.move.t + dt / 0.5);
+        pot.group.position.lerpVectors(pot.move.from, pot.move.to, ease(pot.move.t));
+        pot.group.position.y += Math.sin(pot.move.t * Math.PI) * 0.12;
+        if (pot.move.t >= 1) {
+          if (pot.move.hideAfter) pot.group.visible = false;
+          pot.move = null;
+        }
+      }
+      const boiling = !!b && (b.state === 'boiling' || b.state === 'ready');
+      const over = !!b?.overflow;
+      pot.foam.visible = over;
+      pot.lid.position.y = 0.21 + (over ? Math.abs(Math.sin(t * 22 + bi)) * 0.03 : boiling ? Math.abs(Math.sin(t * 6 + bi)) * 0.004 : 0);
+      pot.lid.rotation.z = over ? Math.sin(t * 17) * 0.08 : 0;
+      pot.steam.forEach((st, i) => {
+        st.visible = boiling;
+        if (!boiling) return;
+        const ph = (t * (over ? 0.9 : 0.45) + st.userData.phase) % 1;
+        st.position.set(pot.group.position.x + Math.sin(i * 2 + t) * 0.06, pot.group.position.y + 0.25 + ph * 0.6, pot.group.position.z + Math.cos(i * 3) * 0.05);
+        st.scale.setScalar(0.6 + ph * 1.6);
+        st.material.opacity = (1 - ph) * (over ? 0.6 : 0.3);
+      });
     });
+    // доска, миска кота, мячик
+    const bd = s.equipment.board;
+    this.boardDirt.visible = !!bd && !bd.clean;
+    if (this.boardDirt.visible) this.boardDirt.material.color.setHex(bd.by === 'beet' ? 0x7a1d3c : 0x8a7a66);
+    if (s.cat.state !== 'eat' && this.kibble.visible && s.catNeeds.hunger > 5) this.kibble.visible = false;
+    if (s.cat.state === 'play') {
+      this.playT = (this.playT ?? 0) + dt;
+      const cb = CLAYOUT.catBowl;
+      this.ball.position.set(cb.x + 0.1 + Math.sin(this.playT * 2.2) * 0.35, 0.035 + Math.abs(Math.sin(this.playT * 5)) * 0.12, cb.z - 0.25 + Math.cos(this.playT * 1.7) * 0.2);
+      this.sv.cat.position.x += (this.ball.position.x - 0.12 - this.sv.cat.position.x) * Math.min(1, dt * 3);
+      this.sv.cat.position.z += (this.ball.position.z - this.sv.cat.position.z) * Math.min(1, dt * 3);
+    } else this.ball.position.lerp(this.ballHome, Math.min(1, dt * 2));
+    this.particles.update(dt);
     // духовка
     const o = s.oven;
     const on = o.state !== 'empty';
@@ -1242,6 +1380,8 @@ export class CampaignView {
           model = new THREE.Mesh(new THREE.LatheGeometry([0.03, 0.09, 0.12, 0.13].map((r, i) => new THREE.Vector2(r, i * 0.025)), 28), new THREE.MeshStandardMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.6, side: THREE.DoubleSide }));
         } else if (job.item === 'tray') {
           model = F.trayModel(0.32, 0.22);
+        } else if (job.item === 'board') {
+          model = new THREE.Mesh(F.rbox(0.3, 0.02, 0.2, 0.015), F.m(0xd9a866, 0.7));
         } else model = F.bakingForm();
         if (job.item === 'form') model.scale.setScalar(0.9);
         this.sinkItem.add(model);
@@ -1334,5 +1474,51 @@ export class CampaignView {
     }
     this.slotMarks.visible = !!placed && s.panel === 'table';
     this.tableLight.intensity = mode === 'final' ? 2.5 : entries.length ? 0.6 : 0;
+  }
+}
+
+// Лёгкие частицы для обратной связи: крошки при нарезке, соль, брызги, конфетти. Один InstancedMesh на всё.
+class Particles {
+  constructor(parent, max = 260) {
+    this.max = max;
+    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }), max);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.frustumCulled = false;
+    this.mesh.count = 0;
+    parent.add(this.mesh);
+    this.list = [];
+    this.m = new THREE.Matrix4();
+    this.c = new THREE.Color();
+  }
+  emit(pos, color, n, { spread = 0.05, up = 0.5, life = 1, size = 0.01, gravity = 1 } = {}) {
+    for (let i = 0; i < n && this.list.length < this.max; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * spread;
+      this.list.push({
+        p: pos.clone().add(new THREE.Vector3(Math.cos(a) * r, Math.random() * spread * 0.5, Math.sin(a) * r)),
+        v: new THREE.Vector3(Math.cos(a) * r * 3, up * (0.6 + Math.random() * 0.6), Math.sin(a) * r * 3),
+        life, max: life, size: size * (0.7 + Math.random() * 0.6), color, gravity,
+      });
+    }
+  }
+  update(dt) {
+    let k = 0;
+    this.list = this.list.filter((q) => (q.life -= dt) > 0);
+    for (const q of this.list) {
+      q.v.y -= q.gravity * dt;
+      q.p.addScaledVector(q.v, dt);
+      const sc = q.size * Math.min(1, q.life / q.max + 0.3);
+      this.m.makeScale(sc, sc, sc).setPosition(q.p);
+      this.mesh.setMatrixAt(k, this.m);
+      this.mesh.setColorAt(k, this.c.setHex(q.color));
+      k++;
+    }
+    this.mesh.count = k;
+    this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+  }
+  clear() {
+    this.list = [];
+    this.mesh.count = 0;
   }
 }

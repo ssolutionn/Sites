@@ -7,6 +7,12 @@ import { createRng } from '../game/rng.js';
 
 const SALT_Q = [1, 0.75, 0.45, 0.2];
 const PEPPER_Q = [1, 0.8, 0.55];
+// Фразы для варки с правильным родом и числом.
+export const BOILED = {
+  potato: { boils: 'Картофель варится — будет готов', ready: 'Картофель сварился', hot: 'Картофель ещё горячий', cooled: 'Картофель остыл' },
+  egg: { boils: 'Яйца варятся — будут готовы', ready: 'Яйца сварились', hot: 'Яйца ещё горячие', cooled: 'Яйца остыли' },
+  beet: { boils: 'Свёкла варится — будет готова', ready: 'Свёкла сварилась', hot: 'Свёкла ещё горячая', cooled: 'Свёкла остыла' },
+};
 export const TEMPTING = { sausage: 'к колбасе', herring: 'к селёдке', crab: 'к крабовым палочкам', cheese: 'к сыру' };
 
 export const extraMethods = {
@@ -110,7 +116,7 @@ export const extraMethods = {
       delete this.hot[product];
       return null;
     }
-    return `${PRODUCTS[product].name} ещё горячий — подожди ${left} с или остуди под холодной водой у раковины`;
+    return `${BOILED[product]?.hot ?? PRODUCTS[product].name + ' ещё горячее'} — подожди ${left} с или остуди под холодной водой у раковины`;
   },
 
   hotList() {
@@ -123,7 +129,7 @@ export const extraMethods = {
     return this._startAction('cool', this.cfg.cool.sinkCool, () => {
       delete this.hot[product];
       this._emit('cooled', { product });
-      this.setHint(`${PRODUCTS[product].name} остужен — можно резать`, 2);
+      this.setHint(`${BOILED[product]?.cooled ?? 'Остыло'} — можно резать`, 2);
     }, { product });
   },
 

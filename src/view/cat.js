@@ -117,6 +117,26 @@ export function animateCat(cat, mode, time, speed = 0) {
     legs[1].rotation.x = -0.4;
     head.rotation.x = 0.45;
   }
+  if (mode === 'eat') {
+    // ест из миски: голова вниз, покачивание
+    body.rotation.x = 0.12;
+    head.rotation.x = 0.75 + Math.sin(time * 7) * 0.12;
+  }
+  if (mode === 'sleep') {
+    // свернулся и спит
+    body.rotation.x = -0.05;
+    body.position.y = -0.05 + Math.sin(time * 1.6) * 0.004;
+    legs.forEach((l) => (l.rotation.x = -1.3));
+    head.rotation.x = 0.55;
+    tailPivot.rotation.z = Math.sin(time * 0.8) * 0.08;
+  }
+  if (mode === 'play') {
+    // прыгает за мячиком
+    body.position.y = Math.abs(Math.sin(time * 5)) * 0.06;
+    body.rotation.x = -0.2 + Math.sin(time * 5) * 0.2;
+    legs[0].rotation.x = -0.9 + Math.sin(time * 10) * 0.5;
+    legs[1].rotation.x = -0.9 - Math.sin(time * 10) * 0.5;
+  }
   if (mode === 'sit') {
     body.rotation.x = -0.35;
     legs[2].rotation.x = -0.9;

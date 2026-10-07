@@ -132,9 +132,60 @@ function board(key) {
   think(PACE.inspect);
   if (s.board.items[key]) ui(() => s.boardTransfer());
 }
+function wishOf(dish, kind) {
+  return s.requests.some((r) => r.known && r.recipe === dish && r.kind === kind);
+}
 function adds(dish) {
   go('bowl');
-  for (const t of s.bowlTasks().filter((t) => t.dishId === dish && t.type === 'add' && t.state === 'ready')) ui(() => s.bowlAdd(dish, t.stepId));
+  for (const t of s.bowlTasks().filter((t) => t.dishId === dish && t.type === 'add' && t.state === 'ready')) ui(() => s.bowlAdd(dish, t.stepId, t.product === 'mayo' && wishOf(dish, 'lightMayo') ? 'light' : 'full'));
+}
+// Вкус «как у игрока»: щепотки наугад, проба, поправка по ответу, ещё проба.
+function season(dish) {
+  readPhone();
+  go('bowl');
+  tip('season');
+  const se = s.dishes[dish].season;
+  const noPepper = wishOf(dish, 'noPepper');
+  for (let i = 0; i < 3; i++) ui(() => s.seasonAdd(dish, 'salt'));
+  if (!noPepper) ui(() => s.seasonAdd(dish, 'pepper'));
+  for (let k = 0; k < 4; k++) {
+    ui(() => s.seasonTaste(dish));
+    read(1.5);
+    const l = se.last;
+    if (l.ok) break;
+    if (l.salt > 0 || l.pepper > 0) ui(() => s.seasonDilute(dish));
+    if (l.salt < 0) ui(() => s.seasonAdd(dish, 'salt'));
+    if (l.pepper < 0) ui(() => s.seasonAdd(dish, 'pepper'));
+  }
+  ui(() => s.seasonDone(dish));
+}
+// Плита: поставить всё, что можно, на свободные конфорки.
+function placeAll() {
+  go('stove');
+  tip('stove');
+  while (s.stoveTasks().length && s.usableBurners().some((b) => b.state === 'empty')) ui(() => s.placePot());
+}
+function catCheck() {
+  if (s.catNeeds.hunger >= 50 && s.cat.state === 'home') {
+    go('catbowl');
+    tip('catHungry');
+    ui(() => s.feedCat());
+  }
+}
+// Дождаться продукта, достать, остудить у раковины.
+function boiled(product) {
+  for (;;) {
+    for (const b of s.burners) if (b.overflow) { go('stove'); ui(() => s.reduceHeat(b.i)); }
+    const b = s.burners.find((x) => x.product === product && x.state !== 'empty');
+    if (!b) return;
+    if (b.state === 'ready') break;
+    tick(0.5, 'wait');
+  }
+  go('stove');
+  ui(() => s.takePot(s.burners.find((x) => x.product === product && x.state === 'ready').i));
+  tip('hot');
+  go('sink');
+  ui(() => s.coolProduct(product));
 }
 function stir() {
   tip('bowl');
@@ -230,57 +281,64 @@ function handleOverflow() {
 const days = [
   () => {
     read(PACE.recipeCheck);
-    go('stove');
-    ui(() => s.placePot());
-    for (const k of ['carrot', 'carrot2', 'sausage', 'cucumber', 'cucumber2', 'egg', 'egg2']) {
+    placeAll();
+    for (const k of ['carrot', 'carrot2', 'sausage', 'cucumber', 'cucumber2']) {
       board('olivier:' + k);
       handleOverflow();
+      catCheck();
     }
+    boiled('egg');
+    board('olivier:egg');
+    board('olivier:egg2');
     adds('olivier');
     readPhone();
     fixHome();
-    startPotWait();
-    go('stove');
-    ui(() => s.takePot());
+    boiled('potato');
     board('olivier:potato');
     board('olivier:potato2');
-    go('bowl');
+    season('olivier');
     stir();
   },
   () => {
     read(PACE.recipeCheck);
     readPhone();
     order({ corn: 1 });
+    placeAll();
     wash('bowl');
-    for (const k of ['crab', 'crab2', 'egg', 'egg2', 'cucumber']) board('crab:' + k);
+    for (const k of ['crab', 'crab2', 'cucumber']) board('crab:' + k);
+    catCheck();
+    boiled('egg');
+    board('crab:egg');
+    board('crab:egg2');
     collect();
     adds('crab');
-    go('bowl');
+    season('crab');
     stir();
   },
   () => {
     read(PACE.recipeCheck);
     readPhone();
     order({ caviar: 1 });
+    placeAll();
     tray('sandwiches');
     for (const b of s.dishes.sandwiches.work.breads) zig(b.x, b.z, b.w * 0.95, b.d * 0.95, 7);
-    // пока едет икра — яйца: половинки и желтки на подносе нельзя (поднос занят), поэтому начинка позже
     collect();
     tray('sandwiches');
     s.setTool('spoon');
-    for (const b of s.dishes.sandwiches.work.breads) {
-      clickAt(b.x, b.z);
-      clickAt(b.x, b.z);
-    }
+    const doses = wishOf('sandwiches', 'extraCaviar') ? 3 : 2;
+    for (const b of s.dishes.sandwiches.work.breads) for (let k = 0; k < doses; k++) clickAt(b.x, b.z);
     think(PACE.inspect);
     ui(() => s.confirmDish('sandwiches'));
+    catCheck();
     wash('tray');
+    boiled('egg');
     tray('eggs');
     s.setTool('knife');
     for (const e of s.dishes.eggs.work.eggs) clickAt(e.x, e.z);
     s.setTool('spoon');
     for (const e of s.dishes.eggs.work.eggs) for (const h of e.halves) clickAt(h.x, h.z);
     adds('eggs');
+    season('eggs');
     stir();
     tray('eggs');
     s.setTool('spoon');
@@ -294,8 +352,13 @@ const days = [
     readPhone();
     ui(() => s.setVariant('tomatoes', false));
     order({ greens: 2 });
-    for (const k of ['cheese', 'cheese2', 'egg', 'egg2']) board('tartlets:' + k);
+    placeAll();
+    for (const k of ['cheese', 'cheese2']) board('tartlets:' + k);
+    catCheck();
+    boiled('egg');
+    for (const k of ['egg', 'egg2']) board('tartlets:' + k);
     adds('tartlets');
+    season('tartlets');
     stir();
     collect();
     tray('tartlets');
@@ -307,6 +370,7 @@ const days = [
     ui(() => s.confirmDish('tartlets'));
     wash('bowl');
     wash('tray');
+    catCheck();
     tray('tomatoes');
     s.setTool('knife');
     for (const t of s.dishes.tomatoes.work.toms) clickAt(t.x, t.z - 0.01);
@@ -318,6 +382,7 @@ const days = [
     }
     board('tomatoes:cheese');
     adds('tomatoes');
+    season('tomatoes');
     stir();
     tray('tomatoes');
     s.setTool('spoon');
@@ -329,20 +394,22 @@ const days = [
   },
   () => {
     read(PACE.recipeCheck);
-    go('stove');
-    ui(() => s.placePot());
+    placeAll();
     order({ mayo: 2 });
-    for (const k of ['herring', 'herring2', 'onion', 'carrot', 'beet', 'beet2']) {
-      board('shuba:' + k);
-      handleOverflow();
-    }
+    for (const k of ['onion', 'carrot']) board('shuba:' + k);
+    catCheck();
     readPhone();
     fixHome();
-    startPotWait();
-    go('stove');
-    ui(() => s.takePot());
+    boiled('potato');
     board('shuba:potato');
     board('shuba:potato2');
+    for (const k of ['herring', 'herring2']) board('shuba:' + k);
+    tip('boardDirty');
+    wash('board');
+    catCheck();
+    boiled('beet');
+    board('shuba:beet');
+    board('shuba:beet2');
     collect();
     tray('shuba');
     const w = s.dishes.shuba.work;
@@ -358,6 +425,7 @@ const days = [
   () => {
     read(PACE.recipeCheck);
     order({ grapes: 1 });
+    catCheck();
     board('canape:bread');
     board('canape:cheese');
     board('canape:sausage');
@@ -393,6 +461,7 @@ const days = [
   () => {
     read(PACE.recipeCheck);
     order({ marinade: 1 });
+    catCheck();
     go('table');
     for (const [i, id] of ['olivier', 'crab', 'sandwiches', 'eggs', 'tartlets'].entries()) {
       think(PACE.aimClick + 0.6);
@@ -432,6 +501,7 @@ for (let i = 0; i < 7; i++) {
   s = new KitchenSession({ dayIndex: i, seed: 11 + i, tableDishes: prev.slice() });
   days[i]();
   const r = finish();
+  if (process.env.NOTES) console.log('  день', i + 1, JSON.stringify(r.dishes), r.order, r.orderNotes.join('; '), JSON.stringify(r.notes), 'медали', r.medals.join(','), 'темп', r.pace);
   prev.push(...DAYS[i].dishes);
   rows.push({ day: i + 1, total: s.t, ...Object.fromEntries(Object.entries(R).map(([k, v]) => [k, v])), D: r.D, target: DAYS[i].targetMinutes * 60 });
 }

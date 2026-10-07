@@ -2,7 +2,7 @@
 import { CoverageMask } from './coverage.js';
 import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS } from './layout.js';
 import { PRODUCTS, DISH_ORDER } from './data.js';
-import { TEMPTING } from './st-extra.js';
+import { TEMPTING, BOILED } from './st-extra.js';
 
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
 
@@ -56,7 +56,7 @@ export const homeMethods = {
       this.burners[b.i] = { i: b.i, state: 'boiling', owner: task.dishId, step: task.stepId, product: task.product, startT: this.t, readyAt: this.t + time, overflow: null };
       this._emit('potPlaced', { dishId: task.dishId, burner: b.i, product: task.product });
       const m = Math.floor(time / 60), sec = String(Math.round(time % 60)).padStart(2, '0');
-      this.setHint(`${this.productName(task.product)} варится. Будет готов через ${m}:${sec} — пока займись остальным`, 4);
+      this.setHint(`${BOILED[task.product]?.boils ?? this.productName(task.product) + ' варится — готово'} через ${m}:${sec}. Пока займись остальным`, 4);
     });
   },
 
@@ -73,7 +73,7 @@ export const homeMethods = {
           this._removeAlert(this._potKey(s.i));
         }
         const name = this.productName(s.product);
-        this._alert('potReady' + (s.i || ''), `${name} — сварилось, достань из кастрюли`, { station: 'stove' });
+        this._alert('potReady' + (s.i || ''), `${BOILED[s.product]?.ready ?? name + ' — готово'} — достань из кастрюли`, { station: 'stove' });
         this._emit('potatoReady', { burner: s.i, product: s.product });
       }
       if (s.overflow && this.t >= s.overflow.deadline) {
@@ -120,7 +120,7 @@ export const homeMethods = {
     const b = i != null ? this.burners[i] : this.burners.find((x) => x.state === 'ready') ?? this.burners.find((x) => x.state === 'boiling');
     if (!b) return false;
     if (b.state === 'boiling') {
-      this.setHint(`${this.productName(b.product)} ещё варится — осталось ${Math.ceil(b.readyAt - this.t)} с`);
+      this.setHint(`Ещё варится (${this.productName(b.product).toLowerCase()}) — осталось ${Math.ceil(b.readyAt - this.t)} с`);
       return false;
     }
     if (b.state !== 'ready') return false;
@@ -132,7 +132,7 @@ export const homeMethods = {
       this._completeStep(owner, step, 1);
       if (!this.practice) this.hot[product] = this.t + this.cfg.cool.time;
       this._emit('potatoTaken', { dishId: owner, burner: b.i, product });
-      this.setHint(`${this.productName(product)} горячий — остынет за ${this.cfg.cool.time} с, или остуди у раковины`, 3.5);
+      this.setHint(`${BOILED[product]?.hot ?? 'Горячее'}: остынет за ${this.cfg.cool.time} с — или остуди у раковины`, 3.5);
     });
   },
 

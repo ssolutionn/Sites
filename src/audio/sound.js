@@ -176,6 +176,33 @@ export class Sound {
       case 'bag':
         this._noise(0.35, { vol: 0.25, freq: 1500, q: 0.4 });
         break;
+      case 'salt':
+        for (let i = 0; i < 4; i++) this._noise(0.03, { vol: 0.12, freq: 6000, q: 2, at: i * 0.05 });
+        break;
+      case 'taste':
+        this._tone(330, 0.18, { type: 'triangle', vol: 0.12, slideTo: 420 });
+        this._tone(420, 0.22, { type: 'triangle', vol: 0.12, at: 0.18, slideTo: 300 });
+        break;
+      case 'pour':
+        this._noise(0.6, { vol: 0.18, freq: 700, q: 0.6, type: 'lowpass' });
+        break;
+      case 'feed':
+        for (let i = 0; i < 5; i++) this._noise(0.04, { vol: 0.16, freq: 2500, q: 1.2, at: i * 0.09 });
+        this._tone(700, 0.3, { type: 'triangle', vol: 0.08, at: 0.45, slideTo: 900 });
+        break;
+      case 'ball':
+        [0, 0.18, 0.32].forEach((at, i) => this._tone(500 - i * 60, 0.08, { vol: 0.14, at, slideTo: 300 }));
+        break;
+      case 'purr':
+        this._tone(48, 0.9, { type: 'sawtooth', vol: 0.05, attack: 0.15 });
+        break;
+      case 'fizz':
+        this._noise(0.5, { vol: 0.2, freq: 5000, q: 0.5, type: 'highpass' });
+        break;
+      case 'cash':
+        this._tone(1568, 0.08, { vol: 0.15 });
+        this._tone(2093, 0.2, { vol: 0.15, at: 0.08 });
+        break;
       case 'click':
         this._tone(1200, 0.03, { vol: 0.06 });
         break;

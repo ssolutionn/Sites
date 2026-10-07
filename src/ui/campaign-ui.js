@@ -3,6 +3,7 @@ import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER } from '../campaign/data.
 import { CLAYOUT, TABLE_SLOTS } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
+import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
 import { LOGO_URL } from '../view/textures.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -12,9 +13,10 @@ export function fmt(sec) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
+const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
 const PICON = { potato: '🥔', carrot: '🥕', sausage: '🌭', cucumber: '🥒', egg: '🥚', peas: '🫛', mayo: '🫙', crab: '🦀', corn: '🌽', bread: '🍞', butter: '🧈', caviar: '🔴', tartlet: '🧁', cheese: '🧀', greens: '🌿', tomato: '🍅', onion: '🧅', herring: '🐟', beet: '🟣', skewer: '🍡', mandarin: '🍊', apple: '🍏', grapes: '🍇', chicken: '🍗', marinade: '🥣' };
-const STATION_ICON = { board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', fridge: '🧊', bag: '🛍', table: '🎄', puddle: '🧽' };
+const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', fridge: '🧊', bag: '🛍', table: '🎄', puddle: '🧽' };
 const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука' };
 
 export const TIPS = {
@@ -37,6 +39,14 @@ export const TIPS = {
   delivery: 'Заказ оформлен. Пока курьер едет, занимайся другими делами — уведомление придёт само.',
   radio: 'Радио замолчало. Это не срочно: подойди к нему и удерживай «Настроить», когда будет минутка.',
   garland: 'Часть гирлянды погасла. Не срочно, но к концу дня её стоит починить — это влияет на порядок.',
+  stove: 'Плита: две конфорки. Ставь вариться всё сразу и режи остальное, пока варится. У картофеля 2:00, у яиц 1:00, у свёклы 2:30.',
+  hot: 'Сваренное горячее: резать сразу нельзя. Подожди полминуты или остуди под холодной водой у раковины — это быстрее.',
+  season: 'Вкус: соль и перец — щепотками. Норму не видно: попробуй ложкой («Попробовать»), героиня скажет честно. Пересолила — «Разбавить» (долго). Потом «Вкус готов» и перемешивай.',
+  catHungry: 'Кот проголодался. Голодный кот сам полезет к колбасе, селёдке или сыру на доске. Покорми его у миски кота — сытый кот спит. Мячик отвлекает, но голод не утоляет.',
+  catbowl: 'Миска кота: «Покормить» обнуляет голод. «Мячик» занимает кота на 45 секунд.',
+  money: 'У дня есть бюджет. Экспресс быстрее, но дороже. «Сходить самой» бесплатно, но героиня уходит на 35 секунд — плита и кот без присмотра.',
+  boardDirty: 'После сельди или свёклы доска грязная: тот же продукт резать можно, другой — только после мытья у раковины. Режь пахучее последним!',
+  wish: 'Гости прислали пожелание. Оно видно в рецепте (Q) и влияет на оценку блюда.',
   'tray:chicken': 'Маринад: кисточкой (зажми кнопку) проведи по курице. Видимые части — грудка, ножки, крылья. Спинку покрывать не нужно.',
 };
 
@@ -129,8 +139,10 @@ export class CampaignUI {
           ${has ? '<button class="ghost big" data-ui="new">Новая кампания</button>' : ''}
           <button class="ghost big" data-ui="journal">📖 Журнал дней</button>
         </div>
-        <div class="actions">
+        <div class="actions compact">
           <button class="ghost" data-ui="practice">🔪 Свободная практика</button>
+          <button class="ghost" data-ui="challenges">🏆 Испытания</button>
+          <button class="ghost" data-ui="stream">📺 Режим стрима${save.data.settings.stream?.on ? ' · вкл' : ''}</button>
           <a class="ghost btn-link" href="./classic.html">⏱ Оливье за 5 минут</a>
           <a class="ghost btn-link" href="./gallery.html">Девушка и кот · 3D</a>
           <button class="ghost" data-ui="controls">Управление</button>
@@ -175,7 +187,7 @@ export class CampaignUI {
       const st = save.data.days[i];
       const state = st.completed ? 'done' : st.unlocked ? 'current' : 'locked';
       const dishes = d.dishes.map((id) => `${ICON[id]} ${RECIPES[id].name}`).join('<br/>');
-      const best = st.best ? `<div class="score-pill">лучший ${st.best.D}${st.last && st.last !== st.best ? ` · последний ${st.last.D}` : ''}</div>` : '';
+      const best = st.best ? `<div class="score-pill">лучший ${st.best.D}${st.last && st.last !== st.best ? ` · последний ${st.last.D}` : ''}</div><div class="stars">${stars(st.stars ?? 0)}</div><div class="medals">${(st.medals ?? []).map((m) => `<span title="${esc(MEDALS[m]?.name ?? m)}">${MEDALS[m]?.icon ?? ''}</span>`).join('')}</div>${st.bestTime ? `<div class="small">лучшее время ${fmt(st.bestTime)}</div>` : ''}` : '';
       const btn = state === 'locked' ? '<span class="small">🔒 закрыт</span>' : `<button class="${state === 'current' ? 'primary' : 'ghost'}" data-ui="day" data-arg="${i}">${state === 'done' ? 'Переиграть' : 'Играть'}</button>`;
       return `<div class="day-card ${state}"><div class="day-n">День ${d.id}</div><b>${esc(d.title)}</b><div class="small">${dishes}</div>${best}<div class="day-btn">${btn}</div></div>`;
     }).join('');
@@ -190,7 +202,7 @@ export class CampaignUI {
     );
   }
 
-  showDayIntro(day, save, resumed = false) {
+  showDayIntro(day, save, resumed = false, mods = []) {
     const dishes = day.dishes.map((id) => `<li>${ICON[id]} <b>${RECIPES[id].name}</b> — ${esc(RECIPES[id].look.toLowerCase())}</li>`).join('');
     const skills = day.newSkills.map((s) => `<span class="chip">${esc(s)}</span>`).join(' ');
     this._overlay(
@@ -201,7 +213,8 @@ export class CampaignUI {
         <ul class="dish-list">${dishes}</ul>
         <div class="skills">Новое: ${skills}</div>
         ${resumed ? '<p class="small warn">Страница перезагружалась во время дня: начинаем этот день заново, прошлые результаты сохранены.</p>' : ''}
-        <p class="small">Ориентир: около ${day.targetMinutes} минут. Время не ограничено — день завершается, когда все блюда готовы.</p>
+        <p class="small">Ориентир: около ${day.targetMinutes} минут — уложишься, получишь медаль «В ритме». Время не ограничено. Бюджет на покупки: <b>${day.budget ?? 0} ₽</b>.</p>
+        ${mods?.length ? `<div class="skills">Испытание: ${mods.map((m) => `<span class="chip warn">${esc(MODIFIERS[m].label)} — ${esc(MODIFIERS[m].desc)}</span>`).join(' ')}</div>` : ''}
         <div class="actions"><button class="primary big" data-ui="enter">На кухню!</button><button class="ghost" data-ui="journal">Журнал</button></div>
       </div>`,
       'dim',
@@ -226,6 +239,7 @@ export class CampaignUI {
 
   showPracticeSelect() {
     const acts = Object.entries(PRACTICE)
+      .filter(([, p]) => !p.hidden)
       .map(([id, p]) => {
         const products = id === 'cubes' ? ['carrot', 'potato', 'cucumber', 'egg', 'sausage', 'cheese', 'onion'] : id === 'rounds' ? ['cucumber', 'sausage'] : id === 'grate' ? ['cheese', 'carrot', 'beet', 'potato'] : [null];
         return `<div class="practice-row"><b>${p.label}</b> ${products.map((pr) => `<button class="ghost" data-ui="practiceGo" data-arg="${id}:${pr ?? ''}">${pr ? PICON[pr] + ' ' + PRODUCTS[pr].name : 'Начать'}</button>`).join('')}</div>`;
@@ -245,18 +259,22 @@ export class CampaignUI {
         return `<div class="dish-res"><div class="dish-q">${r.dishes[id]}</div><div><b>${ICON[id]} ${RECIPES[id].name}</b><ul>${notes}</ul></div></div>`;
       })
       .join('');
-    const best = save.data.days[day.id - 1].best;
-    const wish = r.wish ? `<p>${r.wish.met ? '✅ Пожелание гостей выполнено' : '⚠️ Пожелание гостей не выполнено'}</p>` : '';
+    const best = r.challenge ? null : save.data.days[day.id - 1].best;
+    const wish = (r.wishes ?? []).map((w) => `<div>${w.met ? '✅' : '⚠️'} ${ICON[w.recipe]} «${esc(w.label)}» — ${w.met ? 'выполнено' : 'не выполнено'}</div>`).join('');
+    const medals = (r.medals ?? []).map((m) => `<span class="medal" title="${esc(MEDALS[m].hint)}">${MEDALS[m].icon} ${esc(MEDALS[m].name)}</span>`).join('');
+    const guests = day.dishes.map((id, k) => `<div class="guest-line">💬 <b>${['Оля', 'Дима', 'Катя', 'Серёжа'][k % 4]}:</b> ${esc(guestLine(id, r.dishes[id], r.D))}</div>`).join('');
     this._overlay(
       `<div class="card dialog result">
         <div class="head"><div class="emoji">${r.D >= 85 ? '🏆' : r.D >= 60 ? '🎄' : '😅'}</div><h2>День ${day.id} завершён</h2><div class="small">${esc(day.title)}</div></div>
-        <div style="text-align:center"><span class="score">${r.D}</span><span class="small"> / 100 за день${best && best.D > r.D ? ` · лучший ${best.D}` : ''}</span></div>
+        <div style="text-align:center"><span class="score">${r.D}</span><span class="small"> / 100 за день${best && best.D > r.D ? ` · лучший ${best.D}` : ''}</span><div class="stars big">${stars(r.stars ?? 0)}</div></div>
+        ${medals ? `<div class="medals-row">${medals}</div>` : ''}
         ${rows}
-        ${wish}
+        ${wish ? `<div class="wishes">${wish}</div>` : ''}
+        ${guests}
         <div class="order-row"><b>Порядок на кухне: ${r.order}</b>${r.orderNotes.length ? ' — ' + r.orderNotes.map(esc).join('; ') : ' — чисто и празднично'}</div>
-        <p class="small">Время на кухне: ${fmt(r.time)} (ходьба ${fmt(r.stats.walk)}, крупный план ${fmt(r.stats.closeup)}, телефон ${fmt(r.stats.phone)}).</p>
+        <p class="small">Время на кухне: ${fmt(r.time)} при ориентире ${fmt(r.par ?? 0)} — темп ${r.pace ?? '—'} (ходьба ${fmt(r.stats.walk)}, крупный план ${fmt(r.stats.closeup)}, телефон ${fmt(r.stats.phone)}). Покупки: ${r.spent ?? 0} из ${r.budget ?? 0} ₽.</p>
         <div class="actions" style="justify-content:center">
-          ${isLast ? '<button class="primary big" data-ui="final">🎄 Финальный стол</button>' : '<button class="primary big" data-ui="nextDay">Следующий день →</button>'}
+          ${r.challenge ? '<button class="primary big" data-ui="challenges">🏆 К испытаниям</button>' : isLast ? '<button class="primary big" data-ui="final">🎄 Финальный стол</button>' : '<button class="primary big" data-ui="nextDay">Следующий день →</button>'}
           <button class="ghost" data-ui="replay">Переиграть день</button>
           <button class="ghost" data-ui="journal">Журнал</button>
         </div>
@@ -272,17 +290,140 @@ export class CampaignUI {
         <h2>🎆 С Новым годом!</h2>
         <p>Все десять блюд на праздничном столе. Гости уже звонят в дверь.</p>
         <table class="final-table">${rows}<tr><td><b>Итог кампании (по лучшим дням)</b></td><td><b>${campaignScore(save.data)}</b></td></tr></table>
+        <div class="small">Звёзд: ${save.data.days.reduce((a, d) => a + (d.stars ?? 0), 0)} из 21 · медалей: ${new Set(save.data.days.flatMap((d) => d.medals ?? [])).size} из ${Object.keys(MEDALS).length}</div>
         <div class="actions"><button class="ghost" data-ui="journal">Журнал — переиграть дни</button><button class="ghost" data-ui="menu">В меню</button></div>
       </div>`,
       'side',
     );
+    this._finalBubbles(save);
+  }
+
+  // Гости за столом комментируют блюда по лучшим оценкам дней.
+  _finalBubbles(save) {
+    const q = {};
+    save.data.days.forEach((d, i) => {
+      for (const id of DAYS[i].dishes) q[id] = d.best?.dishes?.[id] ?? 75;
+    });
+    this.finalGuests = DISH_ORDER.map((id, k) => ({ id, who: ['Дима', 'Оля', 'Серёжа', 'Катя', 'Миша'][k % 5], text: guestLine(id, q[id], k), at: 1.5 + k * 2.2 }));
+    this.finalT = 0;
+    let box = $('#final-bubbles');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'final-bubbles';
+      document.body.appendChild(box);
+    }
+    box.innerHTML = '';
+    box.classList.remove('hidden');
+  }
+
+  updateFinal(dt, slotOf) {
+    const box = $('#final-bubbles');
+    if (!box || !this.finalGuests) return;
+    this.finalT += dt;
+    const cycle = this.finalGuests.at(-1).at + 4;
+    const t = this.finalT % cycle;
+    for (const g of this.finalGuests) {
+      let el = box.querySelector(`[data-g="${g.id}"]`);
+      const on = t >= g.at && t < g.at + 4.2;
+      if (!on) {
+        el?.remove();
+        continue;
+      }
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'bubble';
+        el.dataset.g = g.id;
+        el.innerHTML = `<b>${esc(g.who)}:</b> ${esc(g.text)}`;
+        box.appendChild(el);
+      }
+      const p = slotOf(g.id);
+      if (!p) continue;
+      el.style.left = `${p.x}px`;
+      el.style.top = `${p.y}px`;
+    }
+  }
+
+  hideFinal() {
+    $('#final-bubbles')?.classList.add('hidden');
+    this.finalGuests = null;
+  }
+
+  showChallenges(save, today) {
+    const ch = save.data.challenges?.[today.key];
+    const sp = save.data.speed?.best;
+    const done = save.data.days.some((d) => d.completed);
+    this._overlay(
+      `<div class="card dialog">
+        <h2>🏆 Испытания</h2>
+        <div class="challenge">
+          <b>Испытание дня · ${esc(today.label)}</b>
+          <div class="small">День ${today.dayIndex + 1} «${esc(DAYS[today.dayIndex].title)}» с условиями: ${today.mods.map((m) => `<span class="chip warn">${esc(MODIFIERS[m].label)}</span>`).join(' ')}</div>
+          <div class="small">Одинаково для всех игроков сегодня. ${ch ? `Твой лучший: <b>${ch.D}</b> ${stars(ch.stars)}` : 'Ещё не пройдено.'}</div>
+          <div class="actions">${done ? '<button class="primary" data-ui="challengeGo">Начать испытание</button>' : '<span class="small warn">Открывается после первого пройденного дня.</span>'}</div>
+        </div>
+        <div class="challenge">
+          <b>⏱ Скоростная нарезка</b>
+          <div class="small">Три продукта кубиками на время. Засчитывается, если аккуратность каждого не ниже 75 %. ${sp ? `Рекорд: <b>${fmt(sp)}</b>` : 'Рекорда пока нет.'}</div>
+          <div class="actions"><button class="primary" data-ui="speedGo">На старт</button></div>
+        </div>
+        <div class="actions"><button class="ghost big" data-ui="menu">← В меню</button></div>
+      </div>`,
+      'dim',
+    );
+  }
+
+  showStream(save) {
+    const st = save.data.settings.stream ?? {};
+    this._overlay(
+      `<div class="card dialog">
+        <h2>📺 Режим стрима</h2>
+        <p class="small">Зрители голосуют в чате Twitch командами <b>!кот</b>, <b>!гость</b>, <b>!радио</b>, <b>!гирлянда</b>. Каждые 45 секунд побеждает самая популярная команда, и событие случается на кухне — в пределах обычных правил (не больше двух срочных дел сразу). Подключение только на чтение, анонимно; без канала игра работает офлайн.</p>
+        <label class="field">Канал Twitch: <input id="stream-channel" value="${esc(st.channel ?? '')}" placeholder="имя_канала" /></label>
+        <label class="field"><input type="checkbox" id="stream-test" ${st.test ? 'checked' : ''}/> Тестовый чат (без сети: кнопки голосования на экране)</label>
+        <div class="actions">
+          <button class="primary" data-ui="streamOn">Включить</button>
+          <button class="ghost" data-ui="streamOff">Выключить</button>
+          <button class="ghost big" data-ui="menu">← В меню</button>
+        </div>
+        <p class="small">Сейчас: ${st.on ? `<b>включён</b>${st.channel ? ' · канал ' + esc(st.channel) : ''}${st.test ? ' · тестовый чат' : ''}` : 'выключен'}</p>
+      </div>`,
+      'dim',
+    );
+  }
+
+  // Плашка голосования чата во время дня.
+  renderVotes(v) {
+    let el = $('#votes');
+    if (!v) {
+      el?.classList.add('hidden');
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'votes';
+      this.voteSig = null;
+      el.className = 'card';
+      document.body.appendChild(el);
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-vote]');
+        if (b) this.app.testVote(b.dataset.vote);
+      });
+    }
+    el.classList.remove('hidden');
+    const host = $('.hud-left');
+    if (host && el.parentElement !== host) host.appendChild(el);
+    const sig = Math.ceil(v.left) + v.status + v.options.map((o) => o.n).join();
+    if (sig === this.voteSig) return;
+    this.voteSig = sig;
+    const rows = v.options.map((o) => `<div class="vote-row"><span>${esc(o.cmd)}</span><span class="vbar"><i style="width:${v.total ? (o.n / v.total) * 100 : 0}%"></i></span><b>${o.n}</b>${v.test ? `<button class="ghost mini" data-vote="${esc(o.cmd)}">+</button>` : ''}</div>`).join('');
+    el.innerHTML = `<div class="small"><b>📺 Чат решает</b> · ${Math.ceil(v.left)} с ${v.status ? '· ' + esc(v.status) : ''}</div>${rows}`;
   }
 
   // ---------- кухня ----------
   showKitchen(session) {
     this.el.hud.classList.remove('hidden');
     this.el.hud.innerHTML = `
-      <div class="card hud-day">
+      <div class="hud-left"><div class="card hud-day">
         <div class="hud-day-title" id="hud-day"></div>
         <div class="hud-step" id="hud-step"></div>
         <div class="hud-actions">
@@ -291,6 +432,8 @@ export class CampaignUI {
           <button id="btn-finish" class="primary hidden">✅ Завершить день</button>
         </div>
       </div>
+      <div class="card hud-meta" id="hud-meta"></div>
+      <div class="tickets" id="tickets"></div></div>
       <div class="card hud-clock"><div id="hud-clock">00:00</div><div class="small" id="hud-sub">на кухне</div></div>
       <div class="hud-buttons">
         <button id="btn-phone" title="Телефон">📱<span class="badge hidden" id="phone-badge"></span></button>
@@ -311,6 +454,16 @@ export class CampaignUI {
     this.el.toasts.innerHTML = '';
     this.toasts = [];
     this.lastTip = null;
+    this.ticketSig = null;
+  }
+
+  // Всплывающая надпись по центру (как в аркадных кухнях): «Идеально!», «Пересолено» и т. п.
+  popup(text, kind = '') {
+    const d = document.createElement('div');
+    d.className = `popup ${kind}`;
+    d.innerHTML = text;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 1500);
   }
 
   hideKitchen() {
@@ -366,7 +519,8 @@ export class CampaignUI {
         this.tip(e.topic);
         break;
       case 'open':
-        if (['bowl', 'sink', 'puddle'].includes(e.station)) this.tip(e.station);
+        if (['bowl', 'sink', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
+        if (e.station === 'phone' && this.phoneTab === 'order') this.tip('money');
         if (e.station === 'phone') {
           this.openPhone();
         }
@@ -376,6 +530,7 @@ export class CampaignUI {
         break;
       case 'dishDone': {
         const d = s.dishes[e.dishId];
+        this.popup(`${ICON[e.dishId]} ${e.Q >= 90 ? 'Шедевр!' : e.Q >= 75 ? 'Отлично!' : e.Q >= 55 ? 'Готово' : 'Ну… съедобно'}`, e.Q >= 75 ? 'good' : '');
         this.toast(`<b>${ICON[e.dishId]} ${esc(d.recipe.name)} готово — ${e.Q}</b><br/><span class="small">${e.notes.map(esc).join(' · ')}</span>`, 'good dish-toast', 6);
         break;
       }
@@ -398,7 +553,56 @@ export class CampaignUI {
         this.tip('garland');
         break;
       case 'catStole':
-        this.toast('Кот утащил кусок колбасы! На доске — «Взять замену»', 'bad', 3.5);
+        this.toast(`Кот утащил кусок (${esc(PRODUCTS[e.product ?? 'sausage'].name.toLowerCase())})! На доске — «Взять замену»`, 'bad', 3.5);
+        this.popup('🐈 Утащил!', 'bad');
+        break;
+      case 'catHungry':
+        this.tip('catHungry');
+        break;
+      case 'catFed':
+        this.toast('Кот сыт и доволен 🐟', 'good');
+        break;
+      case 'catPlay':
+        this.toast('Кот гоняет мячик 🧶', 'good');
+        break;
+      case 'catSleep':
+        this.toast('Сытый кот спит и к еде не лезет 😴', 'good', 3);
+        break;
+      case 'potPlaced':
+        this.tip('stove');
+        break;
+      case 'potatoTaken':
+        this.tip('hot');
+        break;
+      case 'cooled':
+        this.toast(`${PICON[e.product] ?? ''} Остыло — можно резать`, 'good');
+        break;
+      case 'dirty':
+        if (e.item === 'board') this.tip('boardDirty');
+        break;
+      case 'pinch':
+        this.popup(e.kind === 'salt' ? '🧂' : '🌶', 'small');
+        break;
+      case 'taste':
+        this.popup(`${e.face === 'good' ? '😋' : e.face === 'bad' ? '😖' : '🤔'} ${esc(e.verdict)}`, e.face === 'good' ? 'good' : 'bad');
+        break;
+      case 'seasoned':
+        if (e.q >= 0.999) this.popup('😋 Идеальный вкус!', 'good');
+        break;
+      case 'stepDone':
+        if (e.q >= 0.95 && ['cut', 'grate'].includes(s.stepDef(e.dishId, e.stepId)?.type)) this.popup('🔪 Чётко!', 'good');
+        break;
+      case 'paid':
+        this.toast(`💳 −${e.total} ₽`, '', 2);
+        break;
+      case 'noMoney':
+        this.popup('💸 Не хватает денег', 'bad');
+        break;
+      case 'stream':
+        this.toast(`📺 ${esc(e.text)}`, 'bad', 3.5);
+        break;
+      case 'phoneMsg':
+        if (e.from === 'Гости' && s.requests?.some((r) => r.known && !r.tipped && (r.tipped = true))) this.tip('wish');
         break;
       case 'catSpill':
         this.toast('Кот опрокинул компот — на полу лужа', 'bad', 3.5);
@@ -487,20 +691,52 @@ export class CampaignUI {
     else {
       const id = s.activeDish();
       if (id) {
-        const next = s.nextSteps(id).find((st) => !(st.type === 'boil' && s.stove.state !== 'empty'));
+        const onFire = new Set(s.burners.filter((b) => b.state !== 'empty').map((b) => b.owner + ':' + b.step));
+        const next = s.nextSteps(id).find((st) => !(st.type === 'boil' && onFire.has(id + ':' + st.id)));
         const dishes = Object.values(s.dishes).map((x) => `${ICON[x.id]}${x.done ? '✓' : ''}`).join(' ');
         step = `${dishes} · ${esc(s.recipes[id].name)}${next ? ': ' + esc(next.label.toLowerCase()) : ''}`;
       } else if (s.day.finalServe) step = '🎄 Расставь все 10 блюд на праздничном столе';
     }
     $('#hud-step').innerHTML = step;
     $('#hud-clock').textContent = fmt(s.t);
-    $('#hud-sub').textContent = s.stove.state === 'boiling' ? `🥔 готов через ${fmt(s.stove.readyAt - s.t)}` : s.oven.state === 'baking' ? `🍗 духовка ${fmt(s.oven.readyAt - s.t)}` : s.delivery.order ? `🛵 ${({ accepted: 'заказ принят', assembling: 'собирают', onTheWay: 'курьер в пути', arrived: 'курьер приехал', collecting: 'забираем' })[s.delivery.order.status]}` : 'на кухне';
+    const boiling = s.burners.filter((b) => b.state === 'boiling');
+    $('#hud-sub').textContent = boiling.length ? boiling.map((b) => `${PICON[b.product]} ${fmt(b.readyAt - s.t)}`).join(' · ') : s.oven.state === 'baking' ? `🍗 духовка ${fmt(s.oven.readyAt - s.t)}` : s.delivery.order ? `🛵 ${({ accepted: 'заказ принят', assembling: 'собирают', onTheWay: 'курьер в пути', arrived: 'курьер приехал', collecting: 'забираем' })[s.delivery.order.status]}` : 'на кухне';
     $('#btn-finish').classList.toggle('hidden', s.phase !== 'ready' || !!s.practice);
     const badge = $('#phone-badge');
     badge.classList.toggle('hidden', !s.phone.unread);
     badge.textContent = s.phone.unread;
     $('#btn-mute').textContent = this.app.isMuted() ? '🔇' : '🔊';
     $('#btn-phone').classList.toggle('hidden', !!s.practice);
+    this._renderTickets(s);
+    const meta = $('#hud-meta');
+    if (s.practice) meta.classList.add('hidden');
+    else {
+      meta.classList.remove('hidden');
+      const h = Math.round(s.catNeeds.hunger);
+      const catTxt = s.cat.state === 'eat' ? 'ест' : s.cat.state === 'play' ? 'играет' : s.catCalm() ? 'спит' : h >= CAMPAIGN.cat.theftAt ? 'ищет еду!' : h >= CAMPAIGN.cat.warnAt ? 'голоден' : 'бродит';
+      const hot = s.hotList().map((x) => `${PICON[x.product]}🔥${Math.ceil(x.left)}с`).join(' ');
+      meta.innerHTML = `<div class="meter" title="Голод кота"><span>🐱 ${catTxt}</span><i class="${h >= CAMPAIGN.cat.theftAt ? 'bad' : h >= CAMPAIGN.cat.warnAt ? 'warn' : ''}" style="width:${h}%"></i></div><div class="small">💰 ${s.wallet.budget - s.wallet.spent} ₽${hot ? ' · ' + hot : ''}</div>`;
+    }
+  }
+
+  // Карточки заказов дня: блюдо, прогресс шагов, пожелания гостей.
+  _renderTickets(s) {
+    const el = $('#tickets');
+    if (s.practice) {
+      el.innerHTML = '';
+      return;
+    }
+    const sig = Object.values(s.dishes).map((d) => d.id + d.done + d.recipe.steps.filter((st) => s.stepDone(d.id, st.id)).length).join() + s.requests.map((r) => r.known + r.recipe).join() + s.tray.owner + s.bowl.owner;
+    if (sig === this.ticketSig) return;
+    this.ticketSig = sig;
+    el.innerHTML = Object.values(s.dishes)
+      .map((d) => {
+        const total = d.recipe.steps.filter((st) => s.stepState(d.id, st.id) !== 'skipped').length;
+        const done = d.recipe.steps.filter((st) => s.stepState(d.id, st.id) === 'done').length;
+        const wishes = s.requests.filter((r) => r.known && r.recipe === d.id).map((r) => `<span class="wish" title="${esc(s.wishLabel(r))}">🙏 ${esc(s.wishLabel(r))}</span>`).join('');
+        return `<div class="ticket ${d.done ? 'done' : ''}"><div class="t-head">${ICON[d.id]} ${esc(d.recipe.short)}${d.done ? ` <b>${d.Q}</b>` : ''}</div><div class="t-bar"><i style="width:${(done / total) * 100}%"></i></div>${wishes}</div>`;
+      })
+      .join('');
   }
 
   _renderLabels(s) {
@@ -638,7 +874,8 @@ export class CampaignUI {
       }
       case 'bowl': {
         const mt = s.mixTarget();
-        return `${base}|${s.bowlTasks().map((t) => t.stepId + t.state + (t.block ?? '')).join(',')}|${mt?.ok}|${Math.floor(s.mixTurns() * 4)}|${s.equipment.bowl.clean}`;
+        const se = s.bowl.owner && s.dishes[s.bowl.owner]?.season;
+        return `${base}|${s.bowlTasks().map((t) => t.stepId + t.state + (t.block ?? '')).join(',')}|${mt?.ok}|${Math.floor(s.mixTurns() * 4)}|${s.equipment.bowl.clean}|${se ? se.salt + ':' + se.pepper + ':' + se.tastes + (se.last?.verdict ?? '') : ''}`;
       }
       case 'tray': {
         const id = s.tray.owner;
@@ -647,11 +884,13 @@ export class CampaignUI {
         return `${base}|${id}|${s.trayDishes().map((x) => x + s.trayBlock(x)).join(',')}|${d ? d.recipe.steps.map((st) => +s.stepDone(id, st.id)).join('') : ''}|${s.tool}|${s.canConfirm(id ?? '')?.ok}|${extra}|${s.workPlate.owner}`;
       }
       case 'stove':
-        return `${base}|${s.stove.state}|${!!s.stove.overflow}|${s.stoveTask()?.dishId}`;
+        return `${base}|${s.burners.map((b) => b.state + !!b.overflow + b.product).join()}|${s.stoveTasks().map((t) => t.stepId).join()}`;
+      case 'catbowl':
+        return `${base}|${s.cat.state}|${s.catCalm()}`;
       case 'oven':
         return `${base}|${s.oven.state}|${s.dishes.chicken?.steps.marinade.done}|${s.dishes.chicken?.done}`;
       case 'sink':
-        return `${base}|${s.dirtyItems().map((x) => x.id).join(',')}|${s.sinkJob?.item}`;
+        return `${base}|${s.dirtyItems().map((x) => x.id).join(',')}|${s.sinkJob?.item}|${s.hotList().map((x) => x.product).join()}`;
       case 'radio':
         return `${base}|${s.radio.broken}|${s.radio.enabled}`;
       case 'garland':
@@ -726,7 +965,7 @@ export class CampaignUI {
       case 'garland':
         return s.garland.broken ? `Контакт: ${Math.round((s.garland.progress / CAMPAIGN.durations.garlandHold) * 100)} %` : '';
       case 'stove':
-        return s.stove.state === 'boiling' ? `Картофель будет готов через ${fmt(s.stove.readyAt - s.t)}` : '';
+        return s.burners.filter((b) => b.state === 'boiling').map((b) => `${PICON[b.product]} ${esc(PRODUCTS[b.product].name)}: ${fmt(b.readyAt - s.t)}`).join(' · ');
       case 'oven':
         return s.oven.state === 'baking' ? `Запекание: ${Math.round(s.oven.doneness * 100)} % · готово через ${fmt(s.oven.readyAt - s.t)}` : '';
       default:
@@ -769,25 +1008,54 @@ export class CampaignUI {
         const tasks = s.bowlTasks();
         const btns = tasks
           .filter((t) => t.type === 'add')
-          .map((t) => this._btn(`${PICON[t.product] ?? ''} ${t.state === 'done' ? PRODUCTS[t.product].name + ' ✓' : esc(t.label)}`, 'bowlAdd', [t.dishId, t.stepId], t.state === 'done' ? 'ghost' : t.block ? 'soft-disabled' : 'primary', busy || t.state === 'done', t.block ?? ''))
+          .map((t) => {
+            const cls = t.state === 'done' ? 'ghost' : t.block ? 'soft-disabled' : 'primary';
+            if (t.product === 'mayo' && t.state !== 'done') return this._btn(`${PICON.mayo} ${esc(t.label)}`, 'bowlAdd', [t.dishId, t.stepId, 'full'], cls, busy, t.block ?? '') + this._btn(`${PICON.mayo} Поменьше майонеза`, 'bowlAdd', [t.dishId, t.stepId, 'light'], t.block ? 'soft-disabled' : 'ghost', busy, t.block ?? '');
+            const lbl = t.state === 'done' ? PRODUCTS[t.product].name + (t.product === 'mayo' && s.dishes[t.dishId].mayo === 'light' ? ' (поменьше)' : '') + ' ✓' : esc(t.label);
+            return this._btn(`${PICON[t.product] ?? ''} ${lbl}`, 'bowlAdd', [t.dishId, t.stepId], cls, busy || t.state === 'done', t.block ?? '');
+          })
           .join('');
+        const seasonTask = tasks.find((t) => t.type === 'season' && t.state !== 'done' && t.dishId === s.bowl.owner);
+        let seasonRow = '';
+        if (seasonTask) {
+          const ss = s.seasonState(seasonTask.dishId);
+          const dis = busy || !!ss.block;
+          seasonRow = `<div class="season"><div class="row">
+            ${this._btn(`🧂 Соль · ${ss.salt}`, 'seasonAdd', [seasonTask.dishId, 'salt'], '', dis, ss.block ?? '')}
+            ${this._btn(`🌶 Перец · ${ss.pepper}`, 'seasonAdd', [seasonTask.dishId, 'pepper'], '', dis, ss.block ?? '')}
+            ${this._btn('👅 Попробовать', 'seasonTaste', [seasonTask.dishId], 'primary', dis, ss.block ?? '')}
+            ${this._btn('💧 Разбавить', 'seasonDilute', [seasonTask.dishId], 'ghost', dis || (!ss.salt && !ss.pepper))}
+            ${this._btn('✓ Вкус готов', 'seasonDone', [seasonTask.dishId], 'primary', dis)}
+          </div><div class="small">${ss.block ? '⏳ ' + esc(ss.block) : ss.last ? `Последняя проба: <b>${esc(ss.last.verdict)}</b> (проб: ${ss.tastes})` : 'Норма скрыта — пробуй ложкой.'}</div></div>`;
+        }
         const mt = s.mixTarget();
         const dirty = !s.equipment.bowl.clean ? '<p class="note warn">Миска грязная — помой её у раковины.</p>' : '';
         return `<h2>🥣 Миска${s.bowl.owner ? `<span class="sub">${esc(s.recipes[s.bowl.owner].name)}</span>` : ''}</h2>
-          <div class="row">${btns}${back}</div><div class="row">${bar}</div>${live}${dirty}
+          <div class="row">${btns}${back}</div>${seasonRow}<div class="row">${bar}</div>${live}${dirty}
           <p class="note">${mt ? (mt.ok ? 'Зажми кнопку и веди мышь по кругу внутри миски — 4 оборота.' : 'Перемешивание после полного состава: ' + esc(mt.block ?? '')) : s.bowl.contents.length ? 'Добавь всё по рецепту.' : 'Сюда идут нарезанные продукты с доски и заправка.'}</p>`;
       }
       case 'tray':
         return this._trayPanel(s, back, bar, live, busy);
       case 'stove': {
-        const task = s.stoveTask();
-        const rows = [];
-        if (s.stove.overflow) rows.push(this._btn('🔥 Убавить огонь', 'reduceHeat', [], 'danger big', busy));
-        if (s.stove.state === 'empty' && task) rows.push(this._btn(`${PICON[task.product]} Поставить вариться`, 'placePot', [], 'primary big', busy));
-        if (s.stove.state === 'ready') rows.push(this._btn('🥔 Достать картофель', 'takePot', [], 'primary big', busy));
-        if (s.stove.state === 'boiling') rows.push(this._btn('🥔 Достать картофель', 'takePot', [], 'soft-disabled', busy));
-        rows.push(back);
-        return `<h2>♨️ Плита</h2><div class="row">${rows.join('')}</div><div class="row">${bar}</div>${live}<p class="note">${s.stove.state === 'empty' ? (task ? `Картофель будет готов через ${CAMPAIGN.potatoReadyAfter / 60}:00 после установки кастрюли.` : 'Сегодня плита не нужна.') : s.stove.state === 'taken' ? 'Кастрюля пуста.' : 'Следи, чтобы вода не убежала.'}</p>`;
+        const tasks = s.stoveTasks();
+        const usable = new Set(s.usableBurners().map((b) => b.i));
+        const burners = s.burners
+          .map((b) => {
+            const name = `Конфорка ${b.i + 1}`;
+            if (!usable.has(b.i)) return `<div class="burner off"><b>${name}</b> — сломана (испытание)</div>`;
+            let act = '';
+            if (b.overflow) act = this._btn('🔥 Убавить огонь', 'reduceHeat', [b.i], 'danger', busy);
+            else if (b.state === 'ready') act = this._btn(`${PICON[b.product]} Достать`, 'takePot', [b.i], 'primary', busy);
+            else if (b.state === 'boiling') act = `<span class="small">${PICON[b.product]} ${esc(PRODUCTS[b.product].name)} варится</span>`;
+            else act = tasks.length ? tasks.map((t) => this._btn(`${PICON[t.product]} ${esc(PRODUCTS[t.product].name)} · ${fmt(s.boilTime(t.product))}`, 'placePot', [b.i, `${t.dishId}:${t.stepId}`], 'primary', busy)).join('') : '<span class="small">свободна</span>';
+            return `<div class="burner ${b.state}"><b>${name}</b> ${act}</div>`;
+          })
+          .join('');
+        return `<h2>♨️ Плита</h2>${burners}<div class="row">${back}</div><div class="row">${bar}</div>${live}<p class="note">${tasks.length || s.burners.some((b) => b.state !== 'empty') ? 'Ставь сразу на обе конфорки. Следи, чтобы вода не убежала. Сваренное горячее — остуди у раковины.' : 'Сегодня плита не нужна.'}</p>`;
+      }
+      case 'catbowl': {
+        const h = Math.round(s.catNeeds.hunger);
+        return `<h2>🐾 Миска кота<span class="sub">голод ${h} %</span></h2><div class="row">${this._btn('🐟 Покормить', 'feedCat', [], 'primary big', busy)}${this._btn('🧶 Бросить мячик', 'playCat', [], 'ghost', busy)}${back}</div><div class="row">${bar}</div><p class="note">Сытый кот спит и не лезет к еде. Мячик занимает его на ${CAMPAIGN.cat.playTime} с, но голод растёт.</p>`;
       }
       case 'oven': {
         const ch = s.dishes.chicken;
@@ -801,7 +1069,8 @@ export class CampaignUI {
       case 'sink': {
         const dirty = s.dirtyItems();
         const btns = dirty.map((d) => this._btn(`🧽 ${esc(d.label)}`, 'sinkSelect', [d.id], s.sinkJob?.item === d.id ? 'primary active' : 'ghost', busy)).join('');
-        return `<h2>🚰 Раковина</h2><div class="row">${btns || '<span class="small">Вся посуда чистая.</span>'}${back}</div>${live}<p class="note">${s.sinkJob ? 'Зажми кнопку и три губкой по посуде.' : dirty.length ? 'Выбери, что мыть.' : 'Мыть нечего.'}</p>`;
+        const cool = s.hotList().map((x) => this._btn(`❄️ Остудить: ${PICON[x.product]} ${esc(PRODUCTS[x.product].name.toLowerCase())}`, 'coolProduct', [x.product], 'primary', busy)).join('');
+        return `<h2>🚰 Раковина</h2>${cool ? `<div class="row">${cool}</div>` : ''}<div class="row">${btns || '<span class="small">Вся посуда чистая.</span>'}${back}</div><div class="row">${bar}</div>${live}<p class="note">${s.sinkJob ? 'Зажми кнопку и три губкой по посуде.' : dirty.length ? 'Выбери, что мыть.' : cool ? 'Холодная вода остужает сваренное за пару секунд.' : 'Мыть нечего.'}</p>`;
       }
       case 'puddle':
         return `<h2>🧽 Лужа</h2><div class="row">${back}</div>${live}<p class="note">Зажми кнопку и води тряпкой по луже.</p>`;
@@ -890,7 +1159,7 @@ export class CampaignUI {
   }
 
   _renderRecipe(s) {
-    const sig = Object.values(s.dishes).map((d) => d.id + d.done + d.variant.onion + d.recipe.steps.map((st) => s.stepState(d.id, st.id)).join('')).join('|') + s.requestKnown + JSON.stringify(s.inventory.stock);
+    const sig = Object.values(s.dishes).map((d) => d.id + d.done + d.variant.onion + d.recipe.steps.map((st) => s.stepState(d.id, st.id)).join('')).join('|') + s.requests.map((r) => r.known).join() + JSON.stringify(s.inventory.stock);
     if (sig === this.recipeSig) return;
     this.recipeSig = sig;
     const html = Object.values(s.dishes)
@@ -904,15 +1173,16 @@ export class CampaignUI {
           })
           .join('');
         let variant = '';
+        const reqs = s.requests.filter((r) => r.known && r.recipe === d.id).map((r) => `<div class="request">📩 Гости просят: <b>${esc(s.wishLabel(r))}</b>${d.done ? (s.wishMet(r) ? ' ✅' : ' ⚠️') : ''}</div>`).join('');
+        variant = reqs;
         if (d.recipe.onionOption && !d.done) {
-          const req = s.requestKnown && s.request?.recipe === d.id ? `<div class="request">📩 Гости просят: <b>без лука</b></div>` : '';
-          variant = `${req}<div class="row">${this._btn('С луком', 'setVariant', [d.id, true], d.variant.onion ? 'active' : 'ghost')}${this._btn('Без лука', 'setVariant', [d.id, false], !d.variant.onion ? 'active' : 'ghost')}${this._btn('↺ Переделать начинку', 'redoFilling', [d.id], 'ghost')}</div>`;
+          variant = `${reqs}<div class="row">${this._btn('С луком', 'setVariant', [d.id, true], d.variant.onion ? 'active' : 'ghost')}${this._btn('Без лука', 'setVariant', [d.id, false], !d.variant.onion ? 'active' : 'ghost')}${this._btn('↺ Переделать начинку', 'redoFilling', [d.id], 'ghost')}</div>`;
         }
         return `<div class="recipe-dish ${d.done ? 'done' : ''}"><h3>${ICON[d.id]} ${esc(d.recipe.name)} ${d.done ? `<span class="score-pill">${d.Q}</span>` : ''}</h3><div class="small">${esc(d.recipe.look)}</div>${variant}<ul class="steps">${steps}</ul></div>`;
       })
       .join('');
     const extra = s.day.finalServe ? `<div class="recipe-dish"><h3>🎄 Сервировка стола</h3><div class="small">Все 10 блюд — на праздничный стол (${Object.keys(s.table.placed).length}/10).</div></div>` : '';
-    this.el.recipe.innerHTML = `<div class="recipe-head"><b>📋 Рецепты дня</b><button class="ghost" data-close>×</button></div>${html}${extra}<p class="small">Варка и очистка продуктов, кроме картофеля и курицы, уже сделаны заранее.</p>`;
+    this.el.recipe.innerHTML = `<div class="recipe-head"><b>📋 Рецепты дня</b><button class="ghost" data-close>×</button></div>${html}${extra}<p class="small">Картофель, яйца и свёклу варим сами; морковь — уже варёная. Норма соли у каждого блюда своя — пробуй.</p>`;
   }
 
   // ---------- телефон ----------
@@ -947,7 +1217,7 @@ export class CampaignUI {
     }
     if (s.phone.unread) this.act('markRead');
     const o = s.delivery.order;
-    const sig = this.phoneTab + s.phone.messages.length + JSON.stringify(s.delivery.draft) + (o ? o.status : '-') + !!s.delivery.bag + s.alerts.filter((a) => a.urgent).map((a) => a.key).join();
+    const sig = this.phoneTab + s.phone.messages.length + JSON.stringify(s.delivery.draft) + (o ? o.status : '-') + !!s.delivery.bag + s.alerts.filter((a) => a.urgent).map((a) => a.key).join() + s.wallet.spent;
     if (sig === this.phoneSig) return;
     this.phoneSig = sig;
     const pushes = s.alerts.filter((a) => a.urgent).map((a) => `<div class="push">⚠️ ${esc(a.text)}</div>`).join('');
@@ -983,11 +1253,20 @@ export class CampaignUI {
         const rows = cat
           .map((c) => {
             const q = s.delivery.draft[c.id] ?? 0;
-            return `<tr class="${lack[c.id] ? 'lack' : ''}"><td>${PICON[c.id] ?? ''} ${esc(c.name)}${lack[c.id] ? ' <b>!</b>' : ''}</td><td class="qty">${this._btn('−', 'draftSet', [c.id, q - 1], 'ghost mini', q <= 0)}<span>${q}</span>${this._btn('+', 'draftSet', [c.id, q + 1], 'ghost mini', q >= 6)}</td></tr>`;
+            return `<tr class="${lack[c.id] ? 'lack' : ''}"><td>${PICON[c.id] ?? ''} ${esc(c.name)}${lack[c.id] ? ' <b>!</b>' : ''}</td><td class="price">${PRODUCTS[c.id].price ?? 0} ₽</td><td class="qty">${this._btn('−', 'draftSet', [c.id, q - 1], 'ghost mini', q <= 0)}<span>${q}</span>${this._btn('+', 'draftSet', [c.id, q + 1], 'ghost mini', q >= 6)}</td></tr>`;
           })
           .join('');
         const total = Object.values(s.delivery.draft).reduce((a, b) => a + b, 0);
-        body = `<table class="shop">${rows}</table><div class="row">${this._btn(`Подтвердить заказ (${total})`, 'confirmOrder', [], total ? 'primary' : 'soft-disabled')}</div><p class="small">Без оплаты и реальных сервисов. «!» — не хватает для рецептов.</p>`;
+        const m = s.money();
+        const modes = s.deliveryModes()
+          .map((md) => {
+            const c = s.orderCost(s.delivery.draft, md.id);
+            const when = md.id === 'self' ? `уйду на ${md.away} с` : `${md.wait[0]}–${md.wait[1]} с`;
+            const can = total && c.total <= m.left;
+            return this._btn(`${md.id === 'express' ? '⚡' : md.id === 'self' ? '🏃‍♀️' : '🛵'} ${esc(md.label)} · ${c.total} ₽ · ${when}`, 'confirmOrder', [md.id], can ? (md.id === 'standard' ? 'primary' : '') : 'soft-disabled', false, can ? '' : total ? 'Не хватает денег' : 'Пустой заказ');
+          })
+          .join('');
+        body = `<div class="wallet">💰 Бюджет дня: <b>${m.left} ₽</b> из ${m.budget} ₽</div><table class="shop">${rows}</table><div class="row modes">${modes}</div><p class="small">Игровые деньги, без реальных сервисов. «!» — не хватает для рецептов. «Сходить самой» — бесплатно, но плита и кот останутся без присмотра.</p>`;
       }
     }
     this.el.phone.innerHTML = `<div class="phone"><div class="status"><span>${fmt(s.t)}</span><span>📶 🔋</span></div>${pushes}

@@ -192,6 +192,24 @@ export const boardMethods = {
     if (step.dest === 'bowl') this._bowlReceive(it.dishId, { product: it.product, kind: it.grater ? 'grated' : 'pieces', pieces: moved });
     else if (step.dest === 'prepared') dish.prepared[it.stepId] = { product: it.product, q, kind: it.grater ? 'grated' : 'pieces' };
     else if (step.dest === 'pieces') dish.pieces[it.product] = (moved || []).map((p) => ({ ...p, product: it.product, used: false }));
+    if (this.practice?.activity === 'speed') {
+      // скоростная нарезка: аккуратно — следующий продукт, неаккуратно — этот же заново
+      this.inventory.consume(this._opId(it.dishId, it.stepId));
+      delete this.board.items[it.key];
+      this.board.current = null;
+      if (q >= 0.75) {
+        this.dishes.practice.steps[it.stepId] = { done: true, q, info };
+        this._emit('practiceResult', { q, info });
+        const next = this.boardTasks().find((t) => t.state === 'ready');
+        if (next) this.boardSelect(next.key);
+        else this._emit('speedDone', { time: this.t });
+      } else {
+        this._emit('speedRetry', { q });
+        this.setHint(`Неаккуратно (${Math.round(q * 100)} %) — нужно от 75 %. Ещё раз!`, 3);
+        this.boardSelect(it.key);
+      }
+      return true;
+    }
     if (this.practice) {
       this._emit('practiceResult', { q, info });
       this.dishes.practice.lastQ = q;
