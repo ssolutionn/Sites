@@ -142,7 +142,6 @@ export class CampaignUI {
         <div class="actions compact">
           <button class="ghost" data-ui="practice">🔪 Свободная практика</button>
           <button class="ghost" data-ui="challenges">🏆 Испытания</button>
-          <button class="ghost" data-ui="stream">📺 Режим стрима${save.data.settings.stream?.on ? ' · вкл' : ''}</button>
           <a class="ghost btn-link" href="./classic.html">⏱ Оливье за 5 минут</a>
           <a class="ghost btn-link" href="./gallery.html">Девушка и кот · 3D</a>
           <button class="ghost" data-ui="controls">Управление</button>

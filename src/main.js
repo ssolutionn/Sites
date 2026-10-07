@@ -15,6 +15,7 @@ const params = new URLSearchParams(location.search);
 const devMode = params.has('dev');
 const fixedSeed = params.has('seed') ? Number(params.get('seed')) >>> 0 : null;
 let booted = false;
+const STREAM_ENABLED = false;
 
 function fatal(title, details = '') {
   const f = document.getElementById('fatal');
@@ -127,7 +128,8 @@ function boot() {
     stream?.close();
     stream = null;
     const st = save.data.settings.stream;
-    if (!st?.on) return;
+    // режим стрима отключён в этом билде (кнопки нет в меню); код оставлен на будущее
+    if (!st?.on || !STREAM_ENABLED) return;
     stream = new StreamVotes({
       channel: st.channel ?? '',
       test: !!st.test,
