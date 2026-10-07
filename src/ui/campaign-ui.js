@@ -4,7 +4,7 @@ import { CLAYOUT, TABLE_SLOTS } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
-import { LOGO_URL } from '../view/textures.js';
+import { LOGO_URL, NEUTRAL } from '../view/textures.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -127,7 +127,7 @@ export class CampaignUI {
         <div class="title-card">
           <span class="snow">❄</span>
           <h1>Симулятор<br/>новогодней<br/>суеты</h1>
-          <div class="by"><img src="${LOGO_URL}" alt="" /> от «Пятёрочки»</div>
+          ${NEUTRAL ? '' : `<div class="by"><img src="${LOGO_URL}" alt="" /> от «Пятёрочки»</div>`}
         </div>
         <div class="card controls" style="padding:14px 18px">
           <b>Семь дней подготовки. Десять блюд. Один праздничный стол.</b>

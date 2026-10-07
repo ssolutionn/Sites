@@ -85,7 +85,14 @@ export function currentDayIndex(save) {
 }
 
 export class SaveStore {
-  constructor(storage = globalThis.localStorage) {
+  constructor(storage) {
+    if (storage === undefined) {
+      try {
+        storage = globalThis.localStorage; // в песочнице доступ к хранилищу может бросать исключение
+      } catch {
+        storage = null;
+      }
+    }
     this.storage = storage;
     let raw = null;
     try {

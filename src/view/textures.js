@@ -2,7 +2,9 @@
 // кроме логотипа (public/assets/logo-5.svg), который хранится отдельно для замены.
 import * as THREE from 'three';
 
-export const LOGO_URL = './assets/logo-5.svg';
+// VITE_NEUTRAL=1 — сборка без бренда (для публичных ссылок и превью)
+export const NEUTRAL = !!import.meta.env?.VITE_NEUTRAL;
+export const LOGO_URL = NEUTRAL ? './assets/logo-neutral.svg' : './assets/logo-5.svg';
 
 let logoImage = null;
 const logoWaiters = [];

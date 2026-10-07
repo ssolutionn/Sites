@@ -2,7 +2,7 @@
 // Ничего не начисляет сам.
 import { CONFIG } from '../config.js';
 import { LAYOUT } from '../game/layout.js';
-import { LOGO_URL } from '../view/textures.js';
+import { LOGO_URL, NEUTRAL } from '../view/textures.js';
 import { accuracy, pieceVolume } from '../game/cutting.js';
 
 const ICONS = { carrot: '🥕', sausage: '🌭', cucumber: '🥒', egg: '🥚', peas: '🫛', mayo: '🫙', potato: '🥔' };
@@ -56,7 +56,7 @@ export class UI {
         <div class="title-card">
           <span class="snow">❄</span>
           <h1>Симулятор<br/>новогодней<br/>суеты</h1>
-          <div class="by"><img src="${LOGO_URL}" alt="" /> от «Пятёрочки»</div>
+          ${NEUTRAL ? '' : `<div class="by"><img src="${LOGO_URL}" alt="" /> от «Пятёрочки»</div>`}
         </div>
         <div class="card controls" style="padding:14px 18px">
           <b>31 декабря. 5 минут. Один оливье.</b>
