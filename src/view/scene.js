@@ -98,6 +98,7 @@ export class SceneView {
   // Целевая позиция камеры для режима.
   _cameraTarget(mode, pos, look) {
     const aspect = this.camera.aspect;
+    if (this.cameraHook && this.cameraHook(mode, pos, look, aspect)) return;
     if (mode === 'board') {
       const c = this.k.boardCenter;
       const back = aspect < 1.4 ? 1.25 : 1;

@@ -273,6 +273,49 @@ export function animateHeroine(h, pose, time, progress = 0) {
       bob = Math.abs(Math.sin(time * 14)) * 0.04;
       break;
     }
+    case 'joy': {
+      const w = Math.sin(time * 6) * 0.25;
+      la = { x: -2.7 + w, z: -0.35, ex: -0.2 };
+      ra = { x: -2.7 - w, z: 0.35, ex: -0.2 };
+      bob = Math.abs(Math.sin(time * 6)) * 0.05;
+      headTilt = -0.15;
+      break;
+    }
+    case 'grate': {
+      const g = Math.sin(time * 10) * 0.35;
+      ra = { x: -1.2 + g, z: 0.1, ex: -0.8 };
+      la = { x: -1.0, z: -0.25, ex: -0.5 };
+      headTilt = 0.35;
+      break;
+    }
+    case 'wash': {
+      const a = time * 8;
+      la = { x: -1.1 + Math.sin(a) * 0.12, z: -0.15 + Math.cos(a) * 0.1, ex: -0.6 };
+      ra = { x: -1.1 - Math.sin(a) * 0.12, z: 0.15 - Math.cos(a) * 0.1, ex: -0.6 };
+      headTilt = 0.4;
+      break;
+    }
+    case 'wipe': {
+      const a = time * 7;
+      ra = { x: -1.5 + Math.sin(a) * 0.2, z: 0.1 + Math.cos(a) * 0.2, ex: -0.2 };
+      la = { x: -0.6, z: -0.3, ex: -0.6 };
+      bob = -0.12;
+      headTilt = 0.55;
+      break;
+    }
+    case 'unpack': {
+      const a = Math.sin(time * 4) * 0.15;
+      la = { x: -1.3 + a, z: -0.15, ex: -0.3 };
+      ra = { x: -1.3 - a, z: 0.15, ex: -0.3 };
+      headTilt = 0.45;
+      break;
+    }
+    case 'stove': {
+      ra = { x: -1.3, z: 0.05, ex: -0.4 + Math.sin(time * 3) * 0.1 };
+      la = { x: -0.2, z: -0.25, ex: -0.9 };
+      headTilt = 0.25;
+      break;
+    }
     case 'menu': {
       la = { x: -0.3, z: -0.35, ex: -1.4 };
       ra = { x: -0.5, z: 0.3, ex: -1.2 };

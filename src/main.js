@@ -1,13 +1,14 @@
-// Точка входа: состояния приложения (меню → инструкция → попытка ⇄ пауза → результат)
-// и главный цикл. Игровое время продвигается только здесь и только в режиме 'playing'.
-import { CONFIG } from './config.js';
-import { Game } from './game/game.js';
+// Кампания 0.4: меню → карточка дня → кухня ⇄ пауза → итог дня → … → финальный стол.
+// Игровое время продвигается только здесь и только в режиме 'kitchen'.
+import { CAMPAIGN, DAYS, DISH_ORDER } from './campaign/data.js';
+import { KitchenSession } from './campaign/session.js';
+import { SaveStore, recordDay, currentDayIndex } from './campaign/save.js';
+import { CLAYOUT, TABLE_SLOTS } from './campaign/layout.js';
 import { SceneView } from './view/scene.js';
+import { CampaignView } from './view/campaign-view.js';
 import { loadLogo } from './view/textures.js';
-import { UI } from './ui/ui.js';
+import { CampaignUI } from './ui/campaign-ui.js';
 import { Sound } from './audio/sound.js';
-import { initialPieces, totalVolume } from './game/cutting.js';
-import { LAYOUT } from './game/layout.js';
 
 const params = new URLSearchParams(location.search);
 const devMode = params.has('dev');
@@ -18,9 +19,8 @@ function fatal(title, details = '') {
   const f = document.getElementById('fatal');
   f.classList.remove('hidden');
   f.innerHTML = `<div class="card"><h2 style="margin-top:0">${title}</h2><p>${details}</p>
-    <p class="small">Попробуйте свежую версию Chrome, Safari или Firefox и включённое аппаратное ускорение.</p></div>`;
+    <p class="small">Попробуйте свежую версию Chrome или Firefox с включённым аппаратным ускорением.</p></div>`;
 }
-
 window.addEventListener('error', (e) => {
   if (!booted) fatal('Игра не загрузилась', String(e.message || 'Ошибка загрузки ресурсов'));
 });
@@ -43,166 +43,284 @@ function boot() {
     return;
   }
   const canvas = document.getElementById('scene');
-  let scene;
+  let sv, view;
   try {
-    scene = new SceneView(canvas);
+    sv = new SceneView(canvas);
+    view = new CampaignView(sv);
   } catch (err) {
     fatal('Не удалось запустить 3D-сцену', String(err?.message || err));
     return;
   }
   loadLogo();
-
   const sound = new Sound();
-  let mode = 'menu'; // menu | instructions | playing | paused | result
-  let game = null;
-  let resultTimer = 0;
+  const save = new SaveStore();
+  let mode = 'menu'; // menu | intro | kitchen | paused | dayResult | final
+  let session = null;
+  let lastLocal = null;
   let lastNdc = null;
 
-  // Все действия игрока идут через act(): только при активной попытке.
-  const DENY_ON_FALSE = new Set(['goTo', 'transfer', 'takePotato', 'selectIngredient', 'setHold', 'reduceHeat', 'takeReplacement']);
+  function applyQuality() {
+    const low = save.data.settings.quality === 'low';
+    sv.renderer.setPixelRatio(low ? 1 : Math.min(window.devicePixelRatio, 2));
+    sv.renderer.shadowMap.enabled = !low;
+    sv.sun.castShadow = !low;
+    sv.resize();
+  }
+  applyQuality();
+
+  const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'unpack', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay']);
   function act(name, ...args) {
-    if (!game || mode !== 'playing') return false;
-    const fn = game[name];
+    if (!session || mode !== 'kitchen') return false;
+    if (name === 'finishDay') return finishDay();
+    const fn = session[name];
     if (typeof fn !== 'function') return false;
-    const r = fn.apply(game, args);
-    if (r === false && DENY_ON_FALSE.has(name) && !(name === 'setHold' && args[1] === false)) sound.play('deny');
+    const r = fn.apply(session, args);
+    if ((r === false || r === null) && DENY.has(name)) sound.play('deny');
     return r;
   }
 
   const SOUND_OF = {
-    cut: 'chop',
-    select: 'select',
-    rotate: 'rotate',
-    transfer: 'transfer',
-    catStart: 'meow',
-    catShooed: 'shoo',
-    catStole: 'hiss',
-    phoneNotify: 'phone',
-    potBoil: 'boil',
-    spill: 'spill',
-    potSaved: 'fixed',
-    garlandOff: 'garlandOff',
-    garlandFixed: 'fixed',
-    radioBroken: 'radioBroken',
-    radioFixed: 'fixed',
-    potatoReady: 'ready',
-    added: 'added',
-    potPlaced: 'added',
-    potatoTaken: 'added',
-    replacement: 'added',
+    cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
+    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed',
+    radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
+    replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
+    grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny',
+    unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', peel: 'select', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
   };
 
   function dispatch(e) {
-    scene.onEvent(e);
-    ui.onEvent(e, game);
-    if (e.type === 'actionStart' && e.action !== 'cut' && e.action !== 'shoo') sound.play('work');
-    else if (e.type === 'finish') sound.play(e.success ? 'success' : 'fail');
+    view.onEvent(e);
+    ui.onEvent(e, session);
+    if (e.type === 'actionStart' && !['cut', 'shoo', 'cutEgg', 'cap', 'peel', 'split'].includes(e.action)) sound.play('work');
     else if (SOUND_OF[e.type]) sound.play(SOUND_OF[e.type]);
   }
 
+  function completedDishes(upTo = 7) {
+    const out = [];
+    save.data.days.forEach((d, i) => {
+      if (d.completed && i < upTo) out.push(...DAYS[i].dishes);
+    });
+    return out;
+  }
+
+  function startDay(i, resumed = false) {
+    const seed = fixedSeed ?? (Math.random() * 1e9) >>> 0;
+    session = new KitchenSession({ dayIndex: i, seed, tableDishes: completedDishes(i) });
+    view.reset();
+    view.setActive(true);
+    view.setTableDishes(completedDishes(i));
+    ui.hideKitchen();
+    mode = 'intro';
+    ui.showDayIntro(DAYS[i], save, resumed);
+  }
+
+  function enterKitchen() {
+    if (!session) return;
+    mode = 'kitchen';
+    if (!session.practice) {
+      save.data.settings.inProgress = session.day.id;
+      save.write();
+    }
+    ui.hideOverlay();
+    ui.showKitchen(session);
+    last = performance.now();
+  }
+
+  function finishDay() {
+    const r = session.finishDay();
+    if (!r) {
+      sound.play('deny');
+      return null;
+    }
+    if (session.practice) return r;
+    recordDay(save.data, session.day.id, r);
+    delete save.data.settings.inProgress;
+    save.write();
+    sound.play('success');
+    mode = 'dayResult';
+    ui.hideKitchen();
+    ui.showDayResult(r, session.day, save, session.dayIndex === DAYS.length - 1);
+    return r;
+  }
+
+  function startPractice(activity, product) {
+    session = new KitchenSession({ practice: { activity, product: product || undefined }, seed: 1 });
+    view.reset();
+    view.setActive(true);
+    view.setTableDishes([]);
+    const st = ['cubes', 'rounds', 'grate'].includes(activity) ? 'board' : activity === 'mix' ? 'bowl' : 'tray';
+    const stand = CLAYOUT.stations[st].stand;
+    Object.assign(session.heroine, { x: stand.x, z: stand.z, station: st, facing: CLAYOUT.stations[st].facing });
+    session._openPanel(st);
+    if (st === 'board') session.boardSelect('practice:p');
+    if (st === 'tray') session.traySelect('practice');
+    if (st === 'bowl') {
+      session.bowl.owner = 'practice';
+      session.bowl.contents = [
+        { product: 'carrot', kind: 'pieces', pieces: Array(14) },
+        { product: 'potato', kind: 'pieces', pieces: Array(14) },
+        { product: 'cucumber', kind: 'pieces', pieces: Array(12) },
+        { product: 'mayo', kind: 'add' },
+      ];
+    }
+    mode = 'kitchen';
+    ui.hideOverlay();
+    ui.showKitchen(session);
+    sv.setCameraMode(st === 'board' ? 'board' : 'c-' + st, true);
+  }
+
+  function showFinal() {
+    mode = 'final';
+    session = session ?? new KitchenSession({ dayIndex: 6, seed: 1, tableDishes: DISH_ORDER });
+    view.setActive(true);
+    view.setTableDishes(DISH_ORDER);
+    ui.hideKitchen();
+    ui.showFinal(save);
+  }
+
   const app = {
-    devMode,
+    get session() {
+      return session;
+    },
     isMuted: () => sound.muted,
     toggleMute() {
       sound.unlock();
       sound.setMuted(!sound.muted);
     },
-    play() {
-      document.body.classList.remove('practice');
-      newAttempt();
-      mode = 'instructions';
-      ui.showInstructions();
-    },
-    startRound() {
-      mode = 'playing';
-      ui.hideOverlay();
-      ui.showGame();
-    },
     pause() {
-      if (mode !== 'playing') return;
+      if (mode !== 'kitchen') return;
       mode = 'paused';
       ui.releaseHolds();
-      if (game) game.holds.mix = game.holds.garland = game.holds.radio = false;
+      session?.pointerUp();
+      session?._releaseHolds();
       ui.showPause();
     },
     resume() {
       if (mode !== 'paused') return;
-      mode = 'playing';
+      mode = 'kitchen';
       ui.hideOverlay();
       last = performance.now(); // без скачка времени
     },
     toMenu() {
-      document.body.classList.remove('practice');
       mode = 'menu';
-      game = null;
-      scene.reset();
-      ui.showMenu();
+      session = null;
+      view.reset();
+      view.setActive(false);
+      delete save.data.settings.inProgress;
+      save.write();
+      ui.hideKitchen();
+      sv.setCameraMode('menu');
+      ui.showMenu(save);
     },
-    retry() {
-      if (game?.practice) return app.practice();
-      newAttempt();
-      app.startRound();
-    },
-    practice() {
-      newAttempt();
-      const profiles = { carrot: 'carrot', cucumber: 'oval', egg: 'egg', potato: 'oval' };
-      game.practice = true;
-      game.cfg = { ...CONFIG, roundDuration: 86400, potatoReadyAt: 86400, noNewEventsAfter: -1 };
-      for (const def of CONFIG.ingredients.filter(q => q.cut)) {
-        const ing = game.ingredients[def.id];
-        ing.pieces = initialPieces(def.w, def.d, () => game._id(), profiles[def.id]);
-        ing.fullVolume = totalVolume(ing.pieces);
-        ing.available = true;
-        ing.profile = profiles[def.id];
+    dropDish(id, e) {
+      if (!session || mode !== 'kitchen') return;
+      const r = canvas.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
+      const p = view.pickLocal(ndc, 'table');
+      if (!p) return;
+      let best = null;
+      for (const s of TABLE_SLOTS) {
+        const d = Math.hypot(p.x - s.x, p.z - s.z);
+        if (d < s.r && (!best || d < best.d)) best = { s, d };
       }
-      game.phase = 'running';
-      game.potato = 'taken';
-      game.panel = 'board';
-      game.heroine.station = 'board';
-      const p = LAYOUT.stations.board.stand;
-      game.heroine.x = p.x; game.heroine.z = p.z;
-      mode = 'playing';
-      document.body.classList.add('practice');
-      ui.hideOverlay(); ui.showGame();
-      scene.setCameraMode('board', true);
+      if (!best) {
+        session.setHint('Поставь блюдо на свободное место стола', 1.5);
+        sound.play('deny');
+        return;
+      }
+      act('serveDish', id, best.s.i);
     },
-    resetPractice() {
-      if (!game?.practice || game.action) return;
-      const ing = game.board;
-      if (!ing) return;
-      const def = CONFIG.ingredients.find(q => q.id === ing.id);
-      ing.pieces = initialPieces(def.w, def.d, () => game._id(), ing.profile);
-      ing.fullVolume = totalVolume(ing.pieces); ing.cuts = 0; ing.selectedId = null;
-      ing.freshIds.clear(); ing.missing = [];
+    ui(cmd, arg) {
+      switch (cmd) {
+        case 'new':
+          if (save.hasProgress) ui.showConfirmReset();
+          else {
+            save.reset();
+            startDay(0);
+          }
+          break;
+        case 'resetYes':
+          save.reset();
+          startDay(0);
+          break;
+        case 'continue':
+          if (save.data.finished) showFinal();
+          else startDay(currentDayIndex(save.data));
+          break;
+        case 'journal':
+          if (mode === 'kitchen' || mode === 'paused') return;
+          ui.showJournal(save);
+          break;
+        case 'day':
+          startDay(Number(arg));
+          break;
+        case 'enter':
+          enterKitchen();
+          break;
+        case 'menu':
+          app.toMenu();
+          break;
+        case 'resume':
+          app.resume();
+          break;
+        case 'restartDay':
+          if (session?.practice) return startPractice(session.practice.activity, session.practice.product);
+          startDay(session.dayIndex);
+          break;
+        case 'nextDay':
+          startDay(Math.min(DAYS.length - 1, session.dayIndex + 1));
+          break;
+        case 'replay':
+          startDay(session.dayIndex);
+          break;
+        case 'final':
+          showFinal();
+          break;
+        case 'practice':
+          ui.showPracticeSelect();
+          break;
+        case 'practiceGo': {
+          const [a, p] = String(arg).split(':');
+          startPractice(a, p);
+          break;
+        }
+        case 'controls':
+          ui.toggleControls();
+          break;
+        case 'mute':
+          app.toggleMute();
+          ui.showMenu(save);
+          break;
+        case 'quality':
+          save.data.settings.quality = save.data.settings.quality === 'low' ? 'high' : 'low';
+          save.write();
+          applyQuality();
+          ui.showMenu(save);
+          break;
+        default:
+      }
     },
   };
 
-  const ui = new UI({ act, app, sound });
-
-  function newAttempt() {
-    const seed = fixedSeed ?? (Math.random() * 1e9) >>> 0;
-    game = new Game({ config: CONFIG, seed });
-    resultTimer = 0;
-    scene.reset();
-    ui.hideGame();
-    if (devMode) ui.showDev(devHandlers, seed);
-  }
-
-  const devHandlers = {
-    jump: () => game && mode === 'playing' && game.devJumpTo(CONFIG.potatoReadyAt - 2),
-    cat: () => game && mode === 'playing' && game.devCat(),
-    radio: () => game && mode === 'playing' && game.breakRadio(),
-    prepare: () => game && mode === 'playing' && game.devPrepare(),
-    end: () => game && mode === 'playing' && game.devJumpTo(CONFIG.roundDuration - 3),
-  };
+  const ui = new CampaignUI({ app, act, sound, view });
 
   // --- ввод ---
   function ndcOf(e) {
     const r = canvas.getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
   }
+  const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'puddle']);
+  function closeupActive() {
+    return session && CLOSE.has(session.panel) && !session.heroine.target && sv.camT >= 0.95;
+  }
   canvas.addEventListener('pointermove', (e) => {
     lastNdc = ndcOf(e);
+    if (closeupActive()) {
+      lastLocal = view.pickLocal(lastNdc, session.panel);
+      view.pointerLocal = lastLocal;
+      if (lastLocal && mode === 'kitchen') session.pointer('move', lastLocal.x, lastLocal.z);
+    }
   });
   canvas.addEventListener('pointerleave', () => {
     lastNdc = null;
@@ -210,81 +328,123 @@ function boot() {
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     sound.unlock();
-    if (!game || mode !== 'playing') return;
+    if (!session || mode !== 'kitchen') return;
     const ndc = ndcOf(e);
     lastNdc = ndc;
-    if (game.panel === 'board') {
-      const h = scene.pickBoard(ndc, game);
-      if (!h) return;
-      const r = act('sliceBoard', h.x, h.z);
-      if (r === 'too-close' || r === 'limit') sound.play('deny');
-    } else {
-      const st = scene.pickStation(ndc);
-      if (st) act('goTo', st);
+    if (session.panel && CLOSE.has(session.panel)) {
+      // клик во время перехода камеры не режет в неожиданной точке
+      if (!closeupActive()) return;
+      canvas.setPointerCapture?.(e.pointerId);
+      const p = view.pickLocal(ndc, session.panel);
+      if (!p) return;
+      lastLocal = p;
+      view.pointerLocal = p;
+      const r = session.pointer('down', p.x, p.z);
+      if (r === 'too-close' || r === 'limit' || r === 'short') sound.play('deny');
+      return;
     }
+    if (session.panel === 'table' || session.panel === 'phone') return;
+    const hit = view.pick(ndc);
+    if (!hit) return;
+    if (hit.station) act('goTo', hit.station);
+    else if (hit.floor) act('goToPoint', hit.floor.x, hit.floor.z);
   });
+  const release = () => {
+    if (session && mode === 'kitchen') session.pointer('up', lastLocal?.x ?? 0, lastLocal?.z ?? 0);
+  };
+  window.addEventListener('pointerup', release);
+  window.addEventListener('pointercancel', () => session?.pointerUp());
 
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (e.key === 'Escape') {
-      if (mode === 'playing') app.pause();
-      else if (mode === 'paused') app.resume();
+      if (mode === 'kitchen') {
+        if (ui.recipeOpen) ui.toggleRecipe(false);
+        else if (session?.panel === 'phone') session.closePanel();
+        else app.pause();
+      } else if (mode === 'paused') app.resume();
     } else if (e.code === 'KeyR') {
       sound.unlock();
       act('rotate');
-    } else if (e.code === 'KeyM') {
-      app.toggleMute();
+    } else if (e.code === 'KeyM') app.toggleMute();
+    else if (e.code === 'KeyQ' && mode === 'kitchen') ui.toggleRecipe();
+  });
+  window.addEventListener('blur', () => {
+    session?.pointerUp();
+    app.pause();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      session?.pointerUp();
+      app.pause();
     }
   });
+  window.addEventListener('resize', () => sv.resize());
 
-  // Потеря фокуса или скрытие вкладки — пауза; продолжение только кнопкой.
-  window.addEventListener('blur', () => app.pause());
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) app.pause();
-  });
-  window.addEventListener('resize', () => scene.resize());
+  // --- режим разработчика ---
+  if (devMode)
+    ui.showDev({
+      skipDay: () => {
+        if (!session || mode !== 'kitchen') return;
+        for (const d of Object.values(session.dishes)) if (!d.done) session._finishDish(d.id, { prep: 80, comp: 80, asm: 80 }, ['Автозавершение (dev)']);
+        if (session.day.finalServe) DISH_ORDER.forEach((id, i) => (session.table.placed[id] = i));
+        session._checkDayReady();
+      },
+      cat: () => session && session.cat.state === 'home' && session._startCatTheft(),
+      pot: () => session?.stove.state === 'boiling' && !session.stove.overflow && session._startOverflow(),
+      ff: () => session && mode === 'kitchen' && session.fastForward(30),
+      unlock: () => {
+        save.data.days.forEach((d) => (d.unlocked = true));
+        save.write();
+        if (mode === 'menu') ui.showMenu(save);
+      },
+    });
 
   // --- главный цикл ---
   let last = performance.now();
   function frame(now) {
     const real = Math.max(0, (now - last) / 1000);
     last = now;
-    if (mode === 'playing' && game) {
-      game.update(real);
-      for (const e of game.drain()) dispatch(e);
-      if (game.isOver()) {
-        resultTimer += Math.min(real, 0.1);
-        if (resultTimer > 1.0) {
-          mode = 'result';
-          ui.showResult(game.getResult());
-        }
-      }
+    if (mode === 'kitchen' && session) {
+      session.update(real);
+      for (const e of session.drain()) dispatch(e);
     }
-    const animDt = mode === 'paused' ? 0 : Math.min(real, CONFIG.maxFrameDt);
-    sound.syncRadio(mode === 'playing' && game && !game.isOver() && game.phase === 'running' && game.radio.enabled && !game.radio.broken, game?.clock ?? 0);
+    const animDt = mode === 'paused' ? 0 : Math.min(real, CAMPAIGN.maxFrameDt);
+    sound.syncRadio(mode === 'kitchen' && !!session && !session.practice && session.radio.enabled && !session.radio.broken, session?.clock ?? 0);
 
-    if (game && mode === 'playing' && game.panel === 'board' && lastNdc) {
-      scene.setBoardHover(scene.pickBoard(lastNdc, game));
-      scene.hoverStation = null;
+    if (session && (mode === 'kitchen' || mode === 'paused' || mode === 'final')) {
+      if (!closeupActive() && lastNdc && mode === 'kitchen') {
+        const hit = view.pick(lastNdc);
+        view.hover = hit?.station ?? null;
+      } else view.hover = null;
+      if (!closeupActive()) view.pointerLocal = null;
+      canvas.style.cursor = closeupActive() ? (session.panel === 'board' ? 'crosshair' : 'grab') : view.hover ? 'pointer' : 'default';
+      view.update(session, animDt, mode);
     } else {
-      scene.setBoardHover(null);
-      scene.hoverStation = game && mode === 'playing' && lastNdc ? scene.pickStation(lastNdc) : null;
+      canvas.style.cursor = 'default';
+      sv.update(null, animDt, 'menu');
     }
-    canvas.style.cursor = game?.panel === 'board' ? 'crosshair' : scene.hoverStation ? 'pointer' : 'default';
-
-    scene.update(mode === 'menu' ? null : game, animDt, mode);
-    ui.render(mode === 'menu' || mode === 'instructions' ? null : game, scene, animDt, mode);
-    scene.render();
+    ui.render(session, animDt, mode);
+    sv.render();
     requestAnimationFrame(frame);
   }
 
-  scene.setCameraMode('menu', true);
-  ui.showMenu();
+  sv.setCameraMode('menu', true);
+  if (save.data.settings.inProgress) {
+    const i = DAYS.findIndex((d) => d.id === save.data.settings.inProgress);
+    if (i >= 0) {
+      booted = true;
+      startDay(i, true);
+      requestAnimationFrame(frame);
+      window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save };
+      return;
+    }
+  }
+  ui.showMenu(save);
   booted = true;
   requestAnimationFrame(frame);
-
-  // Для отладки из консоли браузера.
-  window.__olivie = { get game() { return game; }, get mode() { return mode; }, scene, app };
+  window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save };
 }
 
 boot();

@@ -706,6 +706,11 @@ export class KitchenSession {
       s -= o.radioLeft;
       notes.push('Радио осталось сломанным');
     }
+    const dirty = this.dirtyItems();
+    if (dirty.length) {
+      s -= o.dirtyLeft * dirty.length;
+      notes.push('Немытая посуда: ' + dirty.map((d) => d.label.toLowerCase()).join(', '));
+    }
     return { score: Math.max(0, s), notes };
   }
 

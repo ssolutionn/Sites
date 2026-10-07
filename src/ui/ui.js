@@ -67,6 +67,7 @@ export class UI {
           <button class="ghost big" data-ui="practice">🔪 Тренировка нарезки</button>
           <a class="model-link" href="./gallery.html">Девушка и кот · 3D</a>
           <button class="ghost big" data-ui="controls">Управление</button>
+          <a class="ghost big btn-link" href="./index.html">← Кампания</a>
           <button class="ghost big" data-ui="mute" title="Звук (M)">${this.app.isMuted() ? '🔇' : '🔊'}</button>
         </div>
         <div class="card controls hidden" id="controls-card">${this._controlsTable()}</div>

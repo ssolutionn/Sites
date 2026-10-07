@@ -372,8 +372,14 @@ export const trayMethods = {
     const dish = this.dishes[dishId];
     const w = dish.work;
     const used = new Set(w?.layers.map((l) => l.comp) ?? []);
+    // слой — продукт целиком: обе подготовленные порции идут в один слой
     const comps = [];
-    for (const [stepId, p] of Object.entries(dish.prepared)) comps.push({ comp: stepId, product: p.product, available: !used.has(stepId) && w?.current?.comp !== stepId });
+    const seen = new Set();
+    for (const p of Object.values(dish.prepared)) {
+      if (seen.has(p.product)) continue;
+      seen.add(p.product);
+      comps.push({ comp: p.product, product: p.product, available: !used.has(p.product) && w?.current?.comp !== p.product });
+    }
     comps.push({ comp: 'mayo', product: 'mayo', available: this.inventory.available('mayo') > 0 || w?.current?.comp === 'mayo' });
     return comps;
   },

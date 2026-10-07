@@ -167,6 +167,15 @@ export class Sound {
       case 'fail':
         [392, 349, 311, 262].forEach((f, i) => this._tone(f, 0.45, { type: 'triangle', vol: 0.2, at: i * 0.18 }));
         break;
+      case 'grate':
+        this._noise(0.12, { vol: 0.18, freq: 4200, q: 1.5 });
+        break;
+      case 'drop':
+        this._tone(520, 0.08, { vol: 0.14, slideTo: 380 });
+        break;
+      case 'bag':
+        this._noise(0.35, { vol: 0.25, freq: 1500, q: 0.4 });
+        break;
       case 'click':
         this._tone(1200, 0.03, { vol: 0.06 });
         break;

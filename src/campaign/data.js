@@ -13,7 +13,8 @@ export const CAMPAIGN = {
   potatoReadyAfter: 120, // 2:00 после установки кастрюли (поправка тестового билда)
   minCutFraction: 0.2,
   maxPiecesPerProduct: 150,
-  edgeTrimAllowance: 0.1, // до 10 % исходного объёма порции — краевые обрезки без штрафа
+  edgeTrimAllowance: 0.1, // до 10 % исходного объёма порции — краевые обрезки без штрафа;
+  // для профилей, где эталонной нарезке этого мало, допуск задан в PRODUCTS[*].cut.trim (scripts/calibrate-trims.mjs)
   tolerance: { min: 0.75, max: 1.25 },
   roundTarget: { thickness: 0.5, min: 0.32, max: 0.72, minCut: 0.18 },
 
@@ -60,21 +61,21 @@ export const CAMPAIGN = {
   scoring: {
     weights: { prep: 0.35, comp: 0.25, asm: 0.25, wish: 0.15 },
     day: { dishes: 0.85, order: 0.15 },
-    order: { theft: 5, spillEvent: 5, puddleLeft: 15, garlandLeft: 10, radioLeft: 8, dirtyLeft: 3 },
+    order: { theft: 5, spillEvent: 5, puddleLeft: 15, garlandLeft: 10, radioLeft: 8, dirtyLeft: 4 },
   },
 };
 
 // --- Продукты ---
 // unit — игровые порции; storage — где хранится; cut — профиль для доски.
 export const PRODUCTS = {
-  potato: { name: 'Картофель', unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 3, d: 2, profile: 'oval' }, grate: true, note: 'варится в кастрюле' },
-  carrot: { name: 'Морковь', unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 4, d: 2, profile: 'carrot' }, grate: true, note: 'варёная' },
+  potato: { name: 'Картофель', unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 4, d: 3, profile: 'oval' }, grate: true, note: 'варится в кастрюле' },
+  carrot: { name: 'Морковь', unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 4, d: 2, profile: 'carrot', trim: 0.39 }, grate: true, note: 'варёная' },
   sausage: { name: 'Колбаса', unit: 'порц.', storage: 'fridge', color: 0xe7909a, cut: { w: 3, d: 3, profile: 'rectangle' }, round: { length: 5, radius: 0.9 } },
-  cucumber: { name: 'Огурец', unit: 'порц.', storage: 'fridge', color: 0x8cc84b, cut: { w: 4, d: 2, profile: 'oval' }, round: { length: 5, radius: 0.75 } },
-  egg: { name: 'Яйцо', unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 3, d: 2, profile: 'egg' }, note: 'сварено и очищено' },
+  cucumber: { name: 'Огурец', unit: 'порц.', storage: 'fridge', color: 0x8cc84b, cut: { w: 5, d: 2, profile: 'oval' }, round: { length: 5, radius: 0.75 } },
+  egg: { name: 'Яйцо', unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 4, d: 3, profile: 'egg', trim: 0.28 }, note: 'сварено и очищено' },
   peas: { name: 'Горошек', unit: 'банка', storage: 'pantry', color: 0x6dbb3a },
   mayo: { name: 'Майонез', unit: 'порц.', storage: 'fridge', color: 0xfffbea },
-  crab: { name: 'Крабовые палочки', unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 5, d: 1, profile: 'rectangle' } },
+  crab: { name: 'Крабовые палочки', unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 5, d: 2, profile: 'rectangle' } },
   corn: { name: 'Кукуруза', unit: 'банка', storage: 'pantry', color: 0xf4c430 },
   bread: { name: 'Хлеб', unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 4, d: 2, profile: 'rectangle' } },
   butter: { name: 'Сливочное масло', unit: 'пачка', storage: 'fridge', color: 0xfff1a8 },
@@ -97,6 +98,12 @@ export const PRODUCTS = {
 // Каталог доставки: всё, что можно заказать.
 export const CATALOG = Object.keys(PRODUCTS).filter((id) => !['skewer'].includes(id));
 
+
+// Две порции одного продукта — отдельные шаги (каждая режется/трётся своей серией движений).
+function twice(step, label2) {
+  return [step, { ...step, id: step.id + '2', label: label2 ?? step.label + ' — вторая порция' }];
+}
+
 // --- Рецепты ---
 // Шаг: id, type, станция выводится из типа, requires — id шагов-предпосылок.
 // cut.shape: cube | round; dest: bowl | prepared | pieces.
@@ -108,15 +115,15 @@ export const RECIPES = {
     uses: ['bowl'],
     look: 'Разноцветные мелкие кусочки в кремовой заправке',
     steps: [
-      { id: 'boil', type: 'boil', product: 'potato', label: 'Поставить картофель вариться' },
-      { id: 'carrot', type: 'cut', product: 'carrot', shape: 'cube', dest: 'bowl', label: 'Нарезать морковь кубиками' },
+      { id: 'boil', type: 'boil', product: 'potato', qty: 2, label: 'Поставить картофель вариться' },
+      ...twice({ id: 'carrot', type: 'cut', product: 'carrot', shape: 'cube', dest: 'bowl', label: 'Нарезать морковь кубиками' }),
       { id: 'sausage', type: 'cut', product: 'sausage', shape: 'cube', dest: 'bowl', label: 'Нарезать колбасу кубиками' },
-      { id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'cube', dest: 'bowl', label: 'Нарезать огурец кубиками' },
-      { id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' },
-      { id: 'potato', type: 'cut', product: 'potato', shape: 'cube', dest: 'bowl', requires: ['boil'], label: 'Нарезать картофель кубиками' },
+      ...twice({ id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'cube', dest: 'bowl', label: 'Нарезать огурец кубиками' }),
+      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' }),
+      ...twice({ id: 'potato', type: 'cut', product: 'potato', shape: 'cube', dest: 'bowl', requires: ['boil'], label: 'Нарезать картофель кубиками' }),
       { id: 'peas', type: 'add', product: 'peas', label: 'Открыть горошек и добавить' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Заправить майонезом' },
-      { id: 'mix', type: 'mix', requires: ['carrot', 'sausage', 'cucumber', 'egg', 'potato', 'peas', 'mayo'], label: 'Перемешать круговыми движениями' },
+      { id: 'mix', type: 'mix', requires: ['carrot', 'carrot2', 'sausage', 'cucumber', 'cucumber2', 'egg', 'egg2', 'potato', 'potato2', 'peas', 'mayo'], label: 'Перемешать круговыми движениями' },
     ],
   },
   crab: {
@@ -126,12 +133,12 @@ export const RECIPES = {
     uses: ['bowl'],
     look: 'Бело-красные кусочки и жёлтая кукуруза',
     steps: [
-      { id: 'crab', type: 'cut', product: 'crab', shape: 'cube', dest: 'bowl', label: 'Нарезать крабовые палочки' },
-      { id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' },
+      ...twice({ id: 'crab', type: 'cut', product: 'crab', shape: 'cube', dest: 'bowl', label: 'Нарезать крабовые палочки' }),
+      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' }),
       { id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'cube', dest: 'bowl', label: 'Нарезать огурец кубиками' },
       { id: 'corn', type: 'add', product: 'corn', label: 'Открыть кукурузу и добавить' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Заправить майонезом' },
-      { id: 'mix', type: 'mix', requires: ['crab', 'egg', 'cucumber', 'corn', 'mayo'], label: 'Перемешать' },
+      { id: 'mix', type: 'mix', requires: ['crab', 'crab2', 'egg', 'egg2', 'cucumber', 'corn', 'mayo'], label: 'Перемешать' },
     ],
   },
   sandwiches: {
@@ -169,10 +176,10 @@ export const RECIPES = {
     look: 'Заполненные корзинки с зеленью',
     count: 8,
     steps: [
-      { id: 'cheese', type: 'grate', product: 'cheese', dest: 'bowl', label: 'Натереть сыр' },
-      { id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' },
+      ...twice({ id: 'cheese', type: 'grate', product: 'cheese', dest: 'bowl', label: 'Натереть сыр' }),
+      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', label: 'Нарезать яйцо кубиками' }),
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Добавить майонез' },
-      { id: 'mix', type: 'mix', requires: ['cheese', 'egg', 'mayo'], label: 'Перемешать начинку' },
+      { id: 'mix', type: 'mix', requires: ['cheese', 'cheese2', 'egg', 'egg2', 'mayo'], label: 'Перемешать начинку' },
       { id: 'fill', type: 'fill', containers: 'tartlet', items: 8, requires: ['mix'], label: 'Разложить начинку по 8 корзинкам' },
       { id: 'garnish', type: 'garnish', product: 'greens', requires: ['fill'], label: 'Украсить зеленью' },
     ],
@@ -203,13 +210,13 @@ export const RECIPES = {
     look: 'Слоёный салат со свекольным верхом',
     onionOption: true,
     steps: [
-      { id: 'boil', type: 'boil', product: 'potato', label: 'Поставить картофель вариться' },
-      { id: 'herring', type: 'cut', product: 'herring', shape: 'cube', dest: 'prepared', label: 'Нарезать сельдь' },
+      { id: 'boil', type: 'boil', product: 'potato', qty: 2, label: 'Поставить картофель вариться' },
+      ...twice({ id: 'herring', type: 'cut', product: 'herring', shape: 'cube', dest: 'prepared', label: 'Нарезать сельдь' }),
       { id: 'onion', type: 'cut', product: 'onion', shape: 'cube', dest: 'prepared', onion: true, label: 'Нарезать лук (если с луком)' },
-      { id: 'potato', type: 'grate', product: 'potato', dest: 'prepared', requires: ['boil'], label: 'Натереть картофель' },
+      ...twice({ id: 'potato', type: 'grate', product: 'potato', dest: 'prepared', requires: ['boil'], label: 'Натереть картофель' }),
       { id: 'carrot', type: 'grate', product: 'carrot', dest: 'prepared', label: 'Натереть морковь' },
-      { id: 'beet', type: 'grate', product: 'beet', dest: 'prepared', label: 'Натереть свёклу' },
-      { id: 'layers', type: 'layers', requires: ['herring', 'onion', 'potato', 'carrot', 'beet'], label: 'Собрать слои' },
+      ...twice({ id: 'beet', type: 'grate', product: 'beet', dest: 'prepared', label: 'Натереть свёклу' }),
+      { id: 'layers', type: 'layers', requires: ['herring', 'herring2', 'onion', 'potato', 'potato2', 'carrot', 'beet', 'beet2'], label: 'Собрать слои' },
     ],
     layers: ['herring', 'onion', 'potato', 'mayo', 'carrot', 'mayo', 'beet', 'mayo'],
   },
@@ -262,7 +269,7 @@ export function stepProducts(recipeId, step, variant) {
       return { [step.product]: 1 };
     case 'boil':
     case 'add':
-      return { [step.product]: 1 };
+      return { [step.product]: step.qty ?? 1 };
     case 'spread':
       return { bread: step.items, butter: 1 };
     case 'dose':
@@ -315,7 +322,7 @@ export const DAYS = [
     intro: 'Первый салат года. Учимся резать на глаз: полоски, поворот R, затем кубики. Картошка готова через 2:00 после установки кастрюли.',
     newSkills: ['Клик — разрез', 'R — поворот', 'Миска и майонез', 'Перемешивание кругами', 'Плита'],
     targetMinutes: 8,
-    stock: { potato: 1, carrot: 1, sausage: 2, cucumber: 1, egg: 1, peas: 1, mayo: 1 },
+    stock: { potato: 2, carrot: 2, sausage: 2, cucumber: 2, egg: 2, peas: 1, mayo: 1 },
     dirty: [],
     events: [
       { type: 'pot', after: 'boilStart', delay: 70 },
@@ -328,10 +335,10 @@ export const DAYS = [
     id: 2,
     title: 'Ещё один салат',
     dishes: ['crab'],
-    intro: 'Крабовый салат: другой набор продуктов. Миска со вчера грязная — её придётся помыть у раковины. Телефон тоже оживает.',
-    newSkills: ['Мытьё посуды', 'Телефон', 'Кукуруза'],
+    intro: 'Крабовый салат: другой набор продуктов. Миска со вчера грязная — помой её у раковины. Кукурузы дома нет: закажи в телефоне и режь, пока едет курьер.',
+    newSkills: ['Мытьё посуды', 'Телефон', 'Первый заказ'],
     targetMinutes: 8,
-    stock: { crab: 1, egg: 1, cucumber: 1, corn: 1, mayo: 1 },
+    stock: { crab: 2, egg: 2, cucumber: 1, corn: 0, mayo: 1 },
     dirty: ['bowl'],
     events: [{ type: 'radio', at: 140 }],
     messages: [
@@ -355,10 +362,10 @@ export const DAYS = [
     id: 4,
     title: 'Мелкая работа',
     dishes: ['tartlets', 'tomatoes'],
-    intro: 'Тарталетки и фаршированные помидоры. Сердцевину вынимаем ложкой, начинку дозируем. Проверь сообщения от гостей.',
+    intro: 'Тарталетки и фаршированные помидоры. Сердцевину вынимаем ложкой, начинку дозируем. Зелени для украшения нет — закажи. Проверь сообщения от гостей.',
     newSkills: ['Тёрка', 'Удаление сердцевины', 'Дозирование', 'Пожелание без лука'],
     targetMinutes: 9,
-    stock: { cheese: 2, egg: 1, mayo: 2, tartlet: 8, greens: 2, tomato: 4, onion: 1 },
+    stock: { cheese: 3, egg: 2, mayo: 2, tartlet: 8, greens: 0, tomato: 4, onion: 1 },
     dirty: [],
     request: { recipe: 'tomatoes', onion: false },
     events: [{ type: 'radio', at: 200 }],
@@ -371,7 +378,7 @@ export const DAYS = [
     intro: 'Селёдка под шубой: тёрка, порядок слоёв и майонез. Последний слой можно отменить. Майонеза на все слои не хватит — закажи.',
     newSkills: ['Слои', 'Распределение соуса', 'Отмена слоя'],
     targetMinutes: 10,
-    stock: { potato: 1, herring: 1, onion: 1, carrot: 1, beet: 1, mayo: 1 },
+    stock: { potato: 2, herring: 2, onion: 1, carrot: 1, beet: 2, mayo: 1 },
     dirty: [],
     events: [
       { type: 'pot', after: 'boilStart', delay: 60 },
@@ -383,10 +390,10 @@ export const DAYS = [
     id: 6,
     title: 'Красиво разложить',
     dishes: ['canape', 'fruit'],
-    intro: 'Канапе на шпажках и фруктовая тарелка. Режем кружочки, перетаскиваем кусочки на шпажки. Осторожно со стаканом компота — кот рядом.',
+    intro: 'Канапе на шпажках и фруктовая тарелка. Режем кружочки, перетаскиваем кусочки на шпажки. Винограда нет — закажи. Осторожно со стаканом компота — кот рядом.',
     newSkills: ['Кружочки', 'Сборка шпажек', 'Выкладка', 'Уборка лужи'],
     targetMinutes: 8,
-    stock: { bread: 1, cheese: 1, sausage: 2, cucumber: 1, skewer: 8, mandarin: 3, apple: 1, grapes: 1 },
+    stock: { bread: 1, cheese: 1, sausage: 2, cucumber: 1, skewer: 8, mandarin: 3, apple: 1, grapes: 0 },
     dirty: [],
     events: [
       { type: 'cat', when: 'sausageOnBoard', delay: 8 },
@@ -399,10 +406,10 @@ export const DAYS = [
     id: 7,
     title: 'Последние приготовления',
     dishes: ['chicken'],
-    intro: 'Курица в духовке, а пока она запекается — финальная сервировка всего стола. Не пропусти сигнал духовки!',
+    intro: 'Маринад закончился — закажи его, а пока курьер едет, начни сервировку стола. Курица запекается 2:30 — не пропусти сигнал духовки!',
     newSkills: ['Маринад', 'Духовка', 'Финальная сервировка'],
     targetMinutes: 9,
-    stock: { chicken: 2, marinade: 2 },
+    stock: { chicken: 2, marinade: 0 },
     dirty: [],
     finalServe: true,
     events: [{ type: 'garland', at: 90 }, { type: 'cat', when: 'idle', at: 60 }],

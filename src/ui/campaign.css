@@ -1,0 +1,115 @@
+/* Кампания 0.4: дополнения к общим стилям */
+.btn-link { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; padding: 10px 16px; border-radius: 14px; color: var(--ink); background: #fff; border: 1.5px solid var(--line); box-shadow: 0 2px 0 rgba(0,0,0,.12); }
+.warn { color: var(--red-dark); }
+.menu .actions { gap: 8px; }
+.chip { display: inline-block; background: #f4eee4; border-radius: 10px; padding: 3px 8px; font-size: 12.5px; margin: 2px 0; }
+.chip.ok { background: var(--green-soft); color: var(--green-dark); }
+.chip.bad { background: var(--red-soft); color: var(--red-dark); }
+.score-pill { display: inline-block; background: var(--green); color: #fff; border-radius: 10px; padding: 2px 9px; font-size: 13px; font-weight: 800; }
+
+/* журнал */
+.journal { width: min(980px, 100%); }
+.days { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin: 10px 0; }
+.day-card { border: 2px solid var(--line); border-radius: 16px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 6px; min-height: 160px; }
+.day-card.current { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.day-card.done { background: #f7fbf6; }
+.day-card.locked { opacity: .55; }
+.day-card .day-btn { margin-top: auto; }
+.day-n { font-size: 12px; font-weight: 800; color: var(--red); text-transform: uppercase; letter-spacing: .5px; }
+.intro { width: min(620px, 100%); }
+.dish-list { padding-left: 18px; }
+.skills { margin: 8px 0; }
+
+/* HUD */
+.hud-day { position: absolute; left: 16px; top: 16px; padding: 10px 14px; max-width: min(460px, calc(100vw - 260px)); }
+.hud-day-title { font-weight: 800; font-size: 15px; }
+.hud-step { font-size: 13px; color: var(--muted); margin: 3px 0 6px; }
+.hud-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.hud-actions button { padding: 6px 10px; font-size: 13px; }
+.hud-clock { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 6px 16px; text-align: center; }
+.hud-clock #hud-clock { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hud-buttons button { position: relative; }
+.badge { position: absolute; top: -4px; right: -4px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; border-radius: 10px; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+#alerts { top: 74px; }
+
+/* панели станций */
+.station-panel { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(820px, calc(100vw - 32px)); padding: 10px 14px 12px; z-index: 20; max-height: 42vh; overflow: auto; }
+.station-panel h2 { margin: 0 0 6px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.station-panel h2 .sub { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
+.station-panel .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.station-panel .row + .row { margin-top: 6px; }
+.station-panel .tabs button { padding: 6px 10px; font-size: 13px; background: #fff; border: 2px solid var(--line); }
+.station-panel button { padding: 8px 12px; font-size: 14px; }
+.station-panel button.active { border: 2px solid var(--green); background: var(--green-soft); }
+.station-panel button.done { opacity: .55; }
+.station-panel .note { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+.station-panel .live { color: var(--ink); font-weight: 700; }
+.station-panel button.big { font-size: 16px; padding: 10px 18px; }
+.stock { display: flex; flex-wrap: wrap; gap: 4px; }
+.bag-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.bag-row.done { opacity: .6; }
+.dish-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.dish-card { background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 6px 10px; font-weight: 700; font-size: 13px; cursor: grab; touch-action: none; }
+.dish-card.placed { background: var(--green-soft); border-color: var(--green); }
+.dish-card.na { opacity: .45; cursor: default; }
+#drag-ghost { position: fixed; z-index: 90; pointer-events: none; transform: translate(-50%, -120%); background: #fff; border: 2px solid var(--green); border-radius: 12px; padding: 6px 10px; font-weight: 800; box-shadow: var(--shadow); }
+button.mini { padding: 2px 9px !important; font-size: 14px !important; }
+
+/* рецепт */
+#recipe { position: absolute; left: 16px; top: 126px; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 290px); overflow: auto; padding: 10px 14px; z-index: 22; }
+.recipe-head { display: flex; justify-content: space-between; align-items: center; }
+.recipe-dish { border-top: 1px solid var(--line); padding: 6px 0; }
+.recipe-dish h3 { margin: 4px 0; font-size: 15px; display: flex; gap: 6px; align-items: center; }
+.recipe-dish.done { opacity: .7; }
+.recipe-dish .steps { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+.recipe-dish .steps li { padding: 2px 0; }
+.recipe-dish .steps li.locked { color: var(--muted); }
+.request { background: #fff4cc; border-radius: 10px; padding: 6px 8px; margin: 4px 0; font-size: 13px; }
+
+/* телефон */
+#phone { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 330px; background: #1d1d26; border-radius: 36px; padding: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.4); z-index: 40; }
+#phone .phone { height: min(560px, calc(100vh - 120px)); }
+.ptabs { display: flex; gap: 4px; padding: 4px 8px; }
+.ptabs button { flex: 1; padding: 6px 4px; font-size: 12.5px; background: #eee; }
+.ptabs button.on { background: var(--green); color: #fff; }
+#phone .feed { overflow-y: auto; }
+.msg-card { background: #fff; border-radius: 14px; padding: 8px 10px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); font-size: 13.5px; }
+.msg-card.svc { background: #eef6ff; }
+.msg-card .from { font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }
+.photo-card { position: relative; height: 140px; border-radius: 12px; overflow: hidden; margin-top: 6px; background: linear-gradient(#8fd3fe, #4fa8e0 55%, #f7d79b 56%, #f0c27a); }
+.photo-card .sun { position: absolute; width: 36px; height: 36px; border-radius: 50%; background: #ffe066; right: 22px; top: 16px; box-shadow: 0 0 20px #ffe066; }
+.photo-card .palm { position: absolute; left: 14px; bottom: 6px; font-size: 54px; }
+.photo-card .cap { position: absolute; right: 8px; bottom: 6px; font-size: 11px; background: rgba(255,255,255,.75); border-radius: 8px; padding: 2px 6px; }
+table.shop { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.shop td { padding: 4px 2px; border-bottom: 1px solid #eee; }
+table.shop tr.lack { background: #fff4f2; }
+table.shop td.qty { white-space: nowrap; text-align: right; }
+table.shop td.qty span { display: inline-block; min-width: 18px; text-align: center; font-weight: 800; }
+.order-status ul { padding-left: 18px; font-size: 13px; }
+.steps-line { display: flex; gap: 4px; margin: 6px 0; }
+.steps-line span { flex: 1; height: 6px; border-radius: 4px; background: #e6e0d6; }
+.steps-line span.on { background: var(--green); }
+
+/* подсказки */
+#tip { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); width: min(640px, calc(100vw - 32px)); padding: 10px 14px; z-index: 26; display: flex; gap: 10px; align-items: center; }
+#tip .tip-text { flex: 1; font-size: 14px; line-height: 1.4; }
+.dish-toast { max-width: 460px; text-align: center; }
+
+/* итоги */
+.dish-res { display: flex; gap: 12px; align-items: flex-start; border-top: 1px solid var(--line); padding: 8px 0; }
+.dish-res .dish-q { font-size: 28px; font-weight: 900; color: var(--green); min-width: 48px; text-align: center; }
+.dish-res ul { margin: 2px 0; padding-left: 18px; font-size: 13.5px; }
+.order-row { background: #f7f3ec; border-radius: 10px; padding: 8px 10px; font-size: 13.5px; margin: 6px 0; }
+#overlay.side { justify-content: flex-end; background: linear-gradient(90deg, transparent 40%, rgba(40,25,10,.35)); }
+.final-card { width: min(420px, 100%); }
+.final-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.final-table td { padding: 5px 2px; border-bottom: 1px solid var(--line); }
+.final-table td:last-child { text-align: right; font-weight: 800; }
+.practice-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.practice-row b { min-width: 120px; }
+body.campaign .st-label.here { border-color: var(--green); }
+
+@media (max-width: 1100px) {
+  .hud-day { max-width: 360px; }
+  #recipe { top: 140px; }
+}

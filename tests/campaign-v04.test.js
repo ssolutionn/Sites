@@ -100,12 +100,14 @@ test('учёт: переключение продуктов на доске не
   assert.ok(s.boardSelect('olivier:carrot'));
   assert.ok(s.boardSelect('olivier:egg'));
   assert.ok(s.boardSelect('olivier:carrot'));
-  assert.equal(s.inventory.available('carrot'), 0);
-  assert.equal(s.inventory.count('carrot'), 1);
+  assert.equal(s.inventory.available('carrot'), 1);
+  assert.equal(s.inventory.count('carrot'), 2);
   cutCubes(s);
   assert.ok(s.boardTransfer());
-  assert.equal(s.inventory.count('carrot'), 0);
+  assert.equal(s.inventory.count('carrot'), 1);
   assert.equal(s.boardSelect('olivier:carrot'), false);
+  assert.ok(s.boardSelect('olivier:carrot2'));
+  assert.equal(s.inventory.available('carrot'), 0);
 });
 
 test('учёт: кража конкретного фрагмента сохраняет остальные, замена берёт запасную порцию и тот же контур', () => {
@@ -175,7 +177,7 @@ test('рецепт: вариант без лука пропускает шаг �
 test('рецепт: шуба — слои по порядку, последний ошибочный слой отменяется с возвратом', () => {
   const s = new KitchenSession({ dayIndex: 4, seed: 1 });
   const d = s.dishes.shuba;
-  for (const id of ['boil', 'herring', 'onion', 'potato', 'carrot', 'beet']) d.steps[id].done = true;
+  for (const id of ['boil', 'herring', 'herring2', 'onion', 'potato', 'potato2', 'carrot', 'beet', 'beet2']) d.steps[id].done = true;
   for (const id of ['herring', 'onion', 'potato', 'carrot', 'beet']) d.prepared[id] = { product: id, q: 1 };
   arrive(s, 'tray');
   assert.ok(s.traySelect('shuba'));
@@ -334,6 +336,7 @@ test('время: пауза — update не вызывается, сроки с
 
 test('время: духовка — готовность, окно, перегрев и порча с исправимой заменой', () => {
   const s = new KitchenSession({ dayIndex: 6, seed: 1 });
+  s.inventory.add('marinade', 2); // в данных дня 7 маринад заказывается
   arrive(s, 'tray');
   s.traySelect('chicken');
   zigzag(s, 0, 0, 0.25, 0.16, 12);
@@ -431,7 +434,7 @@ test('день 1: оливье от плиты до перемешивания, 
   arrive(s, 'stove');
   s.placePot();
   waitAction(s);
-  for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:cucumber', 'olivier:egg']) {
+  for (const key of ['olivier:carrot', 'olivier:carrot2', 'olivier:sausage', 'olivier:cucumber', 'olivier:cucumber2', 'olivier:egg', 'olivier:egg2']) {
     arrive(s, 'board');
     s.boardSelect(key);
     cutCubes(s);
@@ -447,10 +450,12 @@ test('день 1: оливье от плиты до перемешивания, 
   arrive(s, 'stove');
   s.takePot();
   waitAction(s);
-  arrive(s, 'board');
-  s.boardSelect('olivier:potato');
-  cutCubes(s);
-  assert.ok(s.boardTransfer());
+  for (const key of ['olivier:potato', 'olivier:potato2']) {
+    arrive(s, 'board');
+    s.boardSelect(key);
+    cutCubes(s);
+    assert.ok(s.boardTransfer(), s.hint?.text);
+  }
   arrive(s, 'bowl');
   s.bowlAdd('olivier', 'peas');
   waitAction(s);

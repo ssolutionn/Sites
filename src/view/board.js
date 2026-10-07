@@ -2,9 +2,10 @@
 import * as THREE from 'three';
 import { tex, toon } from './textures.js';
 import { bounds } from '../game/cutting.js';
+import { PRODUCTS } from '../campaign/data.js';
 
 export const UNIT = 0.042; // метров на один целевой кубик
-const GAP = 0.0025; // визуальный зазор между частями, геометрия при этом точная
+const GAP = 0.005; // визуальный зазор между частями, геометрия при этом точная
 const shapeKey = p => p.polygon?.map(q=>`${(q.x-p.x).toFixed(6)},${(q.z-p.z).toFixed(6)}`).join('|') ?? '';
 
 const COLORS = {
@@ -181,7 +182,8 @@ export class BoardView {
       const shape = new THREE.Shape(piece.polygon.map(q => new THREE.Vector2((q.x-cx)*UNIT, -(q.z-cz)*UNIT)));
       g = new THREE.ExtrudeGeometry(shape, { depth: UNIT, bevelEnabled: true, bevelSegments: 1, steps: 1, bevelSize: 0.0007, bevelThickness: 0.0007 });
       g.translate(0,0,-UNIT/2);g.rotateX(-Math.PI/2);
-      g.scale(0.985,1,0.985);
+      // заметный зазор между частями: ~3 мм с каждой стороны, логика попаданий не меняется
+      g.scale(Math.max(0.6, 1 - 0.006 / Math.max(piece.w * UNIT, 0.001)), 1, Math.max(0.6, 1 - 0.006 / Math.max(piece.d * UNIT, 0.001)));
     } else {
       const shape = new THREE.Shape();
       const w = Math.max(piece.w*UNIT-GAP,.001), d = Math.max(piece.d*UNIT-GAP,.001), r = Math.min(.002,w/5,d/5);
@@ -191,7 +193,7 @@ export class BoardView {
       g = new THREE.ExtrudeGeometry(shape,{ depth:UNIT,bevelEnabled:true,bevelSize:.0008,bevelThickness:.0008,bevelSegments:1,steps:1 });
       g.translate(0,0,-UNIT/2);g.rotateX(-Math.PI/2);
     }
-    const mat = new THREE.MeshStandardMaterial({color: COLORS[ing] ?? 0xe8a0a5, map: ing==='sausage' ? tex.sausage : null, roughness:.62, metalness:0, emissive:0x000000});
+    const mat = new THREE.MeshStandardMaterial({color: COLORS[ing] ?? PRODUCTS[ing]?.color ?? 0xe8a0a5, map: ing==='sausage' ? tex.sausage : null, roughness:.62, metalness:0, emissive:0x000000});
     mat.emissive = new THREE.Color(0x000000);
     const m = new THREE.Mesh(g, mat);
     m.castShadow = true;

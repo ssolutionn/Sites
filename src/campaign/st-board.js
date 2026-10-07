@@ -145,7 +145,7 @@ export const boardMethods = {
 
   boardQuality(it) {
     if (it.log) return roundQuality(it.log, this.cfg.roundTarget, this.cfg.edgeTrimAllowance);
-    return cutQuality(it.pieces, it.initVolume, this.cfg.tolerance, this.cfg.edgeTrimAllowance);
+    return cutQuality(it.pieces, it.initVolume, this.cfg.tolerance, PRODUCTS[it.product].cut?.trim ?? this.cfg.edgeTrimAllowance);
   },
 
   transferBlock(it = this.boardCur()) {
