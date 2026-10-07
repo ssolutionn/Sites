@@ -1,0 +1,54 @@
+# Сборка десктопной игры на настоящих Mac и Windows.
+# Готовые архивы — во вкладке Actions → запуск → Artifacts.
+name: Desktop build
+
+on:
+  push:
+    branches: ['claude/**', 'main']
+  workflow_dispatch:
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: node desktop/build.mjs darwin arm64,x64
+      - name: Подпись ad-hoc и архивы
+        run: |
+          cd build/desktop-out
+          for a in arm64 x64; do
+            APP="Novogodnyaya Sueta-darwin-$a/Novogodnyaya Sueta.app"
+            codesign --force --deep --sign - "$APP"
+            codesign --verify --deep --strict "$APP"
+            ditto -c -k --keepParent "$APP" "Sueta-mac-$a.zip"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sueta-mac-AppleSilicon
+          path: build/desktop-out/Sueta-mac-arm64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sueta-mac-Intel
+          path: build/desktop-out/Sueta-mac-x64.zip
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node desktop/build.mjs win32 x64
+      - run: Compress-Archive -Path "build/desktop-out/Novogodnyaya Sueta-win32-x64/*" -DestinationPath build/desktop-out/Sueta-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sueta-windows-x64
+          path: build/desktop-out/Sueta-windows-x64.zip
