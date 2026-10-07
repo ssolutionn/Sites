@@ -71,18 +71,15 @@ export class Grater {
       return false; // телепорт курсора не считается движением по тёрке
     }
     this.lastZ = z;
-    if (z <= this.cfg.zoneTop) {
-      if (this.phase === 'bottom') this.visitedTop = true;
-      this.phase = 'top';
-    } else if (z >= this.cfg.zoneBottom) {
-      if (this.phase === 'top' && this.visitedTop) {
-        this.done++;
-        this.visitedTop = false;
-        this.phase = 'bottom';
-        return true;
-      }
-      if (this.phase === 'top') this.visitedTop = true;
-      this.phase = 'bottom';
+    const zone = z <= this.cfg.zoneTop ? 'top' : z >= this.cfg.zoneBottom ? 'bottom' : null;
+    if (!zone || zone === this.phase) return false;
+    const first = this.phase === null;
+    this.phase = zone;
+    if (first) return false;
+    this.halves = (this.halves ?? 0) + 1;
+    if (this.halves % 2 === 0) {
+      this.done++;
+      return true;
     }
     return false;
   }
