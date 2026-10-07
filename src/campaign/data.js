@@ -9,7 +9,9 @@ export const CAMPAIGN = {
   maxFrameDt: 0.25,
   subStep: 0.05,
   walkSpeed: 2.2,
-  knifeDuration: 0.3,
+  knifeDuration: 0.22, // нож уже прошёл росчерком — короткий удар до доски
+  batchGap: 0.7, // зазор между одинаковыми продуктами на доске, в кубиках
+  cutRules: { angleTolerance: 28, cover: 0.6, maxWobble: 1.9, minLength: 0.6 }, // допуски росчерка ножа (gestures.js)
   potatoReadyAfter: 120, // 2:00 после установки кастрюли (поправка тестового билда)
   boilTimes: { potato: 120, egg: 60, beet: 150 }, // у каждой кастрюли свой срок; конфорок две
   burners: 2,
@@ -125,11 +127,6 @@ export const PRODUCTS = {
 export const CATALOG = Object.keys(PRODUCTS).filter((id) => !['skewer'].includes(id));
 
 
-// Две порции одного продукта — отдельные шаги (каждая режется/трётся своей серией движений).
-function twice(step, label2) {
-  return [step, { ...step, id: step.id + '2', label: label2 ?? step.label + ' — вторая порция' }];
-}
-
 // --- Рецепты ---
 // Шаг: id, type, станция выводится из типа, requires — id шагов-предпосылок.
 // cut.shape: cube | round; dest: bowl | prepared | pieces.
@@ -143,14 +140,14 @@ export const RECIPES = {
     steps: [
       { id: 'boil', type: 'boil', product: 'potato', qty: 2, label: 'Поставить картофель вариться' },
       { id: 'boilEgg', type: 'boil', product: 'egg', qty: 2, label: 'Поставить яйца вариться' },
-      ...twice({ id: 'carrot', type: 'cut', product: 'carrot', shape: 'cube', dest: 'bowl', label: 'Нарезать морковь кубиками' }),
+      { id: 'carrot', type: 'cut', product: 'carrot', qty: 2, shape: 'cube', dest: 'bowl', label: 'Нарезать 2 морковки кубиками' },
       { id: 'sausage', type: 'cut', product: 'sausage', shape: 'cube', dest: 'bowl', label: 'Нарезать колбасу кубиками' },
-      ...twice({ id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'cube', dest: 'bowl', label: 'Нарезать огурец кубиками' }),
-      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать яйцо кубиками' }),
-      ...twice({ id: 'potato', type: 'cut', product: 'potato', shape: 'cube', dest: 'bowl', requires: ['boil'], label: 'Нарезать картофель кубиками' }),
+      { id: 'cucumber', type: 'cut', product: 'cucumber', qty: 2, shape: 'cube', dest: 'bowl', label: 'Нарезать 2 огурца кубиками' },
+      { id: 'egg', type: 'cut', product: 'egg', qty: 2, shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать 2 яйца кубиками' },
+      { id: 'potato', type: 'cut', product: 'potato', qty: 2, shape: 'cube', dest: 'bowl', requires: ['boil'], label: 'Нарезать 2 картофелины кубиками' },
       { id: 'peas', type: 'add', product: 'peas', label: 'Открыть горошек и добавить' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Заправить майонезом' },
-      { id: 'season', type: 'season', requires: ['carrot', 'carrot2', 'sausage', 'cucumber', 'cucumber2', 'egg', 'egg2', 'potato', 'potato2', 'peas', 'mayo'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'season', type: 'season', requires: ['carrot', 'sausage', 'cucumber', 'egg', 'potato', 'peas', 'mayo'], label: 'Посолить, поперчить и попробовать' },
       { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать круговыми движениями' },
     ],
   },
@@ -162,12 +159,12 @@ export const RECIPES = {
     look: 'Бело-красные кусочки и жёлтая кукуруза',
     steps: [
       { id: 'boilEgg', type: 'boil', product: 'egg', qty: 2, label: 'Поставить яйца вариться' },
-      ...twice({ id: 'crab', type: 'cut', product: 'crab', shape: 'cube', dest: 'bowl', label: 'Нарезать крабовые палочки' }),
-      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать яйцо кубиками' }),
+      { id: 'crab', type: 'cut', product: 'crab', qty: 2, shape: 'cube', dest: 'bowl', label: 'Нарезать 2 упаковки крабовых палочек' },
+      { id: 'egg', type: 'cut', product: 'egg', qty: 2, shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать 2 яйца кубиками' },
       { id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'cube', dest: 'bowl', label: 'Нарезать огурец кубиками' },
       { id: 'corn', type: 'add', product: 'corn', label: 'Открыть кукурузу и добавить' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Заправить майонезом' },
-      { id: 'season', type: 'season', requires: ['crab', 'crab2', 'egg', 'egg2', 'cucumber', 'corn', 'mayo'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'season', type: 'season', requires: ['crab', 'egg', 'cucumber', 'corn', 'mayo'], label: 'Посолить, поперчить и попробовать' },
       { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать' },
     ],
   },
@@ -209,10 +206,10 @@ export const RECIPES = {
     count: 8,
     steps: [
       { id: 'boilEgg', type: 'boil', product: 'egg', qty: 2, label: 'Поставить яйца вариться' },
-      ...twice({ id: 'cheese', type: 'grate', product: 'cheese', dest: 'bowl', label: 'Натереть сыр' }),
-      ...twice({ id: 'egg', type: 'cut', product: 'egg', shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать яйцо кубиками' }),
+      { id: 'cheese', type: 'grate', product: 'cheese', qty: 2, dest: 'bowl', label: 'Натереть 2 куска сыра' },
+      { id: 'egg', type: 'cut', product: 'egg', qty: 2, shape: 'cube', dest: 'bowl', requires: ['boilEgg'], label: 'Нарезать 2 яйца кубиками' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Добавить майонез' },
-      { id: 'season', type: 'season', requires: ['cheese', 'cheese2', 'egg', 'egg2', 'mayo'], label: 'Посолить, поперчить и попробовать' },
+      { id: 'season', type: 'season', requires: ['cheese', 'egg', 'mayo'], label: 'Посолить, поперчить и попробовать' },
       { id: 'mix', type: 'mix', requires: ['season'], label: 'Перемешать начинку' },
       { id: 'fill', type: 'fill', containers: 'tartlet', items: 8, requires: ['mix'], label: 'Разложить начинку по 8 корзинкам' },
       { id: 'garnish', type: 'garnish', product: 'greens', requires: ['fill'], label: 'Украсить зеленью' },
@@ -247,12 +244,12 @@ export const RECIPES = {
     steps: [
       { id: 'boil', type: 'boil', product: 'potato', qty: 2, label: 'Поставить картофель вариться' },
       { id: 'boilBeet', type: 'boil', product: 'beet', qty: 2, label: 'Поставить свёклу вариться' },
-      ...twice({ id: 'herring', type: 'cut', product: 'herring', shape: 'cube', dest: 'prepared', label: 'Нарезать сельдь' }),
+      { id: 'herring', type: 'cut', product: 'herring', qty: 2, shape: 'cube', dest: 'prepared', label: 'Нарезать 2 филе сельди' },
       { id: 'onion', type: 'cut', product: 'onion', shape: 'cube', dest: 'prepared', onion: true, label: 'Нарезать лук (если с луком)' },
-      ...twice({ id: 'potato', type: 'grate', product: 'potato', dest: 'prepared', requires: ['boil'], label: 'Натереть картофель' }),
+      { id: 'potato', type: 'grate', product: 'potato', qty: 2, dest: 'prepared', requires: ['boil'], label: 'Натереть 2 картофелины' },
       { id: 'carrot', type: 'grate', product: 'carrot', dest: 'prepared', label: 'Натереть морковь' },
-      ...twice({ id: 'beet', type: 'grate', product: 'beet', dest: 'prepared', requires: ['boilBeet'], label: 'Натереть свёклу' }),
-      { id: 'layers', type: 'layers', requires: ['herring', 'herring2', 'onion', 'potato', 'potato2', 'carrot', 'beet', 'beet2'], label: 'Собрать слои' },
+      { id: 'beet', type: 'grate', product: 'beet', qty: 2, dest: 'prepared', requires: ['boilBeet'], label: 'Натереть 2 свёклы' },
+      { id: 'layers', type: 'layers', requires: ['herring', 'onion', 'potato', 'carrot', 'beet'], label: 'Собрать слои' },
     ],
     layers: ['herring', 'onion', 'potato', 'mayo', 'carrot', 'mayo', 'beet', 'mayo'],
   },
@@ -307,7 +304,7 @@ export function stepProducts(recipeId, step, variant) {
     case 'cut':
     case 'grate':
       if (boiledHere(recipeId, step.product)) return {};
-      return { [step.product]: 1 };
+      return { [step.product]: step.qty ?? 1 };
     case 'boil':
     case 'add':
       return { [step.product]: step.qty ?? 1 };
@@ -362,8 +359,8 @@ export const DAYS = [
     id: 1,
     title: 'Начинаем подготовку',
     dishes: ['olivier'],
-    intro: 'Первый салат года. Учимся резать на глаз: полоски, поворот R, затем кубики. Конфорок две: поставь картошку (2:00) и яйца (1:00), режь, пока варятся. Сваренное горячее — подожди или остуди под холодной водой. В конце посоли и попробуй.',
-    newSkills: ['Клик — разрез', 'R — поворот', 'Две конфорки', 'Остывание', 'Соль и вкус', 'Перемешивание кругами'],
+    intro: 'Первый салат года. Режем как в жизни: зажми кнопку и проведи ножом через продукт — вдоль, потом поперёк, и получатся кубики. Конфорок две: поставь картошку (2:00) и яйца (1:00), режь, пока варятся. Сваренное горячее — подожди или остуди под холодной водой. В конце посоли и попробуй.',
+    newSkills: ['Росчерк ножом', 'Вдоль и поперёк', 'Две конфорки', 'Остывание', 'Соль и вкус', 'Перемешивание кругами'],
     targetMinutes: 6,
     budget: 300,
     wishes: 0,

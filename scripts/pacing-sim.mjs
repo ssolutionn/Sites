@@ -3,6 +3,7 @@
 // выполняются через API сессии, а между ними проходит игровое время по допущениям ниже.
 import { KitchenSession } from '../src/campaign/session.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
+import { bounds } from '../src/game/cutting.js';
 import { TRAY, CANAPE_PILES, FRUIT_PILES, SINK } from '../src/campaign/layout.js';
 import { DAYS, PRODUCTS } from '../src/campaign/data.js';
 
@@ -66,6 +67,36 @@ function clickAt(x, z) {
   s.pointer('up', x, z);
   waitAction();
 }
+// Росчерк ножом в единицах доски: прицелиться и провести.
+function slash(axis, pos, from, to) {
+  think(PACE.aimClick);
+  const a = axis === 'x' ? [pos, from] : [from, pos];
+  const b = axis === 'x' ? [pos, to] : [to, pos];
+  dragPath([a.map((v) => v * BOARD_UNIT), b.map((v) => v * BOARD_UNIT)]);
+  waitAction();
+}
+// Кружочки: от края каждого длинного куска отрезаем по ~0.5 кубика.
+function rounds(it) {
+  for (let g = 0; g < 30; g++) {
+    const seg = it.log.segments.find((q) => q.b - q.a > 0.75);
+    if (!seg) break;
+    slash('x', seg.b - seg.a > 0.9 ? seg.a + 0.5 : (seg.a + seg.b) / 2, -it.radius - 0.3, it.radius + 0.3);
+  }
+}
+function cubes(it) {
+  for (let g = 0; g < 40; g++) {
+    const wide = it.pieces.filter((p) => p.w > 1.25).sort((a, b) => a.x - b.x)[0];
+    if (!wide) break;
+    const b = bounds(it.pieces);
+    slash('x', wide.x + 1, b.minZ - 0.4, b.maxZ + 0.4);
+  }
+  for (let g = 0; g < 60; g++) {
+    const wide = it.pieces.filter((p) => p.d > 1.25).sort((a, b) => a.z - b.z)[0];
+    if (!wide) break;
+    const b = bounds(it.pieces);
+    slash('z', wide.z + 1, b.minX - 0.4, b.maxX + 0.4);
+  }
+}
 function dragPath(pts, speed = PACE.mouseSpeed) {
   s.pointer('down', pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) {
@@ -108,26 +139,15 @@ function board(key) {
       tick(PACE.gratePerCycle);
     }
   } else if (it.log) {
-    const L = it.log.length / 2;
-    for (let x = -L + 0.3; x < L - 0.2; x += 0.5) clickAt(x * BOARD_UNIT, 0);
+    rounds(it);
   } else {
-    for (let pass = 0; pass < 2; pass++) {
-      for (let g = 0; g < 14; g++) {
-        const wide = it.pieces.filter((p) => p.w > 1.25).sort((a, b) => a.x - b.x)[0];
-        if (!wide) break;
-        clickAt((wide.x + 1) * BOARD_UNIT, (wide.z + wide.d / 2) * BOARD_UNIT);
-      }
-      ui(() => s.rotate());
-    }
+    cubes(it);
   }
   if (s.cat.state === 'theft') shoo();
   if (it.missing?.length) {
     ui(() => s.takeReplacement());
-    for (let g = 0; g < 10; g++) {
-      const wide = it.pieces?.filter((p) => p.w > 1.25)[0];
-      if (!wide) break;
-      clickAt((wide.x + 1) * BOARD_UNIT, (wide.z + wide.d / 2) * BOARD_UNIT);
-    }
+    if (it.pieces) cubes(it);
+    else if (it.log) rounds(it);
   }
   think(PACE.inspect);
   if (s.board.items[key]) ui(() => s.boardTransfer());
@@ -282,20 +302,18 @@ const days = [
   () => {
     read(PACE.recipeCheck);
     placeAll();
-    for (const k of ['carrot', 'carrot2', 'sausage', 'cucumber', 'cucumber2']) {
+    for (const k of ['carrot', 'sausage', 'cucumber']) {
       board('olivier:' + k);
       handleOverflow();
       catCheck();
     }
     boiled('egg');
     board('olivier:egg');
-    board('olivier:egg2');
     adds('olivier');
     readPhone();
     fixHome();
     boiled('potato');
     board('olivier:potato');
-    board('olivier:potato2');
     season('olivier');
     stir();
   },
@@ -305,11 +323,10 @@ const days = [
     order({ corn: 1 });
     placeAll();
     wash('bowl');
-    for (const k of ['crab', 'crab2', 'cucumber']) board('crab:' + k);
+    for (const k of ['crab', 'cucumber']) board('crab:' + k);
     catCheck();
     boiled('egg');
     board('crab:egg');
-    board('crab:egg2');
     collect();
     adds('crab');
     season('crab');
@@ -353,10 +370,10 @@ const days = [
     ui(() => s.setVariant('tomatoes', false));
     order({ greens: 2 });
     placeAll();
-    for (const k of ['cheese', 'cheese2']) board('tartlets:' + k);
+    board('tartlets:cheese');
     catCheck();
     boiled('egg');
-    for (const k of ['egg', 'egg2']) board('tartlets:' + k);
+    board('tartlets:egg');
     adds('tartlets');
     season('tartlets');
     stir();
@@ -402,14 +419,12 @@ const days = [
     fixHome();
     boiled('potato');
     board('shuba:potato');
-    board('shuba:potato2');
-    for (const k of ['herring', 'herring2']) board('shuba:' + k);
+    board('shuba:herring');
     tip('boardDirty');
     wash('board');
     catCheck();
     boiled('beet');
     board('shuba:beet');
-    board('shuba:beet2');
     collect();
     tray('shuba');
     const w = s.dishes.shuba.work;

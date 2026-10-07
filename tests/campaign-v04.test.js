@@ -11,7 +11,7 @@ import { dishScore, dayScore } from '../src/campaign/scoring.js';
 import { initialPieces, cutAcross, totalVolume, rotatePieces } from '../src/game/cutting.js';
 import { TRAY, SINK, CANAPE_PILES, FRUIT_PILES, CLAYOUT } from '../src/campaign/layout.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
-import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag, seasonTo } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag, seasonTo, knife } from './helpers-campaign.js';
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps * Math.max(1, Math.abs(b)), `${a} ≈ ${b}`);
 let serial = 50000;
@@ -94,20 +94,20 @@ test('учёт: резерв и списание одной порции по ID
   assert.equal(inv.reserve('c', { egg: 2 }), false);
 });
 
-test('учёт: переключение продуктов на доске не даёт бесконечных порций', () => {
+test('учёт: один заход берёт всю порцию рецепта, переключение не даёт лишних порций', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
   arrive(s, 'board');
   assert.ok(s.boardSelect('olivier:carrot'));
+  assert.equal(s.boardCur().qty, 2);
   assert.ok(s.boardSelect('olivier:sausage'));
   assert.ok(s.boardSelect('olivier:carrot'));
-  assert.equal(s.inventory.available('carrot'), 1);
+  assert.equal(s.inventory.available('carrot'), 0);
   assert.equal(s.inventory.count('carrot'), 2);
   cutCubes(s);
   assert.ok(s.boardTransfer());
-  assert.equal(s.inventory.count('carrot'), 1);
+  assert.equal(s.inventory.count('carrot'), 0);
   assert.equal(s.boardSelect('olivier:carrot'), false);
-  assert.ok(s.boardSelect('olivier:carrot2'));
-  assert.equal(s.inventory.available('carrot'), 0);
+  assert.equal(s.boardTasks().filter((t) => t.product === 'carrot').length, 1);
 });
 
 test('учёт: кража конкретного фрагмента сохраняет остальные, замена берёт запасную порцию и тот же контур', () => {
@@ -115,9 +115,7 @@ test('учёт: кража конкретного фрагмента сохра�
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
   const it = s.boardCur();
-  s.pointer('down', -0.5 * BOARD_UNIT, 0);
-  s.pointer('up', 0, 0);
-  waitAction(s);
+  assert.equal(knife(s, 'x', -0.5, -2, 2), 'cut');
   const vol = totalVolume(it.pieces);
   const others = it.pieces.length - 1;
   s._startCatTheft();
@@ -177,7 +175,7 @@ test('рецепт: вариант без лука пропускает шаг �
 test('рецепт: шуба — слои по порядку, последний ошибочный слой отменяется с возвратом', () => {
   const s = new KitchenSession({ dayIndex: 4, seed: 1 });
   const d = s.dishes.shuba;
-  for (const id of ['boil', 'herring', 'herring2', 'onion', 'potato', 'potato2', 'carrot', 'beet', 'beet2']) d.steps[id].done = true;
+  for (const id of ['boil', 'herring', 'onion', 'potato', 'carrot', 'beet']) d.steps[id].done = true;
   for (const id of ['herring', 'onion', 'potato', 'carrot', 'beet']) d.prepared[id] = { product: id, q: 1 };
   arrive(s, 'tray');
   assert.ok(s.traySelect('shuba'));
@@ -438,7 +436,7 @@ test('день 1: оливье от плиты до перемешивания, 
   assert.ok(s.placePot()); // яйца — вторая
   waitAction(s);
   assert.equal(s.burners[1].product, 'egg');
-  for (const key of ['olivier:carrot', 'olivier:carrot2', 'olivier:sausage', 'olivier:cucumber', 'olivier:cucumber2']) {
+  for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:cucumber']) {
     arrive(s, 'board');
     s.boardSelect(key);
     cutCubes(s);
@@ -456,7 +454,7 @@ test('день 1: оливье от плиты до перемешивания, 
   arrive(s, 'sink');
   assert.ok(s.coolProduct('egg'));
   waitAction(s);
-  for (const key of ['olivier:egg', 'olivier:egg2']) {
+  for (const key of ['olivier:egg']) {
     arrive(s, 'board');
     assert.ok(s.boardSelect(key), s.hint?.text);
     cutCubes(s);
@@ -473,7 +471,7 @@ test('день 1: оливье от плиты до перемешивания, 
   s.takePot();
   waitAction(s);
   run(s, CAMPAIGN.cool.time + 0.5);
-  for (const key of ['olivier:potato', 'olivier:potato2']) {
+  for (const key of ['olivier:potato']) {
     arrive(s, 'board');
     s.boardSelect(key);
     cutCubes(s);

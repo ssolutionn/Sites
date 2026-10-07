@@ -47,7 +47,7 @@ test('вкус: норма скрыта, проба говорит честно,
   const s = new KitchenSession({ dayIndex: 1, seed: 4 });
   const se = s.dishes.crab.season;
   s.bowl.owner = 'crab';
-  for (const st of ['boilEgg', 'crab', 'crab2', 'egg', 'egg2', 'cucumber', 'corn', 'mayo']) s.dishes.crab.steps[st].done = true;
+  for (const st of ['boilEgg', 'crab', 'egg', 'cucumber', 'corn', 'mayo']) s.dishes.crab.steps[st].done = true;
   arrive(s, 'bowl');
   for (let i = 0; i < se.target.salt + 2; i++) { s.seasonAdd('crab', 'salt'); waitAction(s); }
   s.seasonTaste('crab');
@@ -134,7 +134,7 @@ test('доска: после сельди другой продукт не ре�
   assert.equal(s.equipment.board.clean, false);
   assert.equal(s.boardSelect('shuba:onion'), false);
   assert.match(s.hint.text, /селёдк/);
-  assert.ok(s.boardSelect('shuba:herring2')); // тот же продукт — можно
+  assert.equal(s._boardDirtyBlock('herring'), null); // тот же продукт — можно
   arrive(s, 'sink');
   s.sinkSelect('board');
   for (let k = 0; k < 6 && !s.equipment.board.clean; k++) {
@@ -183,7 +183,7 @@ test('день 1 целиком через API даёт звёзды и меда
   waitAction(s);
   s.placePot();
   waitAction(s);
-  for (const key of ['olivier:carrot', 'olivier:carrot2', 'olivier:sausage', 'olivier:cucumber', 'olivier:cucumber2']) {
+  for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:cucumber']) {
     arrive(s, 'board');
     s.boardSelect(key);
     cutCubes(s);
@@ -198,7 +198,7 @@ test('день 1 целиком через API даёт звёзды и меда
     arrive(s, 'sink');
     s.coolProduct(s.burners[b].product ?? (b ? 'egg' : 'potato'));
     waitAction(s);
-    for (const key of b ? ['olivier:egg', 'olivier:egg2'] : ['olivier:potato', 'olivier:potato2']) {
+    for (const key of b ? ['olivier:egg'] : ['olivier:potato']) {
       arrive(s, 'board');
       assert.ok(s.boardSelect(key), s.hint?.text);
       cutCubes(s);

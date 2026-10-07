@@ -1,6 +1,7 @@
 // Доска: нарезка кубиками (по реальному контуру), кружочки, тёрка.
 import { PRODUCTS } from './data.js';
-import { initialPieces, cutAcross, rotatePieces, pieceAt, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
+import { initialBatch, cutLine, rotatePieces, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
+import { Stroke, classifyCut, CUT_HINTS, CUT_RULES } from './gestures.js';
 import { TEMPTING } from './st-extra.js';
 import { makeRoundLog, cutRound, roundSlices, roundQuality, cutQuality, Grater } from './mechanics.js';
 
@@ -16,7 +17,7 @@ export const boardMethods = {
         const state = this.stepState(dishId, s.id);
         if (state === 'skipped') continue;
         const key = `${dishId}:${s.id}`;
-        out.push({ key, dishId, stepId: s.id, product: s.product, type: s.type, shape: s.shape, state, started: !!this.board.items[key], block: state === 'ready' ? null : this.stepBlock(dishId, s.id) });
+        out.push({ key, dishId, stepId: s.id, product: s.product, qty: s.qty ?? 1, type: s.type, shape: s.shape, state, started: !!this.board.items[key], block: state === 'ready' ? null : this.stepBlock(dishId, s.id) });
       }
     }
     return out;
@@ -49,15 +50,16 @@ export const boardMethods = {
     }
     if (!this._reserveStep(dishId, stepId)) return false;
     const prod = PRODUCTS[step.product];
-    const it = { key, dishId, stepId, product: step.product, type: step.type, shape: step.shape, cuts: 0, missing: [], freshIds: new Set() };
+    const qty = step.qty ?? 1; // один заход — вся порция рецепта: копии лежат рядом
+    const it = { key, dishId, stepId, product: step.product, qty, type: step.type, shape: step.shape, cuts: 0, missing: [], freshIds: new Set() };
     if (step.type === 'grate') {
-      it.grater = new Grater(this.cfg.grate);
+      it.grater = new Grater(this.cfg.grate, this.cfg.grate.cyclesPerPortion * qty);
     } else if (step.shape === 'round') {
-      it.log = makeRoundLog(prod.round.length);
+      it.log = makeRoundLog(prod.round.length * qty);
       it.radius = prod.round.radius;
-      it.initVolume = prod.round.length;
+      it.initVolume = prod.round.length * qty;
     } else {
-      it.pieces = initialPieces(prod.cut.w, prod.cut.d, () => this._id(), prod.cut.profile === 'rectangle' ? null : prod.cut.profile);
+      it.pieces = initialBatch(prod.cut.w, prod.cut.d, () => this._id(), prod.cut.profile === 'rectangle' ? null : prod.cut.profile, qty, this.cfg.batchGap);
       it.initVolume = totalVolume(it.pieces);
     }
     this.board.items[key] = it;
@@ -77,6 +79,8 @@ export const boardMethods = {
     return `Доска ${b.by === 'beet' ? 'в свёкле' : 'пахнет селёдкой'} — помой её у раковины`;
   },
 
+  // Нож ведут мышью: нажал — лезвие на продукте, провёл — разрез, отпустил — готово.
+  // Сам росчерк хранится в board.stroke (единицы доски), его же рисует сцена.
   _boardPointer(type, x, z) {
     const it = this.boardCur();
     if (!it) return 'ignored';
@@ -93,47 +97,78 @@ export const boardMethods = {
       }
       return 'idle';
     }
-    if (type !== 'down') return 'hover';
-    if (this.action) return 'ignored';
-    if (it.log) return this._roundCut(it, ux, uz);
-    return this._cubeCut(it, ux, uz);
+    if (type === 'down') {
+      if (this.action) return 'ignored';
+      this.board.stroke = new Stroke();
+      this.board.stroke.add(ux, uz, this.clock);
+      return 'stroke';
+    }
+    if (type === 'move') {
+      if (!this.pointerDown || !this.board.stroke) return 'hover';
+      this.board.stroke.add(ux, uz, this.clock);
+      return 'stroke';
+    }
+    if (type === 'up') {
+      const stroke = this.board.stroke;
+      this.board.stroke = null;
+      if (!stroke || this.action) return 'ignored';
+      stroke.add(ux, uz, this.clock);
+      return this._strokeCut(it, stroke);
+    }
+    return 'hover';
   },
 
-  _cubeCut(it, ux, uz) {
-    if (!pieceAt(it.pieces, ux, uz)) return 'miss';
-    const opts = { minWidth: this.cfg.minCutFraction, maxPieces: this.cfg.maxPiecesPerProduct, nextId: () => 0 };
-    const check = cutAcross(it.pieces, ux, opts);
-    if (!check.ok) {
-      this.setHint(check.reason === 'limit' ? 'Кусочков уже достаточно — перенеси продукт' : 'Слишком близко к краю одного из кусочков — сдвинь нож', 2);
-      return check.reason;
-    }
+  _cutRules() {
+    return { ...CUT_RULES, ...(this.cfg.cutRules ?? {}) };
+  },
+
+  // Росчерк закончен: распознать линию и разрезать то, что оказалось под лезвием.
+  _strokeCut(it, stroke) {
+    const rules = this._cutRules();
+    const line = classifyCut(stroke, { allow: it.log ? 'x' : 'both', rules });
+    if (!line.ok) return this._cutDenied(line.reason);
+    if (it.log) return this._roundCut(it, line, rules);
+    return this._lineCut(it, line, rules);
+  },
+
+  _cutDenied(reason) {
+    this.setHint(CUT_HINTS[reason] ?? CUT_HINTS.short, 2.2);
+    this._emit('cutDenied', { reason });
+    return reason;
+  },
+
+  _lineCut(it, line, rules) {
+    const opts = { minWidth: this.cfg.minCutFraction, maxPieces: this.cfg.maxPiecesPerProduct, cover: rules.cover, nextId: () => 0 };
+    const check = cutLine(it.pieces, line, opts);
+    if (!check.ok) return this._cutDenied(check.reason);
     this._startAction('cut', this.cfg.knifeDuration, () => {
       if (this.board.items[it.key] !== it) return;
-      const r = cutAcross(it.pieces, ux, { ...opts, nextId: () => this._id() });
+      const r = cutLine(it.pieces, line, { ...opts, nextId: () => this._id() });
       if (!r.ok) return;
       it.pieces = r.pieces;
       it.cuts++;
       for (const c of r.cuts) it.freshIds.delete(c.original.id);
-      this._emit('cut', { key: it.key, x: ux, count: r.cuts.length });
-    }, { key: it.key, x: ux, z: uz });
+      this._emit('cut', { key: it.key, axis: line.axis, pos: line.pos, x: line.axis === 'x' ? line.pos : null, count: r.cuts.length });
+    }, { key: it.key, axis: line.axis, pos: line.pos, from: line.from, to: line.to, x: line.axis === 'x' ? line.pos : 0, z: line.axis === 'z' ? line.pos : 0 });
     return 'cut';
   },
 
-  _roundCut(it, ux, uz) {
-    if (Math.abs(uz) > it.radius) return 'miss';
+  _roundCut(it, line, rules) {
+    const r0 = it.radius;
+    const covered = Math.max(0, Math.min(r0, line.to) - Math.max(-r0, line.from));
+    if (line.to < -r0 || line.from > r0) return this._cutDenied('outside');
+    if (covered / (2 * r0) < rules.cover) return this._cutDenied('short');
+    const ux = line.pos;
     const r = cutRound(it.log, ux, this.cfg.roundTarget.minCut);
-    if (!r.ok) {
-      if (r.reason === 'too-close') this.setHint('Слишком тонко — такой кружочек развалится', 2);
-      return r.reason === 'outside' ? 'miss' : r.reason;
-    }
+    if (!r.ok) return this._cutDenied(r.reason === 'outside' ? 'outside' : 'too-close');
     this._startAction('cut', this.cfg.knifeDuration, () => {
       if (this.board.items[it.key] !== it) return;
       const rr = cutRound(it.log, ux, this.cfg.roundTarget.minCut);
       if (!rr.ok) return;
       it.log = rr.log;
       it.cuts++;
-      this._emit('cut', { key: it.key, x: ux, round: true });
-    }, { key: it.key, x: ux, z: uz, round: true });
+      this._emit('cut', { key: it.key, axis: 'x', pos: ux, x: ux, round: true });
+    }, { key: it.key, axis: 'x', pos: ux, from: line.from, to: line.to, x: ux, z: 0, round: true });
     return 'cut';
   },
 

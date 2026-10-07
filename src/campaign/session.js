@@ -66,7 +66,7 @@ export class KitchenSession {
     this.request = this.day.request ?? null;
     this.requestKnown = false;
 
-    this.board = { current: null, items: {}, grated: null };
+    this.board = { current: null, items: {}, grated: null, stroke: null };
     this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null };
     this.workPlate = { owner: null, amount: 0 };
     this.spoon = { load: 0 };
@@ -568,7 +568,7 @@ export class KitchenSession {
     if (this.isOver() || this.heroine.away || this.heroine.target) return 'ignored';
     if (type === 'down') this.pointerDown = true;
     if (type === 'up') {
-      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : 'up';
+      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : 'up';
       this.pointerUp();
       return r;
     }
@@ -592,6 +592,7 @@ export class KitchenSession {
   // Отпускание кнопки, уход курсора за canvas, потеря фокуса — удержание прекращается.
   pointerUp() {
     this.pointerDown = false;
+    if (this.board) this.board.stroke = null;
     this.bowl.stirrer?.release();
     const it = this.board.current && this.board.items[this.board.current];
     it?.grater?.release();

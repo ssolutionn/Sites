@@ -434,7 +434,7 @@ function boot() {
       lastLocal = p;
       view.pointerLocal = p;
       const r = session.pointer('down', p.x, p.z);
-      if (r === 'too-close' || r === 'limit' || r === 'short') sound.play('deny');
+      if (r === 'too-close' || r === 'limit') sound.play('deny');
       return;
     }
     if (session.panel === 'table' || session.panel === 'phone') return;
@@ -443,8 +443,11 @@ function boot() {
     if (hit.station) act('goTo', hit.station);
     else if (hit.floor) act('goToPoint', hit.floor.x, hit.floor.z);
   });
+  const KNIFE_DENY = new Set(['too-close', 'limit', 'short', 'diagonal', 'wobbly', 'rounds-only', 'outside']);
   const release = () => {
-    if (session && mode === 'kitchen') session.pointer('up', lastLocal?.x ?? 0, lastLocal?.z ?? 0);
+    if (!session || mode !== 'kitchen') return;
+    const r = session.pointer('up', lastLocal?.x ?? 0, lastLocal?.z ?? 0);
+    if (session.panel === 'board' && KNIFE_DENY.has(r)) sound.play('deny');
   };
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', () => session?.pointerUp());

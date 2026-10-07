@@ -28,6 +28,25 @@ export function pieceAt(pieces, px, pz) {
   return null;
 }
 
+/**
+ * Несколько одинаковых продуктов рядом на доске (один заход — вся порция рецепта).
+ * Копии лежат друг под другом по оси Z с зазором gap; общий центр — центр доски.
+ */
+export function initialBatch(w, d, nextId, profile = null, qty = 1, gap = 0.7) {
+  const n = Math.max(1, qty | 0);
+  const total = n * d + (n - 1) * gap;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const dz = -total / 2 + d / 2 + i * (d + gap);
+    for (const p of initialPieces(w, d, nextId, profile)) out.push(shiftPiece(p, 0, dz));
+  }
+  return out;
+}
+
+function shiftPiece(p, dx, dz) {
+  return { ...p, x: p.x + dx, z: p.z + dz, ...(p.polygon ? { polygon: p.polygon.map((q) => ({ ...q, x: q.x + dx, z: q.z + dz })) } : {}) };
+}
+
 // Ломтик, центрированный на доске.
 export function initialPieces(w, d, nextId, profile = null) {
   if (!profile || profile === 'rectangle') return [makePiece(nextId(), -w / 2, -d / 2, w, d)];
@@ -159,9 +178,10 @@ export function pointInPolygon(poly, x, z) {
 }
 
 // One knife stroke across every intersected strip. Validate atomically first.
+// opts.only — множество id: резать только эти куски (нож прошёл не над всеми).
 export function cutAcross(pieces, cutX, opts) {
   if (!Number.isFinite(cutX)) return { ok: false, reason: 'outside' };
-  const touched = pieces.filter(p => cutX > p.x + EPS && cutX < p.x + p.w - EPS);
+  const touched = pieces.filter(p => cutX > p.x + EPS && cutX < p.x + p.w - EPS && (!opts.only || opts.only.has(p.id)));
   if (!touched.length) return { ok: false, reason: 'outside' };
   if (opts.maxPieces != null && pieces.length + touched.length > opts.maxPieces) return { ok: false, reason: 'limit' };
   for (const p of touched) {
@@ -176,4 +196,54 @@ export function cutAcross(pieces, cutX, opts) {
     cuts.push({ original: p, left: result.left, right: result.right });
   }
   return { ok: true, pieces: out, cuts };
+}
+
+// Зеркало относительно диагонали x = z: разрез «вдоль X» сводится к разрезу «вдоль Z».
+export function transposePieces(pieces) {
+  return pieces.map((p) => (p.polygon ? polygonPiece(p.id, p.polygon.map((q) => ({ ...q, x: q.z, z: q.x }))) : { ...p, x: p.z, z: p.x, w: p.d, d: p.w }));
+}
+
+/** Протяжённость куска вдоль линии x = cutX: [min, max] по Z (для контура — реальная хорда). */
+export function chordAt(p, cutX) {
+  if (!p.polygon) return [p.z, p.z + p.d];
+  let lo = Infinity, hi = -Infinity;
+  const poly = p.polygon;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    if ((a.x - cutX) * (b.x - cutX) > 0) continue;
+    const zs = Math.abs(b.x - a.x) < EPS ? [a.z, b.z] : [a.z + ((b.z - a.z) * (cutX - a.x)) / (b.x - a.x)];
+    for (const z of zs) {
+      lo = Math.min(lo, z);
+      hi = Math.max(hi, z);
+    }
+  }
+  return lo <= hi ? [lo, hi] : [p.z, p.z + p.d];
+}
+
+/**
+ * Разрез ножом по прямой: axis 'x' — линия вдоль Z на x = pos, axis 'z' — линия вдоль X на z = pos.
+ * from/to — где прошёл нож вдоль линии. Режутся только куски, над которыми нож прошёл
+ * хотя бы на долю cover их реальной хорды (как в жизни: что под лезвием, то и разрезано).
+ * Возвращает { ok, reason, pieces, cuts }; reason: outside | short | too-close | limit.
+ */
+export function cutLine(pieces, { axis, pos, from, to }, opts) {
+  const flip = axis === 'z';
+  const src = flip ? transposePieces(pieces) : pieces;
+  const cover = opts.cover ?? 0.6;
+  const lo = Math.min(from, to), hi = Math.max(from, to);
+  const under = src.filter((p) => pos > p.x + EPS && pos < p.x + p.w - EPS);
+  if (!under.length) return { ok: false, reason: 'outside' };
+  const only = new Set();
+  for (const p of under) {
+    const [a, b] = chordAt(p, pos);
+    const span = b - a;
+    const covered = Math.max(0, Math.min(hi, b) - Math.max(lo, a));
+    if (span <= EPS || covered / span >= cover - EPS) only.add(p.id);
+  }
+  if (!only.size) return { ok: false, reason: 'short' };
+  const r = cutAcross(src, pos, { ...opts, only });
+  if (!r.ok) return r;
+  if (!flip) return r;
+  const back = (p) => transposePieces([p])[0];
+  return { ok: true, pieces: transposePieces(r.pieces), cuts: r.cuts.map((c) => ({ original: back(c.original), left: back(c.left), right: back(c.right) })) };
 }

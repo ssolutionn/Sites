@@ -18,41 +18,44 @@ export function waitAction(s) {
   for (let i = 0; i < 600 && s.action; i++) s.update(1 / 30);
 }
 
-// Нарезка кубиками: полоски по 1, поворот, снова полоски. Клики по фактическому продукту.
+// Росчерк ножом по доске в единицах продукта: axis 'x' — линия вдоль Z на x = pos, 'z' — вдоль X на z = pos.
+export function knife(s, axis, pos, from, to, steps = 8) {
+  const pt = (k) => {
+    const v = from + ((to - from) * k) / steps;
+    return axis === 'x' ? [pos * BOARD_UNIT, v * BOARD_UNIT] : [v * BOARD_UNIT, pos * BOARD_UNIT];
+  };
+  s.pointer('down', ...pt(0));
+  for (let k = 1; k <= steps; k++) s.pointer('move', ...pt(k));
+  const r = s.pointer('up', ...pt(steps));
+  waitAction(s);
+  return r;
+}
+
+// Нарезка кубиками росчерками: полоски вдоль, затем поперёк — без поворота доски.
 export function cutCubes(s) {
   const it = s.boardCur();
-  for (let pass = 0; pass < 2; pass++) {
-    for (let guard = 0; guard < 40; guard++) {
-      const b = bounds(it.pieces);
-      // самая левая полоса шире 1 — режем на расстоянии 1 от её левого края
-      const wide = it.pieces.filter((p) => p.w > 1.25).sort((a, c) => a.x - c.x)[0];
-      if (!wide) break;
-      let x = wide.x + 1;
-      const z = (wide.z + wide.d / 2);
-      // клик должен попасть в продукт: ищем z внутри контура
-      const r = s.pointer('down', x * BOARD_UNIT, z * BOARD_UNIT);
-      s.pointer('up', x * BOARD_UNIT, z * BOARD_UNIT);
-      if (r !== 'cut') {
-        // обрезок у края: сдвиг
-        x = wide.x + wide.w / 2;
-        const r2 = s.pointer('down', x * BOARD_UNIT, z * BOARD_UNIT);
-        s.pointer('up', 0, 0);
-        if (r2 !== 'cut') break;
-      }
-      waitAction(s);
-    }
-    s.rotate();
+  for (let guard = 0; guard < 60; guard++) {
+    const wide = it.pieces.filter((p) => p.w > 1.25).sort((a, c) => a.x - c.x)[0];
+    if (!wide) break;
+    const b = bounds(it.pieces);
+    let r = knife(s, 'x', wide.x + 1, b.minZ - 0.4, b.maxZ + 0.4);
+    if (r !== 'cut') r = knife(s, 'x', wide.x + wide.w / 2, b.minZ - 0.4, b.maxZ + 0.4);
+    if (r !== 'cut') break;
+  }
+  for (let guard = 0; guard < 80; guard++) {
+    const wide = it.pieces.filter((p) => p.d > 1.25).sort((a, c) => a.z - c.z)[0];
+    if (!wide) break;
+    const b = bounds(it.pieces);
+    let r = knife(s, 'z', wide.z + 1, b.minX - 0.4, b.maxX + 0.4);
+    if (r !== 'cut') r = knife(s, 'z', wide.z + wide.d / 2, b.minX - 0.4, b.maxX + 0.4);
+    if (r !== 'cut') break;
   }
 }
 
 export function cutRounds(s, thickness = 0.5) {
   const it = s.boardCur();
   const L = it.log.length / 2;
-  for (let x = -L + 0.3; x < L - 0.2; x += thickness) {
-    s.pointer('down', x * BOARD_UNIT, 0);
-    s.pointer('up', 0, 0);
-    waitAction(s);
-  }
+  for (let x = -L + 0.3; x < L - 0.2; x += thickness) knife(s, 'x', x, -it.radius - 0.3, it.radius + 0.3);
 }
 
 // Круговые движения в миске.

@@ -48,6 +48,11 @@ after it runs `project.yaml` holds the real values.
 
 ## Collaboration Protocol
 
+> **Режим проекта (решение владельца, 2026-10-07):** автономная работа. Владелец разрешил
+> работать без вопроса «можно записать?» перед каждым файлом и коммитить/пушить в рабочую ветку
+> после каждого законченного этапа (Conventional Commits). Вопросы — только на развилках, где
+> решение действительно за владельцем. Протокол ниже применяется, если владелец явно попросит.
+
 **User-driven collaboration, not autonomous execution.**
 Every task follows: **Question -> Options -> Decision -> Draft -> Approval**
 
