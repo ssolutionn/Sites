@@ -1,0 +1,22 @@
+{
+  "heroine": {
+    "meshes": 82,
+    "triangles": 73596,
+    "bytes": 5016500,
+    "animations": [
+      "Idle",
+      "Walk",
+      "Mix"
+    ]
+  },
+  "cat": {
+    "meshes": 46,
+    "triangles": 32304,
+    "bytes": 2105280,
+    "animations": [
+      "Idle",
+      "Walk",
+      "Reach"
+    ]
+  }
+}

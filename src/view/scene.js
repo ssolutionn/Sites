@@ -7,6 +7,7 @@ import { buildKitchen } from './kitchen.js';
 import { buildHeroine, animateHeroine, setExpression } from './heroine.js';
 import { buildCat, animateCat } from './cat.js';
 import { BoardView } from './board.js';
+import { pieceAt } from '../game/cutting.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 
@@ -18,6 +19,8 @@ export class SceneView {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.1;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xf6dfb8);
@@ -162,7 +165,7 @@ export class SceneView {
     const ing = game?.board;
     let pieceId = null;
     if (ing) {
-      for (const q of ing.pieces) if (b.x >= q.x && b.x <= q.x + q.w && b.z >= q.z && b.z <= q.z + q.d) pieceId = q.id;
+      pieceId = pieceAt(ing.pieces,b.x,b.z)?.id ?? null;
     }
     return { ...b, pieceId };
   }
@@ -276,6 +279,7 @@ export class SceneView {
     if (a) return { pose: 'work' };
     if (game.holds.mix) return { pose: 'mix' };
     if (game.holds.garland) return { pose: 'reach' };
+    if (game.holds.radio) return { pose: 'work' };
     if (game.panel === 'board') return { pose: 'cut', progress: 0 };
     if (game.panel === 'phone') return { pose: 'phone' };
     return { pose: 'idle' };
@@ -358,13 +362,19 @@ export class SceneView {
     this.hemi.intensity = broken ? 1.15 : 1.35;
 
     // экран телефона мигает при уведомлении
+    const radioBroken = !!game?.radio.broken;
+    const radioOn = !!game?.radio.enabled && !radioBroken && game.phase === 'running';
+    this.k.radio.led.material.color.setHex(radioBroken ? 0xd65037 : radioOn ? 0x64d48b : 0x6c7367);
+    this.k.radio.led.material.emissive.setHex(radioBroken ? 0x9a180b : radioOn ? 0x2faa64 : 0x000000);
+    this.k.radio.led.material.emissiveIntensity = radioBroken ? .3+Math.abs(Math.sin(t*5))*.5 : radioOn ? .8 : 0;
+    this.k.radio.dial.rotation.y = game?.holds.radio ? Math.sin(t*9)*.5 : 0;
     const phoneAlert = game?.alerts.some((a) => a.type === 'phone');
     this.k.phone.screen.material.color.setScalar(phoneAlert ? 0.75 + Math.sin(t * 8) * 0.25 : game?.panel === 'phone' ? 1 : 0.35);
 
     // подсветка станций
     const inBoard = camMode === 'board';
     for (const [id, ring] of Object.entries(this.k.rings)) {
-      const urgent = (id === 'stove' && (over || game?.potato === 'ready')) || (id === 'garland' && broken) || (id === 'phone' && phoneAlert);
+      const urgent = (id === 'stove' && (over || game?.potato === 'ready')) || (id === 'garland' && broken) || (id === 'phone' && phoneAlert) || (id === 'radio' && radioBroken);
       const locked = game?.phase === 'prestart' && id !== 'stove';
       ring.visible = !!game && !inBoard && !game.isOver() && !locked;
       const hover = this.hoverStation === id;

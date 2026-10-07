@@ -6,6 +6,8 @@ import { SceneView } from './view/scene.js';
 import { loadLogo } from './view/textures.js';
 import { UI } from './ui/ui.js';
 import { Sound } from './audio/sound.js';
+import { initialPieces, totalVolume } from './game/cutting.js';
+import { LAYOUT } from './game/layout.js';
 
 const params = new URLSearchParams(location.search);
 const devMode = params.has('dev');
@@ -81,6 +83,8 @@ function boot() {
     potSaved: 'fixed',
     garlandOff: 'garlandOff',
     garlandFixed: 'fixed',
+    radioBroken: 'radioBroken',
+    radioFixed: 'fixed',
     potatoReady: 'ready',
     added: 'added',
     potPlaced: 'added',
@@ -104,6 +108,7 @@ function boot() {
       sound.setMuted(!sound.muted);
     },
     play() {
+      document.body.classList.remove('practice');
       newAttempt();
       mode = 'instructions';
       ui.showInstructions();
@@ -117,7 +122,7 @@ function boot() {
       if (mode !== 'playing') return;
       mode = 'paused';
       ui.releaseHolds();
-      if (game) game.holds.mix = game.holds.garland = false;
+      if (game) game.holds.mix = game.holds.garland = game.holds.radio = false;
       ui.showPause();
     },
     resume() {
@@ -127,14 +132,48 @@ function boot() {
       last = performance.now(); // без скачка времени
     },
     toMenu() {
+      document.body.classList.remove('practice');
       mode = 'menu';
       game = null;
       scene.reset();
       ui.showMenu();
     },
     retry() {
+      if (game?.practice) return app.practice();
       newAttempt();
       app.startRound();
+    },
+    practice() {
+      newAttempt();
+      const profiles = { carrot: 'carrot', cucumber: 'oval', egg: 'egg', potato: 'oval' };
+      game.practice = true;
+      game.cfg = { ...CONFIG, roundDuration: 86400, potatoReadyAt: 86400, noNewEventsAfter: -1 };
+      for (const def of CONFIG.ingredients.filter(q => q.cut)) {
+        const ing = game.ingredients[def.id];
+        ing.pieces = initialPieces(def.w, def.d, () => game._id(), profiles[def.id]);
+        ing.fullVolume = totalVolume(ing.pieces);
+        ing.available = true;
+        ing.profile = profiles[def.id];
+      }
+      game.phase = 'running';
+      game.potato = 'taken';
+      game.panel = 'board';
+      game.heroine.station = 'board';
+      const p = LAYOUT.stations.board.stand;
+      game.heroine.x = p.x; game.heroine.z = p.z;
+      mode = 'playing';
+      document.body.classList.add('practice');
+      ui.hideOverlay(); ui.showGame();
+      scene.setCameraMode('board', true);
+    },
+    resetPractice() {
+      if (!game?.practice || game.action) return;
+      const ing = game.board;
+      if (!ing) return;
+      const def = CONFIG.ingredients.find(q => q.id === ing.id);
+      ing.pieces = initialPieces(def.w, def.d, () => game._id(), ing.profile);
+      ing.fullVolume = totalVolume(ing.pieces); ing.cuts = 0; ing.selectedId = null;
+      ing.freshIds.clear(); ing.missing = [];
     },
   };
 
@@ -152,6 +191,7 @@ function boot() {
   const devHandlers = {
     jump: () => game && mode === 'playing' && game.devJumpTo(CONFIG.potatoReadyAt - 2),
     cat: () => game && mode === 'playing' && game.devCat(),
+    radio: () => game && mode === 'playing' && game.breakRadio(),
     prepare: () => game && mode === 'playing' && game.devPrepare(),
     end: () => game && mode === 'playing' && game.devJumpTo(CONFIG.roundDuration - 3),
   };
@@ -176,7 +216,7 @@ function boot() {
     if (game.panel === 'board') {
       const h = scene.pickBoard(ndc, game);
       if (!h) return;
-      const r = act('boardClick', h.x, h.z);
+      const r = act('sliceBoard', h.x, h.z);
       if (r === 'too-close' || r === 'limit') sound.play('deny');
     } else {
       const st = scene.pickStation(ndc);
@@ -221,6 +261,7 @@ function boot() {
       }
     }
     const animDt = mode === 'paused' ? 0 : Math.min(real, CONFIG.maxFrameDt);
+    sound.syncRadio(mode === 'playing' && game && !game.isOver() && game.phase === 'running' && game.radio.enabled && !game.radio.broken, game?.clock ?? 0);
 
     if (game && mode === 'playing' && game.panel === 'board' && lastNdc) {
       scene.setBoardHover(scene.pickBoard(lastNdc, game));

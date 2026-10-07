@@ -5,6 +5,8 @@ export class Sound {
   constructor() {
     this.ctx = null;
     this.muted = false;
+    this.radioNodes = new Set();
+    this.radioStep = -1;
     try {
       this.muted = localStorage.getItem('olivie.muted') === '1';
     } catch {
@@ -18,7 +20,7 @@ export class Sound {
       if (!AC) return;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.5;
+      this.master.gain.value = this.muted ? 0 : 0.5;
       this.master.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
@@ -26,6 +28,7 @@ export class Sound {
 
   setMuted(m) {
     this.muted = m;
+    if (this.ctx && this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.5, this.ctx.currentTime, 0.02);
     try {
       localStorage.setItem('olivie.muted', m ? '1' : '0');
     } catch {
@@ -41,7 +44,7 @@ export class Sound {
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
   }
 
-  _tone(freq, dur, { type = 'sine', vol = 0.3, at = 0, slideTo = null, attack = 0.005 } = {}) {
+  _tone(freq, dur, { type = 'sine', vol = 0.3, at = 0, slideTo = null, attack = 0.005, radio = false } = {}) {
     const c = this.ctx;
     const t0 = c.currentTime + at;
     const o = c.createOscillator();
@@ -55,6 +58,24 @@ export class Sound {
     o.connect(g).connect(this.master);
     o.start(t0);
     o.stop(t0 + dur + 0.02);
+    if (radio) this.radioNodes.add(o);
+    o.onended = () => { this.radioNodes.delete(o); o.disconnect(); g.disconnect(); };
+  }
+
+  // Собственная негромкая мелодия. Шаг берётся из игрового clock: без скрытых таймеров.
+  syncRadio(playing, elapsed) {
+    if (!playing || this.muted || !this.ctx || this.ctx.state !== 'running') {
+      for (const o of this.radioNodes) { try { o.stop(); } catch { /* уже завершён */ } }
+      this.radioNodes.clear(); this.radioStep = -1;
+      return;
+    }
+    const step = Math.floor(elapsed / 0.30);
+    if (step === this.radioStep) return;
+    this.radioStep = step;
+    const melody = [64, 67, 69, 67, 64, 62, 60, null, 62, 65, 67, 65, 62, 60, 59, null];
+    const note = melody[step % melody.length];
+    if (note !== null) this._tone(440 * 2 ** ((note - 69) / 12), 0.26, {type:'triangle',vol:0.075,attack:0.018,radio:true});
+    if (step % 2 === 0) this._tone(440 * 2 ** (((step % 16 < 8 ? 48 : 43) - 69) / 12),0.30,{type:'sine',vol:0.045,attack:0.02,radio:true});
   }
 
   _noise(dur, { vol = 0.3, at = 0, freq = 2000, q = 1, type = 'bandpass' } = {}) {
@@ -126,6 +147,10 @@ export class Sound {
       case 'garlandOff':
         this._tone(900, 0.35, { type: 'sawtooth', vol: 0.1, slideTo: 60 });
         this._noise(0.1, { vol: 0.2, freq: 6000, at: 0.02 });
+        break;
+      case 'radioBroken':
+        this._noise(0.28, {vol:0.20,freq:1700,q:0.3});
+        this._tone(420,0.20,{type:'triangle',vol:0.08,slideTo:75});
         break;
       case 'ready':
         [0, 0.12, 0.24].forEach((at) => this._tone(1046, 0.5, { vol: 0.25, at }));

@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../src/config.js';
-import { Game } from '../src/game/game.js';
+import { Game as BaseGame } from '../src/game/game.js';
+
+// Регрессия исходного режима 0.3: 4:30 и без нового радио.
+// В отдельном radio-v031.test.js проверяется реальная новая конфигурация 2:00.
+const legacyConfig = { ...CONFIG, potatoReadyAt: 270, events: { ...CONFIG.events, radio: { at: Infinity } } };
+class Game extends BaseGame {
+  constructor(options = {}) { super({ config: legacyConfig, ...options }); }
+}
 import { cutPiece, rotatePieces, totalVolume, accuracy, makePiece, initialPieces } from '../src/game/cutting.js';
 import { computeScore, resultTitle } from '../src/game/scoring.js';
 

@@ -1,264 +1,212 @@
-// Героиня из примитивов: каштановые кудри, красная повязка со снежинками,
-// красно-белый свитер, красный фартук с белой «5». Стиль — мультяшный, мягкие формы.
+// Sculpted, texture-free festive character. All detail survives a GLB export.
 import * as THREE from 'three';
-import { tex, toon } from './textures.js';
-
-const SKIN = 0xf3c29b;
-const HAIR = 0x6e3a1f;
-const HAIR_LIGHT = 0x8a4b27;
-
-function sphere(r, mat, ws = 20, hs = 14) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(r, ws, hs), mat);
-  m.castShadow = true;
-  return m;
-}
-
-function limb(rTop, rBottom, len, mat) {
-  // Цилиндр, подвешенный за верхний конец (поворот вокруг плеча/бедра).
-  const g = new THREE.CylinderGeometry(rTop, rBottom, len, 14);
-  g.translate(0, -len / 2, 0);
-  const m = new THREE.Mesh(g, mat);
-  m.castShadow = true;
-  return m;
-}
+import { material, mesh, ellipsoid, curve, line, snowflake, taperedLimb, group, mergeStaticMeshes } from './model-utils.js';
 
 export function buildHeroine() {
-  const root = new THREE.Group();
-  root.name = 'heroine';
-  const body = new THREE.Group(); // для покачивания
-  root.add(body);
+  const root = group(null, 'heroine');
+  const body = group(root, 'heroine_body');
+  const skin = material(0xf1b992, .58), skinShadow = material(0xd98d71);
+  const cream = material(0xffeed5, .92), knit = material(0xe7d3bb, .93);
+  const red = material(0xc62c37, .78), stitch = material(0x9e1d2e, .88);
+  const dark = material(0x303746, .85), hair = material(0x442619, .7);
+  const hairLight = material(0x754126, .65), hairHighlight = material(0x945632, .62);
+  const white = material(0xfffaf2, .4), irisMat = material(0x6b4228, .33);
+  const pupilMat = material(0x17151c, .38), lipMat = material(0xb84b4b, .57);
+  const gold = material(0xe6b548, .3, .7), green = material(0x28784a);
 
-  const skin = toon(SKIN);
-  const sweater = toon(0xffffff, { map: tex.sweater });
-  const red = toon(0xd7262b);
-  const dark = toon(0x2b2b3a);
-  const hairMat = toon(HAIR);
-  const hairLight = toon(HAIR_LIGHT);
-  const white = toon(0xffffff);
+  // Soft fitted knit, using a continuous lathed silhouette rather than blocks.
+  const profile = [[.15,.68],[.18,.73],[.184,.85],[.162,.97],[.16,1.1],[.183,1.17],[.17,1.205],[.104,1.235],[.055,1.25]];
+  const torso = mesh(new THREE.LatheGeometry(profile.map(([r,y])=>new THREE.Vector2(r,y)),40), cream, body,'heroine_knitted_torso');
+  torso.scale.z=.78;
+  const neck=mesh(new THREE.CylinderGeometry(.047,.055,.12,20),skin,body,'heroine_neck');neck.position.y=1.26;
+  // Ribbed crew collar follows shoulder slope.
+  const collar=mesh(new THREE.TorusGeometry(.073,.019,8,40),cream,body,'heroine_collar');
+  collar.rotation.x=Math.PI/2;collar.position.y=1.245;collar.scale.z=.7;
+  for(let i=0;i<28;i++){const a=i*Math.PI*2/28;line(body,knit,[Math.cos(a)*.071,1.23,Math.sin(a)*.051],[Math.cos(a)*.074,1.255,Math.sin(a)*.053],.0018,'collar_rib');}
 
-  // --- ноги ---
-  const legs = [];
-  for (const s of [-1, 1]) {
-    const hip = new THREE.Group();
-    hip.position.set(0.075 * s, 0.68, 0);
-    const leg = limb(0.055, 0.045, 0.6, dark);
-    hip.add(leg);
-    const shoe = sphere(0.065, red);
-    shoe.scale.set(1, 0.6, 1.5);
-    shoe.position.set(0, -0.62, 0.03);
-    hip.add(shoe);
-    body.add(hip);
+  // Legs and comfortable festive flats.
+  const legs=[];
+  for(const s of [-1,1]){
+    const hip=group(body,`heroine_${s<0?'left':'right'}_hip`,[s*.079,.69,0]);
+    taperedLimb(hip,dark,.60,.058,.038,'trouser_leg');
+    ellipsoid(hip,red,[0,-.61,.047],[.063,.04,.102],'red_slipper');
+    ellipsoid(hip,stitch,[0,-.628,.052],[.064,.012,.103],'slipper_sole',20);
+    curve(hip,cream,[[-.031,-.596,.084],[0,-.582,.095],[.031,-.596,.084]],.003,'slipper_piping',12);
     legs.push(hip);
   }
-
-  // --- туловище ---
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.55, 22), sweater);
-  torso.position.y = 0.95;
-  torso.castShadow = true;
-  body.add(torso);
-  const shoulders = sphere(0.165, sweater);
-  shoulders.scale.set(1.05, 0.55, 0.85);
-  shoulders.position.y = 1.2;
-  body.add(shoulders);
-  // юбка-фартук
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.27, 0.32, 22), red);
-  skirt.position.y = 0.6;
-  skirt.castShadow = true;
-  body.add(skirt);
-  // фартук спереди (часть цилиндра) с логотипом
-  const apronGeo = new THREE.CylinderGeometry(0.168, 0.24, 0.72, 24, 1, true, -Math.PI * 0.36, Math.PI * 0.72);
-  const apron = new THREE.Mesh(apronGeo, toon(0xffffff, { map: tex.apron, side: THREE.DoubleSide }));
-  apron.position.set(0, 0.84, 0.012);
-  body.add(apron);
-  // завязки
-  const tie = new THREE.Mesh(new THREE.TorusGeometry(0.205, 0.012, 6, 30), red);
-  tie.rotation.x = Math.PI / 2;
-  tie.position.y = 0.86;
-  body.add(tie);
-  const bow = sphere(0.04, red);
-  bow.scale.set(1.6, 0.8, 0.6);
-  bow.position.set(0, 0.86, -0.21);
-  body.add(bow);
-
-  // --- руки ---
-  const arms = [];
-  for (const s of [-1, 1]) {
-    const shoulder = new THREE.Group();
-    shoulder.position.set(0.19 * s, 1.18, 0);
-    shoulder.rotation.z = 0.12 * s;
-    const upper = limb(0.055, 0.05, 0.27, sweater);
-    shoulder.add(upper);
-    const elbow = new THREE.Group();
-    elbow.position.y = -0.27;
-    shoulder.add(elbow);
-    const fore = limb(0.05, 0.045, 0.24, sweater);
-    elbow.add(fore);
-    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.014, 6, 14), red);
-    cuff.rotation.x = Math.PI / 2;
-    cuff.position.y = -0.22;
-    elbow.add(cuff);
-    const hand = sphere(0.05, skin);
-    hand.position.y = -0.27;
-    elbow.add(hand);
-    body.add(shoulder);
-    arms.push({ shoulder, elbow, hand });
+  // The skirt/apron has a flared sculpted silhouette and slight cloth waves.
+  const skirtGeo=new THREE.LatheGeometry([[.255,.45],[.223,.61],[.19,.73],[.17,.76]].map(([r,y])=>new THREE.Vector2(r,y)),48);
+  const skirtPos=skirtGeo.attributes.position;
+  for(let i=0;i<skirtPos.count;i++){
+    const x=skirtPos.getX(i),z=skirtPos.getZ(i),y=skirtPos.getY(i),a=Math.atan2(x,z);
+    const ripple=1+Math.sin(a*10)*.028*(.76-y)/.31;
+    skirtPos.setXYZ(i,x*ripple,y,z*ripple);
   }
+  skirtGeo.computeVertexNormals();mesh(skirtGeo,red,body,'heroine_apron_skirt');
+  // Bib built from an extruded smooth outline, slightly curved in z.
+  const bibShape=new THREE.Shape();bibShape.moveTo(-.105,1.155);bibShape.quadraticCurveTo(0,1.125,.105,1.155);
+  bibShape.lineTo(.158,.80);bibShape.quadraticCurveTo(0,.765,-.158,.80);bibShape.closePath();
+  const bibGeo=new THREE.ExtrudeGeometry(bibShape,{depth:.009,bevelEnabled:true,bevelThickness:.004,bevelSize:.005,bevelSegments:2,steps:1});
+  const bibPos=bibGeo.attributes.position;for(let i=0;i<bibPos.count;i++){const x=bibPos.getX(i);bibPos.setZ(i,bibPos.getZ(i)+.151-x*x*1.0);}
+  bibGeo.computeVertexNormals();mesh(bibGeo,red,body,'heroine_apron_bib');
+  for(const s of [-1,1]){
+    curve(body,red,[[s*.086,1.105,.15],[s*.115,1.22,.10],[s*.10,1.255,-.035],[s*.09,1.11,-.145]],.016,'apron_shoulder_strap',20);
+    curve(body,cream,[[s*.086,1.105,.169],[s*.113,1.20,.131]],.002,'strap_stitch',12);
+  }
+  const waist=mesh(new THREE.TorusGeometry(.192,.013,8,48),stitch,body,'apron_waist_tie');waist.rotation.x=Math.PI/2;waist.position.y=.79;waist.scale.y=.83;
+  const bow=group(body,'apron_side_bow',[-.194,.79,.025]);
+  for(const s of [-1,1]){const b=ellipsoid(bow,red,[s*.031,0,.013],[.034,.026,.014],'apron_bow_loop');b.rotation.z=s*.3;}
+  ellipsoid(bow,stitch,[0,0,.03],[.012,.015,.012],'apron_bow_knot');
+  for(const s of [-1,1])curve(bow,red,[[s*.01,-.01,.005],[s*.026,-.055,.016],[s*.035,-.105,.012]],.009,'apron_bow_tail',14);
+  // Modeled badge and numeral, no raster texture dependencies.
+  const badge=mesh(new THREE.TorusGeometry(.049,.0032,8,40),white,body,'apron_badge_outline');badge.position.set(0,1.024,.166);
+  const five=curve(body,white,[[.021,1.050,.174],[-.014,1.050,.174],[-.020,1.025,.174],[.010,1.025,.174],[.022,1.014,.174],[.018,.991,.174],[-.009,.986,.174],[-.023,.996,.174]],.006,'apron_badge_five',28);
+  curve(body,green,[[.007,1.067,.168],[.023,1.077,.17],[.034,1.065,.171],[.007,1.067,.168]],.004,'apron_badge_leaf',14);
+  // Embroidery along exposed chest, skirt and cuffs.
+  for(const s of [-1,1]){
+    snowflake(body,red,s*.145,1.14,.111,.021,'sweater_snowflake');
+    snowflake(body,red,s*.135,.94,.101,.017,'sweater_snowflake');
+    for(let j=0;j<3;j++)snowflake(body,cream,s*(.045+j*.07),.52+(j%2)*.045,Math.sqrt(Math.max(0,.242*.242-(.045+j*.07)**2))+.002,.013,'apron_snowflake');
+  }
+  for(const x of [-.14,0,.14]){
+    const tree=group(body,`apron_tree_${x}`,[x,.66,Math.sqrt(.221**2-x*x)+.003]);
+    const sh=new THREE.Shape();sh.moveTo(0,.032);sh.lineTo(-.017,.003);sh.lineTo(-.011,.003);sh.lineTo(-.023,-.012);sh.lineTo(.023,-.012);sh.lineTo(.011,.003);sh.lineTo(.017,.003);sh.closePath();
+    mesh(new THREE.ExtrudeGeometry(sh,{depth:.002,bevelEnabled:false}),green,tree,'embroidered_tree');
+    line(tree,gold,[0,-.012,.003],[0,-.024,.003],.003,'tree_trunk');
+  }
+  // Apron pocket and double seams.
+  curve(body,stitch,[[-.06,.855,.168],[-.05,.812,.173],[0,.80,.174],[.05,.812,.173],[.06,.855,.168]],.004,'apron_pocket',20);
+  curve(body,cream,[[-.054,.851,.172],[0,.846,.179],[.054,.851,.172]],.002,'pocket_stitch',12);
 
-  // нож в правой руке (виден при нарезке)
-  const knife = new THREE.Group();
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.09, 0.03), toon(0x3a2a20));
-  handle.position.y = -0.03;
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.16, 0.045), new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.8, roughness: 0.25 }));
-  blade.position.y = -0.14;
-  knife.add(handle, blade);
-  knife.position.y = -0.27;
-  knife.rotation.x = -1.2;
-  knife.visible = false;
-  arms[1].elbow.add(knife);
-
-  // телефон в левой руке
-  const phoneProp = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.13, 0.012), toon(0x222233));
-  phoneProp.position.set(0, -0.3, 0.03);
-  phoneProp.visible = false;
-  arms[0].elbow.add(phoneProp);
-
-  // --- голова ---
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 12), skin);
-  neck.position.y = 1.27;
-  body.add(neck);
-  const head = new THREE.Group();
-  head.position.y = 1.47;
-  body.add(head);
-  const skull = sphere(0.175, skin, 28, 20);
-  skull.scale.set(1, 1.02, 0.95);
-  head.add(skull);
-
-  // глаза
-  const eyes = [];
-  for (const s of [-1, 1]) {
-    const eye = new THREE.Group();
-    eye.position.set(0.065 * s, 0.0, 0.145);
-    const ball = sphere(0.042, white, 16, 12);
-    ball.scale.set(0.9, 1.15, 0.5);
-    const iris = sphere(0.026, toon(0x5a3214), 14, 10);
-    iris.scale.set(1, 1.15, 0.5);
-    iris.position.set(0.004 * s, -0.004, 0.017);
-    const pupil = sphere(0.014, toon(0x111111), 10, 8);
-    pupil.scale.set(1, 1.1, 0.5);
-    pupil.position.set(0.004 * s, -0.004, 0.026);
-    const glint = sphere(0.007, white, 8, 6);
-    glint.position.set(0.012 * s, 0.01, 0.031);
-    eye.add(ball, iris, pupil, glint);
-    head.add(eye);
-    eyes.push(eye);
-    // ресницы
-    const lash = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.008, 0.01), toon(0x1a1010));
-    lash.position.set(0.068 * s, 0.045, 0.165);
-    lash.rotation.z = -0.25 * s;
-    head.add(lash);
-  }
-  const brows = [];
-  for (const s of [-1, 1]) {
-    const brow = new THREE.Mesh(new THREE.CapsuleGeometry(0.008, 0.045, 4, 8), toon(0x4a2414));
-    brow.rotation.z = Math.PI / 2;
-    brow.position.set(0.066 * s, 0.075, 0.158);
-    head.add(brow);
-    brows.push({ mesh: brow, side: s });
-  }
-  const nose = sphere(0.018, toon(0xeaae88), 10, 8);
-  nose.position.set(0, -0.035, 0.172);
-  head.add(nose);
-  for (const s of [-1, 1]) {
-    const cheek = sphere(0.025, toon(0xf3958c), 10, 8);
-    cheek.scale.set(1.2, 0.7, 0.3);
-    cheek.position.set(0.1 * s, -0.045, 0.135);
-    head.add(cheek);
-  }
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 6, 16, Math.PI), toon(0xb3333b));
-  mouth.position.set(0, -0.085, 0.158);
-  mouth.rotation.z = Math.PI;
-  head.add(mouth);
-  for (const s of [-1, 1]) {
-    const ear = sphere(0.03, skin, 10, 8);
-    ear.scale.set(0.5, 1, 0.8);
-    ear.position.set(0.172 * s, -0.01, 0);
-    head.add(ear);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.005, 6, 16), new THREE.MeshStandardMaterial({ color: 0xf2c14e, metalness: 0.9, roughness: 0.3 }));
-    ring.position.set(0.176 * s, -0.06, 0.005);
-    ring.rotation.y = Math.PI / 2;
-    head.add(ring);
-  }
-
-  // волосы: основа + много кудряшек
-  const hairBase = sphere(0.19, hairMat, 24, 18);
-  hairBase.scale.set(1.05, 1.0, 1.0);
-  hairBase.position.set(0, 0.04, -0.035);
-  head.add(hairBase);
-  const curls = new THREE.Group();
-  head.add(curls);
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  // пышная копна сверху
-  for (let i = 0; i < 38; i++) {
-    const a = rnd() * Math.PI * 2;
-    const r = 0.06 + rnd() * 0.09;
-    const c = sphere(0.045 + rnd() * 0.035, rnd() > 0.5 ? hairMat : hairLight, 10, 8);
-    c.position.set(Math.cos(a) * r, 0.2 + rnd() * 0.1, Math.sin(a) * r - 0.04);
-    curls.add(c);
-  }
-  // кудри по бокам и сзади
-  for (let i = 0; i < 46; i++) {
-    const a = Math.PI * 0.1 + rnd() * Math.PI * 0.8; // задняя полусфера
-    const side = rnd() > 0.5 ? 1 : -1;
-    const y = -0.12 + rnd() * 0.24;
-    const rr = 0.17 + rnd() * 0.03;
-    const c = sphere(0.04 + rnd() * 0.025, rnd() > 0.4 ? hairMat : hairLight, 10, 8);
-    c.position.set(Math.cos(a) * rr * side, y, -Math.sin(a) * rr * 0.9 + 0.02);
-    curls.add(c);
-  }
-  // локоны у лица
-  for (const s of [-1, 1]) {
-    for (let k = 0; k < 3; k++) {
-      const lock = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.011, 6, 12), hairMat);
-      lock.position.set(0.15 * s, -0.06 - k * 0.04, 0.09 - k * 0.015);
-      lock.rotation.y = Math.PI / 2;
-      head.add(lock);
+  const arms=[];
+  for(const s of [-1,1]){
+    const shoulder=group(body,`heroine_${s<0?'left':'right'}_shoulder`,[s*.184,1.182,0]);
+    shoulder.rotation.z=s*.12;
+    taperedLimb(shoulder,cream,.265,.071,.052,'knit_upper_arm');
+    const elbow=group(shoulder,`heroine_${s<0?'left':'right'}_elbow`,[0,-.265,0]);
+    taperedLimb(elbow,cream,.225,.054,.044,'knit_forearm');
+    const cuff=mesh(new THREE.CylinderGeometry(.045,.044,.049,24),cream,elbow,'ribbed_cuff');cuff.position.y=-.216;
+    for(let i=0;i<16;i++){const a=i*Math.PI*2/16;line(elbow,knit,[Math.cos(a)*.046,-.192,Math.sin(a)*.046],[Math.cos(a)*.046,-.24,Math.sin(a)*.046],.0017,'cuff_rib');}
+    const hand=group(elbow,`heroine_${s<0?'left':'right'}_hand`,[0,-.28,.003]);
+    ellipsoid(hand,skin,[0,0,0],[.039,.048,.026],'palm');
+    for(let f=0;f<4;f++){
+      const fx=(f-1.5)*.015;
+      const finger=ellipsoid(hand,skin,[fx,-.044+(f===0||f===3?.006:0),.004],[.009,.024,.010],'finger',16);
+      const nail=ellipsoid(hand,material(0xf6cbbb,.45),[fx,-.055+(f===0||f===3?.006:0),.013],[.005,.007,.002],'fingernail',12);
     }
+    const thumb=ellipsoid(hand,skin,[s*.038,-.006,.005],[.016,.026,.018],'thumb',16);thumb.rotation.z=s*.4;
+    // Embroidered sleeves: snowflakes sit just in front of the curved sleeve.
+    snowflake(shoulder,red,0,-.092,.067,.024,'sleeve_snowflake');
+    snowflake(elbow,red,0,-.087,.052,.019,'forearm_snowflake');
+    for(const yy of [-.03,-.15])curve(elbow,red,[[-.045,yy,.021],[0,yy,.056],[.045,yy,.021]],.004,'sleeve_pattern_band',14);
+    body.add(shoulder);arms.push({shoulder,elbow,hand});
   }
-  // чёлка-кудряшки
-  for (let i = 0; i < 6; i++) {
-    const c = sphere(0.035, hairMat, 10, 8);
-    c.position.set(-0.11 + i * 0.045, 0.13 + Math.sin(i) * 0.01, 0.11);
-    head.add(c);
+  const knife=group(arms[1].elbow,'heroine_knife',[0,-.29,.025]);
+  const knifeHandle=mesh(new THREE.CapsuleGeometry(.013,.06,4,12),dark,knife,'knife_handle');knifeHandle.position.y=-.018;
+  const bladeShape=new THREE.Shape();bladeShape.moveTo(-.005,-.064);bladeShape.lineTo(-.005,-.218);bladeShape.quadraticCurveTo(.038,-.207,.045,-.064);bladeShape.closePath();
+  const blade=mesh(new THREE.ExtrudeGeometry(bladeShape,{depth:.003,bevelEnabled:true,bevelThickness:.001,bevelSize:.001,bevelSegments:1}),material(0xd9e4eb,.24,.8),knife,'knife_blade');
+  knife.rotation.x=-1.2;knife.visible=false;
+  const phoneProp=mesh(new THREE.BoxGeometry(.067,.122,.009),dark,arms[0].elbow,'heroine_phone');phoneProp.position.set(0,-.3,.034);phoneProp.visible=false;
+
+  // A custom oval face: narrower jaw and gently full cheeks.
+  const head=group(body,'heroine_head',[0,1.48,0]);
+  const faceGeo=new THREE.SphereGeometry(.175,40,28);const fp=faceGeo.attributes.position;
+  for(let i=0;i<fp.count;i++){
+    let x=fp.getX(i),y=fp.getY(i),z=fp.getZ(i);const lower=Math.max(0,-y/.175);
+    x*=1-.30*lower**1.5;z*=.86;z+=Math.max(0,z)*Math.exp(-(((y+.035)/.07)**2))*.065;y*=1.12;
+    fp.setXYZ(i,x,y,z);
   }
-
-  // повязка со снежинками
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.193, 0.197, 0.06, 32, 1, true), toon(0xffffff, { map: tex.headband, side: THREE.DoubleSide }));
-  band.position.set(0, 0.1, -0.01);
-  band.rotation.x = -0.32;
-  head.add(band);
-  const knot = new THREE.Group();
-  for (const s of [-1, 1]) {
-    const wing = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.1, 10), toon(0xd7262b));
-    wing.rotation.z = (Math.PI / 2) * s;
-    wing.position.x = -0.05 * s;
-    knot.add(wing);
+  faceGeo.computeVertexNormals();mesh(faceGeo,skin,head,'heroine_sculpted_face');
+  // Ears with inset cartilage and gold hoops.
+  for(const s of [-1,1]){
+    ellipsoid(head,skin,[s*.165,-.018,-.012],[.022,.035,.022],'ear',20);
+    ellipsoid(head,skinShadow,[s*.177,-.018,.005],[.011,.021,.006],'ear_cartilage',16);
+    const ring=mesh(new THREE.TorusGeometry(.022,.004,8,24),gold,head,'gold_earring');ring.position.set(s*.174,-.064,.015);ring.rotation.y=s*.4;
   }
-  knot.add(sphere(0.025, toon(0xb71c1c)));
-  knot.position.set(0.11, 0.21, 0.04);
-  knot.rotation.set(0.3, 0, 0.5);
-  head.add(knot);
+  const eyes=[],brows=[];
+  for(const s of [-1,1]){
+    const eye=group(head,`heroine_${s<0?'left':'right'}_eye`,[s*.064,.012,.139]);
+    ellipsoid(eye,white,[0,0,0],[.049,.044,.022],'eye_white',28);
+    ellipsoid(eye,irisMat,[s*.005,-.001,.019],[.025,.031,.009],'brown_iris',24);
+    ellipsoid(eye,pupilMat,[s*.005,-.001,.027],[.0135,.021,.005],'eye_pupil',20);
+    ellipsoid(eye,white,[-.008,.014,.033],[.008,.009,.004],'eye_catchlight',12);
+    ellipsoid(eye,white,[.011,-.012,.031],[.003,.004,.002],'eye_small_catchlight',10);
+    curve(eye,hair,[[-.046,.011,.013],[-.033,.035,.016],[0,.044,.011],[.034,.033,.014],[.047,.011,.012]],.004,'upper_eyelid',20);
+    curve(eye,skinShadow,[[-.045,-.011,.01],[0,-.044,.01],[.043,-.015,.012]],.0018,'lower_eyelid',16);
+    for(let k=0;k<3;k++)curve(eye,hair,[[s*(.032+k*.005),.027-k*.006,.015],[s*(.052+k*.004),.037-k*.007,.018]],.002,'eyelash',6);
+    eyes.push(eye);
+    const brow=group(head,`heroine_${s<0?'left':'right'}_brow`,[s*.063,.085,.133]);
+    // Curve along local y, so existing expression rotation around z is compatible.
+    curve(brow,hair,[[-.002,-.042,0],[-.008,-.023,.007],[-.012,.004,.004],[0,.042,-.007]],.0065,'sculpted_eyebrow',18);
+    brow.rotation.z=Math.PI/2+s*.08;brows.push({mesh:brow,side:s});
+    ellipsoid(head,material(0xeaa58c,.72),[s*.105,-.05,.128],[.028,.016,.003],'soft_cheek_blush',20);
+  }
+  ellipsoid(head,skin,[0,-.025,.15],[.017,.026,.026],'nose_bridge',24);
+  ellipsoid(head,skin,[0,-.039,.174],[.025,.018,.020],'nose_tip',24);
+  for(const s of [-1,1])ellipsoid(head,skinShadow,[s*.014,-.048,.186],[.005,.003,.002],'nostril',12);
+  const mouth=group(head,'heroine_smile',[0,-.09,.14]);
+  curve(mouth,lipMat,[[-.034,.008,0],[-.020,-.001,.008],[0,-.009,.012],[.020,-.001,.008],[.034,.008,0]],.0045,'smile_lips',20);
+  curve(mouth,white,[[-.022,.003,.009],[0,-.003,.014],[.022,.003,.009]],.003,'smile_teeth',14);
+  const mouthO=ellipsoid(head,material(0x76323a,.7),[0,-.093,.148],[.018,.023,.005],'surprised_mouth',20);mouthO.visible=false;
 
-  const mouthO = sphere(0.02, toon(0x8e2430), 10, 8);
-  mouthO.scale.set(1, 1.2, 0.4);
-  mouthO.position.set(0, -0.088, 0.16);
-  mouthO.visible = false;
-  head.add(mouthO);
+  // Chestnut bun and flowing curve-based curls. Face remains clear.
+  ellipsoid(head,hair,[0,.056,-.072],[.181,.184,.132],'hair_back_volume',32);
+  ellipsoid(head,hair,[0,.223,-.079],[.133,.105,.116],'hair_bun_volume',28);
+  // Curls wrap the bun, layered helixes rather than disconnected spheres.
+  for(let i=0;i<28;i++){
+    const phi=i*2.39996,theta=.38+(i%7)/6*2.2;
+    const center=new THREE.Vector3(Math.sin(theta)*Math.cos(phi)*.139,.223+Math.cos(theta)*.111,-.079+Math.sin(theta)*Math.sin(phi)*.122);
+    const n=new THREE.Vector3(Math.sin(theta)*Math.cos(phi),Math.cos(theta),Math.sin(theta)*Math.sin(phi));
+    const tangent=new THREE.Vector3(0,1,0).cross(n).normalize(),bitangent=n.clone().cross(tangent);
+    const pts=[];for(let k=0;k<=30;k++){
+      const t=k/30,a=t*Math.PI*3.6,r=.025*(.84+.16*Math.sin(t*Math.PI));
+      const p=center.clone().addScaledVector(tangent,Math.cos(a)*r).addScaledVector(bitangent,Math.sin(a)*r).addScaledVector(n,.007+Math.sin(t*Math.PI)*.009);pts.push(p.toArray());
+    }
+    curve(head,i%4===0?hairHighlight:i%2?hairLight:hair,pts,.009,'bun_ringlet',30);
+  }
+  // Dense ringlets over the visible bun surface break up the silhouette.
+  for(let row=0;row<4;row++)for(let col=0;col<6;col++){
+    const xx=(col-2.5)*.038+(row%2)*.008, yy=.174+row*.034;
+    const q=1-(xx/.143)**2-((yy-.223)/.115)**2;
+    if(q<.05)continue;
+    const zz=-.079+.126*Math.sqrt(q),pts=[];
+    for(let k=0;k<=24;k++){
+      const t=k/24,a=t*Math.PI*3.4,rr=.014+.003*Math.sin(t*Math.PI);
+      pts.push([xx+Math.cos(a)*rr,yy+Math.sin(a)*rr,zz+.008+t*.004]);
+    }
+    curve(head,(row+col)%4===0?hairHighlight:(row+col)%2?hairLight:hair,pts,.0075,'front_bun_ringlet',24);
+  }
+  // Scalp ridges curve around the crown in deliberate sweeping locks.
+  for(let i=0;i<13;i++){
+    const x=-.153+i*.0255;
+    curve(head,i%3?hair:hairLight,[[x,.062,-.176],[x*.93,.15,-.139],[x*.75,.21,-.063],[x*.58,.16,.036]],.012,'swept_crown_lock',24);
+  }
+  for(const s of [-1,1]){
+    for(let j=0;j<5;j++){
+      const pts=[];for(let k=0;k<=28;k++){const t=k/28,a=t*Math.PI*4.3+j*.53;pts.push([s*(.158+j*.004+Math.sin(a)*.014),.093-t*.218,.004+j*.013+Math.cos(a)*.018]);}
+      curve(head,j%2?hairLight:hair,pts,.0085,'face_ringlet',28);
+    }
+    curve(head,hair,[[s*.14,.10,.09],[s*.10,.149,.128],[s*.055,.158,.126],[s*.015,.114,.138]],.022,'side_swept_fringe',24);
+    curve(head,hairLight,[[s*.139,.111,.105],[s*.096,.159,.134],[s*.048,.161,.133],[s*.014,.121,.144]],.003,'fringe_highlight',24);
+  }
+  // Broad red fabric band across the crown; decorative stitches are actual geometry.
+  curve(head,red,[[-.176,.086,.009],[-.154,.15,.05],[-.093,.182,.081],[0,.192,.10],[.093,.182,.081],[.154,.15,.05],[.176,.086,.009]],.025,'festive_headband',36);
+  for(const x of [-.11,-.055,0,.055,.11]){
+    const yy=.19-Math.abs(x)*.12,zz=.124-Math.abs(x)*.24;
+    snowflake(head,white,x,yy,zz,.013,'headband_snowflake');
+  }
+  const bandBow=group(head,'heroine_headband_bow',[-.14,.182,.034]);bandBow.rotation.z=-.35;
+  for(const s of [-1,1]){
+    const loop=ellipsoid(bandBow,red,[s*.034,.012,0],[.038,.022,.012],'headband_bow_loop');loop.rotation.z=s*.32;
+    curve(bandBow,stitch,[[s*.005,.012,.012],[s*.025,.022,.014],[s*.058,.01,.012]],.002,'bow_fold',12);
+  }
+  ellipsoid(bandBow,stitch,[0,.01,.01],[.012,.017,.013],'headband_bow_knot');
+  for(const s of [-1,1])curve(bandBow,red,[[s*.005,.003,0],[s*.027,-.025,.006],[s*.035,-.058,.009]],.012,'headband_bow_ribbon',12);
 
-  root.userData = { body, legs, arms, head, eyes, brows, mouth, mouthO, knife, phoneProp };
+  root.userData={body,legs,arms,head,eyes,brows,mouth,mouthO,knife,phoneProp};
+  mergeStaticMeshes(root,new Set([mouthO,phoneProp]));
   return root;
 }
-
 // Позы: на основе игрового состояния, время — только игровое/анимационное.
 export function animateHeroine(h, pose, time, progress = 0) {
   const { body, legs, arms, head, brows, mouth, knife, phoneProp } = h.userData;

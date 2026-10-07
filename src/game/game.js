@@ -17,6 +17,7 @@ import {
   accuracy,
   makePiece,
   recenter,
+  cutAcross,
 } from './cutting.js';
 import { computeScore, resultTitle } from './scoring.js';
 
@@ -42,14 +43,14 @@ export class Game {
     this.queuedGoTo = null;
     this.action = null; // { type, duration, elapsed, onDone, data }
     this.panel = null; // открытая станция
-    this.holds = { mix: false, garland: false };
+    this.holds = { mix: false, garland: false, radio: false };
 
     this.ingredients = {};
     this.added = {};
     for (const def of config.ingredients) {
       this.added[def.id] = false;
       if (!def.cut) continue;
-      const pieces = initialPieces(def.w, def.d, () => this._id());
+      const pieces = initialPieces(def.w, def.d, () => this._id(), def.profile);
       this.ingredients[def.id] = {
         id: def.id,
         name: def.name,
@@ -57,7 +58,7 @@ export class Game {
         selectedId: pieces[0].id,
         cuts: 0,
         available: def.id !== 'potato',
-        fullVolume: def.w * def.d,
+        fullVolume: totalVolume(pieces),
         missing: [],
         freshIds: new Set(),
       };
@@ -71,6 +72,7 @@ export class Game {
     this.pot = { idx: 0, active: false, deadline: 0 };
     this.garland = { triggered: false, broken: false, repaired: false, progress: 0 };
     this.phone = { idx: 0, sessionTime: 0, open: false };
+    this.radio = { triggered: false, broken: false, enabled: true, progress: 0, repairs: 0 };
     this.stats = {
       thefts: 0,
       theftsFromBoard: 0,
@@ -172,7 +174,7 @@ export class Game {
     this.phase = success ? 'success' : 'fail';
     this.endT = this.t;
     this.action = null;
-    this.holds.mix = this.holds.garland = false;
+    this.holds.mix = this.holds.garland = this.holds.radio = false;
     this.heroine.target = null;
     this.panel = null;
     this.alerts = [];
@@ -290,6 +292,7 @@ export class Game {
   _releaseHolds() {
     this.holds.mix = false;
     this.holds.garland = false;
+    this.holds.radio = false;
   }
 
   setHold(kind, on) {
@@ -311,11 +314,28 @@ export class Game {
       if (!this._isIdleAt('garland')) return false;
       if (!this.garland.broken || this.garland.repaired) return false;
     }
+    if (kind === 'radio') {
+      if (!this._isIdleAt('radio') || !this.radio.broken) return false;
+    }
     this.holds[kind] = true;
     return true;
   }
 
   _updateHolds(h) {
+    if (this.holds.radio) {
+      if (!this._isIdleAt('radio') || this.action) this.holds.radio = false;
+      else {
+        this.radio.progress = Math.min(this.cfg.durations.radioHold, this.radio.progress + h);
+        if (this.radio.progress >= this.cfg.durations.radioHold - EPS) {
+          this.radio.broken = false;
+          this.radio.enabled = true;
+          this.radio.repairs++;
+          this.holds.radio = false;
+          this._removeAlert('radio');
+          this._emit('radioFixed');
+        }
+      }
+    }
     if (this.holds.mix) {
       if (!this._isIdleAt('bowl') || this.action) this.holds.mix = false;
       else {
@@ -368,7 +388,7 @@ export class Game {
   takePotato() {
     if (this.phase !== 'running' || !this._isIdleAt('stove')) return false;
     if (this.potato === 'boiling') {
-      this.setHint('Картошка ещё варится — будет готова в 4:30');
+      this.setHint(`Картошка ещё варится — будет готова через ${Math.max(0, Math.ceil(this.cfg.potatoReadyAt - this.t))} с`);
       return false;
     }
     if (this.potato !== 'ready') return false;
@@ -437,6 +457,29 @@ export class Game {
     return 'cut';
   }
 
+  // Player-facing input: every click is a chop, not a selection step.
+  sliceBoard(px, pz) {
+    if (!this.canUseBoard() || this.action) return 'ignored';
+    const ing = this.board;
+    if (!ing || !pieceAt(ing.pieces, px, pz)) return 'miss';
+    const opts = { minWidth: this.cfg.minCutFraction * this.cfg.targetSize, maxPieces: this.cfg.maxPiecesPerIngredient, nextId: () => 0 };
+    const check = cutAcross(ing.pieces, px, opts);
+    if (!check.ok) {
+      this.setHint(check.reason === 'limit' ? 'Кусочков уже достаточно — перенеси продукт в миску' : 'Слишком близко к краю одного из кусочков — чуть сдвинь нож');
+      return check.reason;
+    }
+    ing.selectedId = null;
+    this._startAction('cut', this.cfg.knifeDuration, () => {
+      const result = cutAcross(ing.pieces, px, { ...opts, nextId: () => this._id() });
+      if (!result.ok || ing.added) return;
+      ing.pieces = result.pieces;
+      ing.cuts++;
+      for (const pair of result.cuts) ing.freshIds.delete(pair.original.id);
+      this._emit('cut', { ingredient: ing.id, left: result.cuts[0].left, right: result.cuts[0].right, cuts: result.cuts, x: px });
+    }, { ingredient: ing.id, x: px, z: pz, across: true });
+    return 'cut';
+  }
+
   _applyCut(ingId, pieceId, x) {
     const ing = this.ingredients[ingId];
     if (!ing || ing.added) return;
@@ -469,10 +512,10 @@ export class Game {
     if (!ing || !ing.missing.length) return false;
     return this._startAction('replacement', this.cfg.durations.replacement, () => {
       for (const m of ing.missing) {
-        const piece = placeBeside(ing.pieces, m.w, m.d, this._id());
+        const piece = placeBeside(ing.pieces, m.w, m.d, this._id(), m);
         ing.pieces = recenter([...ing.pieces, piece]);
         ing.freshIds.add(piece.id);
-        this.stats.replacedVolume += m.w * m.d;
+        this.stats.replacedVolume += pieceVolume(m);
         if (!ing.selectedId || !ing.pieces.some((q) => q.id === ing.selectedId)) ing.selectedId = piece.id;
       }
       ing.missing = [];
@@ -567,7 +610,7 @@ export class Game {
     if (this.boardIng === 'sausage' && !sausage.added && sausage.pieces.length) {
       const victim = largestPiece(sausage.pieces);
       sausage.pieces = sausage.pieces.filter((p) => p !== victim);
-      sausage.missing.push({ w: victim.w, d: victim.d });
+      sausage.missing.push({ ...victim });
       sausage.freshIds.delete(victim.id);
       this.stats.stolenVolume += pieceVolume(victim);
       if (this.action?.data?.pieceId === victim.id) this._cancelAction();
@@ -592,7 +635,7 @@ export class Game {
     // Картофель: проверка пересечения отметки, а не равенства.
     if (prev < this.cfg.potatoReadyAt && t >= this.cfg.potatoReadyAt && this.potato === 'boiling') {
       this.potato = 'ready';
-      this._alert('potatoReady', 'Картошка готова! Осталось 30 секунд');
+      this._alert('potatoReady', `Картошка готова! До конца раунда ${Math.max(0, Math.ceil(this.cfg.roundDuration - t))} с`);
       this._emit('potatoReady');
     }
 
@@ -642,6 +685,27 @@ export class Game {
         this._emit('garlandOff');
       }
     }
+    // Радио: несрочная разовая помеха, только при включённом приёмнике.
+    if (ev.radio && !this.radio.triggered && t >= ev.radio.at) {
+      this.radio.triggered = true;
+      if (this._canStartEvent(ev.radio.at) && this.radio.enabled) this.breakRadio();
+    }
+  }
+
+  toggleRadio() {
+    if (this.phase !== 'running' || !this._isIdleAt('radio') || this.action) return false;
+    if (this.radio.broken) { this.setHint('Сначала почини радио'); return false; }
+    this.radio.enabled = !this.radio.enabled;
+    return true;
+  }
+
+  breakRadio() {
+    if (this.phase !== 'running' || this.radio.broken || !this.radio.enabled) return false;
+    this.radio.broken = true;
+    this.radio.progress = 0;
+    this._alert('radio', 'Радио потрескивает и замолчало');
+    this._emit('radioBroken');
+    return true;
   }
 
   // ---------- итог ----------
@@ -652,7 +716,8 @@ export class Game {
     const A = accuracy(this.bowl.pieces, this.cfg.tolerance) * 100;
     const M = this.bowl.mixed ? 100 : 0;
     const garlandError = this.garland.broken && !this.garland.repaired ? 1 : 0;
-    const E = this.stats.thefts + this.stats.spills + garlandError;
+    const radioError = this.radio.broken ? 1 : 0;
+    const E = this.stats.thefts + this.stats.spills + garlandError + radioError;
     const S = computeScore({ C, A, M, E }, this.cfg.scoring);
     const success = this.phase === 'success';
     return {
@@ -671,7 +736,9 @@ export class Game {
       shoos: this.stats.shoos,
       spills: this.stats.spills,
       garlandError,
-      kitchenErrors: this.stats.spills + garlandError,
+      radioError,
+      radioRepairs: this.radio.repairs,
+      kitchenErrors: this.stats.spills + garlandError + radioError,
       phoneTime: this.stats.phoneTime,
     };
   }
@@ -688,13 +755,14 @@ export class Game {
     while (this.phone.idx < ev.phone.at.length && ev.phone.at[this.phone.idx] < target) this.phone.idx++;
     while (this.pot.idx < ev.pot.at.length && ev.pot.at[this.pot.idx] < target) this.pot.idx++;
     if (ev.garland.at < target) this.garland.triggered = true;
+    if (ev.radio && ev.radio.at < target) this.radio.triggered = true;
     this.pot.active = false;
     if (this.cat.state === 'active') {
       this.cat.state = 'waiting';
       this._emit('catGone');
     }
     if (this.cat.nextAt < target) this.cat.nextAt = target + 5;
-    this.alerts = this.alerts.filter((a) => a.type === 'garland' && this.garland.broken);
+    this.alerts = this.alerts.filter((a) => (a.type === 'garland' && this.garland.broken) || (a.type === 'radio' && this.radio.broken));
     this.t = Math.min(target, this.cfg.roundDuration - 0.01);
     this._emit('devJump');
   }

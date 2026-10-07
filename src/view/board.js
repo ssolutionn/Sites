@@ -1,9 +1,11 @@
 // Отображение доски и миски. Только читает состояние игры, ничего не начисляет.
 import * as THREE from 'three';
 import { tex, toon } from './textures.js';
+import { bounds } from '../game/cutting.js';
 
 export const UNIT = 0.042; // метров на один целевой кубик
 const GAP = 0.0025; // визуальный зазор между частями, геометрия при этом точная
+const shapeKey = p => p.polygon?.map(q=>`${(q.x-p.x).toFixed(6)},${(q.z-p.z).toFixed(6)}`).join('|') ?? '';
 
 const COLORS = {
   carrot: 0xf28c28,
@@ -67,6 +69,10 @@ export class BoardView {
     cuff.position.set(0.004, 0.052, -0.122);
     cuff.rotation.x = 0.5;
     tilt.add(hand, sleeve, cuff);
+    this.bladeParts = [blade, spine];
+    this.knifeTip = tip;
+    this.knifeGrip = [handle, hand, sleeve, cuff, ...tilt.children.filter(m => m.geometry?.type === 'SphereGeometry' && m !== hand)];
+    this.knifeGrip.forEach(m => { m.userData.gripZ = m.position.z; });
     this.knife.visible = false;
     this.group.add(this.knife);
 
@@ -169,12 +175,27 @@ export class BoardView {
   }
 
   _pieceMesh(piece, ing) {
-    const g = new THREE.BoxGeometry(Math.max(piece.w * UNIT - GAP, 0.001), UNIT, Math.max(piece.d * UNIT - GAP, 0.001));
-    const mat = matFor(ing).clone();
+    let g;
+    if (piece.polygon) {
+      const cx = piece.x + piece.w / 2, cz = piece.z + piece.d / 2;
+      const shape = new THREE.Shape(piece.polygon.map(q => new THREE.Vector2((q.x-cx)*UNIT, -(q.z-cz)*UNIT)));
+      g = new THREE.ExtrudeGeometry(shape, { depth: UNIT, bevelEnabled: true, bevelSegments: 1, steps: 1, bevelSize: 0.0007, bevelThickness: 0.0007 });
+      g.translate(0,0,-UNIT/2);g.rotateX(-Math.PI/2);
+      g.scale(0.985,1,0.985);
+    } else {
+      const shape = new THREE.Shape();
+      const w = Math.max(piece.w*UNIT-GAP,.001), d = Math.max(piece.d*UNIT-GAP,.001), r = Math.min(.002,w/5,d/5);
+      shape.moveTo(-w/2+r,-d/2);shape.lineTo(w/2-r,-d/2);shape.quadraticCurveTo(w/2,-d/2,w/2,-d/2+r);
+      shape.lineTo(w/2,d/2-r);shape.quadraticCurveTo(w/2,d/2,w/2-r,d/2);shape.lineTo(-w/2+r,d/2);shape.quadraticCurveTo(-w/2,d/2,-w/2,d/2-r);
+      shape.lineTo(-w/2,-d/2+r);shape.quadraticCurveTo(-w/2,-d/2,-w/2+r,-d/2);
+      g = new THREE.ExtrudeGeometry(shape,{ depth:UNIT,bevelEnabled:true,bevelSize:.0008,bevelThickness:.0008,bevelSegments:1,steps:1 });
+      g.translate(0,0,-UNIT/2);g.rotateX(-Math.PI/2);
+    }
+    const mat = new THREE.MeshStandardMaterial({color: COLORS[ing] ?? 0xe8a0a5, map: ing==='sausage' ? tex.sausage : null, roughness:.62, metalness:0, emissive:0x000000});
     mat.emissive = new THREE.Color(0x000000);
     const m = new THREE.Mesh(g, mat);
     m.castShadow = true;
-    m.userData = { w: piece.w, d: piece.d, ing };
+    m.userData = { w: piece.w, d: piece.d, ing, shape: shapeKey(piece) };
     return m;
   }
 
@@ -191,7 +212,7 @@ export class BoardView {
       for (const p of ing.pieces) {
         alive.add(p.id);
         let m = this.meshes.get(p.id);
-        if (m && (Math.abs(m.userData.w - p.w) > 1e-9 || Math.abs(m.userData.d - p.d) > 1e-9)) {
+        if (m && (Math.abs(m.userData.w - p.w) > 1e-9 || Math.abs(m.userData.d - p.d) > 1e-9 || m.userData.shape !== shapeKey(p))) {
           this._disposeMesh(m);
           m = null;
         }
@@ -203,7 +224,7 @@ export class BoardView {
         const selected = p.id === ing.selectedId;
         const hovered = closeup && this.hover && this.hover.pieceId === p.id && !selected;
         m.position.set((p.x + p.w / 2) * UNIT, UNIT / 2 + (selected ? 0.003 : 0), (p.z + p.d / 2) * UNIT);
-        m.material.emissive.setHex(selected ? 0x3a5a00 : hovered ? 0x2a2a10 : 0x000000);
+        m.material.emissive.setHex(hovered ? 0x080904 : 0x000000);
       }
     }
     for (const [pid, m] of this.meshes) {
@@ -232,6 +253,13 @@ export class BoardView {
       kx = THREE.MathUtils.clamp(kx, -6.8, 6.8);
       this.knife.position.set(kx * UNIT, lift, 0);
       const sel = ing.pieces.find((p) => p.id === ing.selectedId);
+      const box = bounds(ing.pieces);
+      this.knife.position.z = (box.minZ+box.maxZ)/2*UNIT;
+      // Blade spans all prepared strips; its stroke matches the batch-cut logic.
+      const bladeScale = Math.max(1,(box.maxZ-box.minZ)*UNIT/.12+.12);
+      this.bladeParts.forEach(m => { m.scale.z = bladeScale; });
+      this.knifeTip.position.z = .06 * bladeScale;
+      this.knifeGrip.forEach(m => { m.position.z = m.userData.gripZ - .06 * (bladeScale - 1); });
       // левая рука придерживает продукт у левого края
       if (ing.pieces.length) {
         let minX = Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -242,12 +270,12 @@ export class BoardView {
         }
         this.leftHand.position.set(minX * UNIT - 0.018, UNIT * 0.4, ((minZ + maxZ) / 2) * UNIT);
       }
-      this.outline.visible = !!sel;
+      this.outline.visible = false;
       if (sel) {
         this.outline.scale.set(sel.w * UNIT, UNIT, sel.d * UNIT);
         this.outline.position.set((sel.x + sel.w / 2) * UNIT, UNIT / 2 + 0.003, (sel.z + sel.d / 2) * UNIT);
         if (!act && this.hover && this.hover.pieceId === sel.id) {
-          this.cutLine.visible = true;
+          this.cutLine.visible = false;
           this.cutLine.scale.y = sel.d * UNIT;
           this.cutLine.position.set(this.hover.x * UNIT, UNIT + 0.0035, (sel.z + sel.d / 2) * UNIT);
         }

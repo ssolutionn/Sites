@@ -3,9 +3,10 @@
 import { CONFIG } from '../config.js';
 import { LAYOUT } from '../game/layout.js';
 import { LOGO_URL } from '../view/textures.js';
+import { accuracy, pieceVolume } from '../game/cutting.js';
 
 const ICONS = { carrot: '🥕', sausage: '🌭', cucumber: '🥒', egg: '🥚', peas: '🫛', mayo: '🫙', potato: '🥔' };
-const ALERT_ICONS = { cat: '🐱', pot: '♨️', garland: '💡', phone: '📱', potatoReady: '🥔' };
+const ALERT_ICONS = { cat: '🐱', pot: '♨️', garland: '💡', phone: '📱', potatoReady: '🥔', radio: '📻' };
 const $ = (sel, root = document) => root.querySelector(sel);
 
 export function fmtTime(sec) {
@@ -63,6 +64,8 @@ export class UI {
         </div>
         <div class="actions">
           <button class="primary big" data-ui="play">▶ Играть</button>
+          <button class="ghost big" data-ui="practice">🔪 Тренировка нарезки</button>
+          <a class="model-link" href="./gallery.html">Девушка и кот · 3D</a>
           <button class="ghost big" data-ui="controls">Управление</button>
           <button class="ghost big" data-ui="mute" title="Звук (M)">${this.app.isMuted() ? '🔇' : '🔊'}</button>
         </div>
@@ -74,9 +77,9 @@ export class UI {
   _controlsTable() {
     return `<table>
       <tr><td>Кухня</td><td>Клик по станции или по её метке — героиня идёт и открывает действие</td></tr>
-      <tr><td>Доска: клик по кусочку</td><td>Выбрать кусочек</td></tr>
+      <tr><td>Доска: клик</td><td>Нож режет все части под лезвием</td></tr>
       <tr><td>Доска: движение мыши</td><td>Где пройдёт нож</td></tr>
-      <tr><td>Доска: клик по выбранному</td><td>Один разрез</td></tr>
+      <tr><td>Нарезка на глаз</td><td>Размер зависит от положения ножа; линии-подсказки нет</td></tr>
       <tr><td>«Повернуть» или <kbd>R</kbd></td><td>Повернуть продукт на 90°</td></tr>
       <tr><td>Кнопки продуктов</td><td>Сменить продукт (нарезка сохраняется)</td></tr>
       <tr><td>«В миску»</td><td>Перенести нарезанное</td></tr>
@@ -93,9 +96,9 @@ export class UI {
         <ol>
           <li><b>Подойди к плите и поставь картошку вариться.</b> С этого момента пошли 5 минут.</li>
           <li>Кликай по станциям — героиня идёт туда и открывает действие.</li>
-          <li><b>На доске:</b> клик по кусочку — выбрать, мышь — где пройдёт нож, ещё клик — разрез. «Повернуть» (<kbd>R</kbd>) — для поперечных разрезов. Целевой размер — кубик-образец в углу доски.</li>
+          <li><b>На доске:</b> мышь — положение ножа, клик по продукту — разрез через все полоски под лезвием. «Повернуть» (<kbd>R</kbd>) — для поперечной нарезки. Определяй размер на глаз по кубику-образцу в углу доски.</li>
           <li>Морковь → колбаса → огурец → яйцо, затем у миски — горошек и майонез.</li>
-          <li><b>В 4:30 картошка готова.</b> Достань, нарежь, добавь последней и удерживай «Перемешать» 3 секунды.</li>
+          <li><b>В ${fmtTime(CONFIG.potatoReadyAt)} картошка готова.</b> Достань, нарежь, добавь последней и удерживай «Перемешать» 3 секунды. Радио играет на кухне; если замолчит — подойди и почини.</li>
           <li>Мешать будут кот, телефон, кастрюля и гирлянда.</li>
         </ol>
         <div class="actions"><button class="primary big" data-ui="start">На кухню!</button></div>
@@ -133,6 +136,8 @@ export class UI {
     if (r.thefts) comments.push(`Кот утащил колбасу: ${r.thefts} раз(а). Он доволен.`);
     if (r.spills) comments.push(`Кастрюля выкипела: ${r.spills} раз(а). Пол помоют гости.`);
     if (r.garlandError) comments.push('Гирлянда так и не загорелась — праздник без огоньков.');
+    if (r.radioError) comments.push('Радио осталось сломанным — праздник без музыки.');
+    else if (r.radioRepairs) comments.push('Радио починено — музыка вернулась.');
     if (r.success && r.A < 50) comments.push('Кубики получились очень разными — зато с характером.');
     if (r.success && r.remaining >= 20) comments.push(`Ещё ${Math.floor(r.remaining)} с в запасе — можно успеть нарядиться.`);
     if (!comments.length) comments.push('Идеальная смена. Можно открывать шампанское.');
@@ -178,6 +183,7 @@ export class UI {
         this.sound.play('click');
         const a = b.dataset.ui;
         if (a === 'play') this.app.play();
+        else if (a === 'practice') this.app.practice();
         else if (a === 'controls') $('#controls-card')?.classList.toggle('hidden');
         else if (a === 'mute') {
           this.app.toggleMute();
@@ -273,7 +279,7 @@ export class UI {
         this.banner('Картошка варится! Пошли 5 минут', false, 2.4);
         break;
       case 'potatoReady':
-        this.banner('Картошка готова! Осталось 30 секунд', false, 3.2);
+        this.banner(`Картошка готова! До конца ${fmtTime(game.remaining)}`, false, 3.2);
         break;
       case 'catStole':
         this.toast(e.from === 'board' ? 'Кот утащил кусок колбасы с доски! Возьми замену' : 'Кот стащил колбасу с запасной тарелки', 'bad', 3.2);
@@ -289,6 +295,12 @@ export class UI {
         break;
       case 'garlandFixed':
         this.toast('Гирлянда снова горит ✨', 'good');
+        break;
+      case 'radioBroken':
+        this.toast('Радио замолчало — можно починить 📻', '', 3);
+        break;
+      case 'radioFixed':
+        this.toast('Музыка снова играет 📻', 'good');
         break;
       case 'transfer':
         this.toast(`${ICONS[e.ingredient]} ${game.ingredientName(e.ingredient)} — в миске`, 'good', 1.8);
@@ -373,6 +385,7 @@ export class UI {
       const urgent =
         (id === 'stove' && (game.pot.active || game.potato === 'ready' || game.phase === 'prestart')) ||
         (id === 'garland' && game.garland.broken && !game.garland.repaired) ||
+        (id === 'radio' && game.radio.broken) ||
         (id === 'phone' && game.alerts.some((a) => a.type === 'phone'));
       el.classList.toggle('urgent', urgent);
       el.classList.toggle('locked', game.phase === 'prestart' && id !== 'stove');
@@ -402,6 +415,7 @@ export class UI {
         if (a.type === 'cat') acts = `<button class="danger" data-a="shoo">👋 Прогнать</button>`;
         if (a.type === 'pot') acts = `<button class="danger" data-a="goto" data-s="stove">К плите</button>`;
         if (a.type === 'garland') acts = `<button class="primary" data-a="goto" data-s="garland">Починить</button>`;
+        if (a.type === 'radio') acts = `<button class="primary" data-a="goto" data-s="radio">К радио</button>`;
         if (a.type === 'potatoReady') acts = `<button class="primary" data-a="goto" data-s="stove">К плите</button>`;
         if (a.type === 'phone') acts = `<button class="primary" data-a="goto" data-s="phone">Открыть</button><button class="ghost" data-a="dismiss">Позже</button>`;
         el.innerHTML = `<div class="ico">${ALERT_ICONS[a.type] ?? '❗'}</div><div class="txt">${esc(a.text)}</div><div class="acts">${acts}</div>${a.deadline != null ? '<div class="timer"><i></i></div>' : ''}`;
@@ -437,6 +451,8 @@ export class UI {
       if (!b || b.dataset.hold) return;
       this.sound.unlock();
       const arg = b.dataset.arg;
+      if (b.dataset.act === 'resetPractice') { this.app.resetPractice(); return; }
+      if (b.dataset.act === 'practiceMenu') { this.app.toMenu(); return; }
       this.act(b.dataset.act, arg);
     });
     const holdOn = (e) => {
@@ -479,6 +495,7 @@ export class UI {
     if (st === 'stove') return `stove|${game.phase}|${game.potato}|${game.pot.active}|${busy}|${this.app.devMode ? 'd' : ''}`;
     if (st === 'bowl') return `bowl|${Object.values(game.added).join()}|${busy}|${game.bowl.mixed}`;
     if (st === 'garland') return `garland|${game.garland.broken}|${game.garland.repaired}`;
+    if (st === 'radio') return `radio|${game.radio.broken}|${game.radio.enabled}|${busy}`;
     if (st === 'phone') {
       const alerts = game.alerts.filter((a) => a.type === 'cat' || a.type === 'pot').map((a) => a.text).join(';');
       return `phone|${game.phone.idx}|${game.phone.sessionTime >= CONFIG.events.phone.insightAfter}|${alerts}|${Math.floor(game.t / 30)}`;
@@ -513,6 +530,10 @@ export class UI {
     if (mixBar) mixBar.style.width = `${(game.bowl.mixProgress / CONFIG.durations.mixHold) * 100}%`;
     const gar = p.querySelector('.garland-progress i');
     if (gar) gar.style.width = `${(game.garland.progress / CONFIG.durations.garlandHold) * 100}%`;
+    const rad = p.querySelector('.radio-progress i');
+    if (rad) rad.style.width = `${(game.radio.progress / game.cfg.durations.radioHold) * 100}%`;
+    const radFill = p.querySelector('[data-hold="radio"] .fill');
+    if (radFill) radFill.style.width = `${(game.radio.progress / game.cfg.durations.radioHold) * 100}%`;
     const potEta = p.querySelector('#pot-eta');
     if (potEta) potEta.textContent = fmtTime(CONFIG.potatoReadyAt - game.t);
     const clock = p.querySelector('#phone-clock');
@@ -528,7 +549,7 @@ export class UI {
         let body = '';
         if (game.phase === 'prestart') {
           body = `<div class="row"><button class="primary big" data-act="placePot">🔥 Поставить картошку вариться</button>${back}</div>
-            <p class="note">После этого начнётся отсчёт 5 минут. Картошка будет готова в 4:30.</p>`;
+            <p class="note">После этого начнётся отсчёт 5 минут. Картошка будет готова в ${fmtTime(CONFIG.potatoReadyAt)}.</p>`;
         } else {
           const rows = [];
           if (game.pot.active) rows.push(`<button class="danger big" data-act="reduceHeat" ${busy ? 'disabled' : ''}>🔥 Убавить огонь</button>`);
@@ -556,20 +577,24 @@ export class UI {
         if (!ing) {
           return `<h2>🔪 Доска</h2><div class="row tabs">${tabs}</div>
             <div class="row" style="margin-top:8px"><button class="primary" data-act="goTo" data-arg="bowl">🥗 К миске</button>${back}</div>
-            <p class="note">${game.potato === 'boiling' ? 'Нарезать больше нечего — ждём картошку (4:30). Загляни к миске: горошек и майонез.' : 'Всё нарезано. Дальше — миска.'}</p>`;
+            <p class="note">${game.potato === 'boiling' ? `Нарезать больше нечего — ждём картошку (${fmtTime(CONFIG.potatoReadyAt)}). Загляни к миске: горошек и майонез.` : 'Всё нарезано. Дальше — миска.'}</p>`;
         }
         const reason = game.transferBlockReason();
         const repl = ing.missing.length ? `<button class="danger" data-act="takeReplacement" ${busy ? 'disabled' : ''}>🌭 Взять замену</button>` : '';
-        return `<h2>🔪 ${ICONS[ing.id]} ${ing.name}<span class="sub">кусочков: ${ing.pieces.length} · разрезов: ${ing.cuts}</span></h2>
+        const quality = Math.round(accuracy(ing.pieces,CONFIG.tolerance)*100);
+        const neat = ing.pieces.filter(q => q.w>=.75 && q.w<=1.25 && q.d>=.75 && q.d<=1.25).length;
+        const volume = ing.pieces.reduce((s,q) => s+pieceVolume(q),0);
+        const actions = game.practice ? `<button data-act="resetPractice" ${busy?'disabled':''}>↺ Начать заново</button><button class="ghost" data-act="practiceMenu">В меню</button>` : `<button class="primary ${reason ? 'soft-disabled' : ''}" data-act="transfer" title="${esc(reason ?? '')}">🥗 В миску</button>${back}`;
+        return `<h2>🔪 ${ICONS[ing.id]} ${ing.name}<span class="sub">${game.practice?'Тренировка · ':''}кусочков: ${ing.pieces.length} · взмахов: ${ing.cuts}</span></h2>
           <div class="row tabs">${tabs}</div>
+          <div class="cut-quality"><span>Аккуратность <b>${quality}%</b></span><div class="quality-track"><i style="width:${quality}%"></i></div><span>${neat} ровных кусочков · объём сохранён: ${Math.round(volume/ing.fullVolume*100)}%</span></div>
           <div class="row">
             <button data-act="rotate" ${busy ? 'disabled' : ''}>⟳ Повернуть <kbd>R</kbd></button>
             ${repl}
-            <button class="primary ${reason ? 'soft-disabled' : ''}" data-act="transfer" title="${esc(reason ?? '')}">🥗 В миску</button>
-            ${back}
+            ${actions}
             ${ing.missing.length ? actBar : ''}
           </div>
-          <p class="note">Клик по кусочку — выбрать · мышь — где пройдёт нож · клик по выбранному — разрез. Цель — кубики как образец в углу доски.</p>`;
+          <p class="note">Мышь — положение ножа · клик — разрез через все полоски · R — поворот. Нарезай на глаз по образцу; слишком крупные кусочки можно дорезать.${game.practice?' Закруглённые края продукта дают естественные маленькие обрезки.':''}</p>`;
       }
       case 'bowl': {
         const a = game.added;
@@ -591,6 +616,10 @@ export class UI {
           <div class="row"><button class="primary hold-btn big" data-hold="garland" data-act="garland">🔌 Поправить контакт (удерживай)<span class="fill"></span></button>${back}</div>
           <div class="row"><div class="progress garland-progress"><i></i></div></div>
           <p class="note">Удерживай 2 секунды.</p>`;
+      }
+      case 'radio': {
+        if (game.radio.broken) return `<h2>📻 Радио замолчало</h2><div class="row"><button class="primary hold-btn big" data-hold="radio">Поправить настройку (удерживай)<span class="fill"></span></button>${back}</div><div class="progress radio-progress"><i></i></div><p class="note">Удерживай ${game.cfg.durations.radioHold} секунды. Музыка вернётся после ремонта.</p>`;
+        return `<h2>📻 Кухонное радио</h2><div class="row"><button data-act="toggleRadio">${game.radio.enabled?'Выключить':'Включить'} радио</button>${back}</div><p class="note">${game.radio.enabled?'Играет негромкая мелодия.':'Радио выключено.'} Общий звук — клавиша M.</p>`;
       }
       case 'phone': {
         const pushes = game.alerts
@@ -624,8 +653,9 @@ export class UI {
     const d = this.el.dev;
     d.classList.remove('hidden');
     d.innerHTML = `<b>DEV · seed ${seed}</b>
-      <button data-d="jump">→ 4:28 (картошка)</button>
+      <button data-d="jump">→ ${fmtTime(CONFIG.potatoReadyAt-2)} (картошка)</button>
       <button data-d="cat">Позвать кота</button>
+      <button data-d="radio">Сломать радио</button>
       <button data-d="prepare">Готовы 6 ингредиентов</button>
       <button data-d="end">Конец времени (−3 с)</button>`;
     d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => handlers[b.dataset.d]?.()));

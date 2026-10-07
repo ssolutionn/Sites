@@ -46,18 +46,14 @@ async function cutAll(limit = 60) {
       const ing = window.__olivie.game.board;
       if (!ing) return null;
       const big = ing.pieces.find((p) => p.w > 1.0001 || p.d > 1.0001);
-      return big ? { big, sel: ing.selectedId } : { done: true };
+      return big ? { big } : { done: true };
     });
     if (!st || st.done) return true;
-    const { big, sel } = st;
+    const { big } = st;
     if (big.w <= 1.0001) {
       await page.keyboard.press('KeyR');
       await wait(150);
       continue;
-    }
-    if (sel !== big.id) {
-      await boardClick(big.x + 0.5, big.z + big.d / 2);
-      await wait(80);
     }
     await boardClick(big.x + 1, big.z + big.d / 2);
     await waitFor(() => !window.__olivie.game.action);
@@ -161,12 +157,23 @@ await wait(200);
 const tr = await g(() => window.__olivie.game.t);
 check('продолжение без скачка времени', tr - tp < 0.35, `${(tr - tp).toFixed(3)} с`);
 
-// финал: остальные ингредиенты готовы, картошка в 4:30
+// Радио: отдельный тест нового события и ремонта.
+await g(() => window.__olivie.game.breakRadio());
+await clickLabel('Радио');
+await waitFor(() => window.__olivie.game.panel === 'radio');
+const rb = await page.locator('[data-hold=radio]').boundingBox();
+await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+await page.mouse.down();
+await waitFor(() => !window.__olivie.game.radio.broken);
+await page.mouse.up();
+check('радио починено', (await g(() => window.__olivie.game.radio.repairs)) === 1);
+
+// финал: остальные ингредиенты готовы, картошка в 2:00
 await page.click('#dev [data-d=prepare]');
 await page.click('#dev [data-d=jump]');
-await waitFor(() => window.__olivie.game.t > 270.3);
+await waitFor(() => window.__olivie.game.t > 120.3);
 await shot('14_potato_ready');
-check('картошка готова в 4:30', (await g(() => window.__olivie.game.potato)) === 'ready');
+check('картошка готова в 2:00', (await g(() => window.__olivie.game.potato)) === 'ready');
 const t0 = await g(() => window.__olivie.game.t);
 await clickLabel('Плита');
 await waitFor(() => window.__olivie.game.panel === 'stove');
