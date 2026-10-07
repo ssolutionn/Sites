@@ -57,7 +57,7 @@ async function noAction() { await waitFor(() => !window.__sueta.session.action, 
 const U = 0.042;
 // Нарезка кубиками мышью: полоски, R, поперёк.
 async function cutCubes() {
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 4; pass++) {
     for (let g = 0; g < 12; g++) {
       const wide = await sess(`(() => { const it = s.boardCur(); const w = it.pieces.filter(p => p.w > 1.25).sort((a,b)=>a.x-b.x)[0]; return w ? { x: w.x, z: w.z + w.d/2, w: w.w } : null; })()`);
       if (!wide) break;
@@ -65,6 +65,7 @@ async function cutCubes() {
       const n = await sess('s.boardCur().cuts');
       if (g > 10) break;
     }
+    if (pass >= 1 && !(await sess('s.boardCur().pieces.some(p => p.w > 1.25 || p.d > 1.25)'))) break;
     await page.keyboard.press('KeyR'); await wait(150);
   }
 }
@@ -89,6 +90,12 @@ try {
   await page.goto(url + '?dev&seed=3');
   await wait(2500);
   await shot('01_menu');
+  if (part === 'late' || part === 'd7') {
+    const upto = part === 'd7' ? 6 : 5;
+    // Поздние дни отдельно: дни 1–5 отмечены пройденными через сохранение (их проверяет полный прогон).
+    await S((upto) => { const sv = window.__sueta.save; sv.data.days.forEach((d, i) => { if (i < upto) { d.completed = true; d.unlocked = true; d.best = d.last = { D: 90, dishes: {}, order: 100, time: 0 }; } }); sv.data.days[upto].unlocked = true; sv.write(); }, upto);
+    await page.reload(); await wait(2500);
+  } else {
   await page.click('[data-ui=new]'); await wait(500);
   await shot('02_intro');
   await page.click('[data-ui=enter]'); await wait(1500);
@@ -162,6 +169,7 @@ try {
   check('после перезагрузки день 1 сохранён', await S(() => window.__sueta.save.data.days[0].completed && window.__sueta.save.data.days[1].unlocked));
   await shot('10_menu_after_reload');
 
+  }
   // ---------- общие помощники для дней 2–7 ----------
   async function startNext() {
     if (await page.locator('[data-ui=nextDay]').count()) await page.click('[data-ui=nextDay]');
@@ -244,6 +252,7 @@ try {
   }
   const timings = [];
 
+  if (part === 'all') {
   // ---------- день 2 ----------
   await startNext();
   check('день 2 открыт', (await sess('s.day.id')) === 2);
@@ -375,6 +384,8 @@ try {
   await S(() => window.__sueta.session.fastForward(Math.max(0, 152 - window.__sueta.session.t)));
   await finishDayUI(5);
 
+  }
+  if (part !== 'd7') {
   // ---------- день 6 ----------
   await startNext();
   await phoneOrder('Виноград', 1);
@@ -385,10 +396,11 @@ try {
   await boardDo('Огурец', 'round');
   await trayItem('canape');
   const sk = await sess('s.dishes.canape.work.skewers.map(s => s.slots)');
-  const piles = await S(async () => (await import('/src/campaign/layout.js').catch(() => null))?.CANAPE_PILES ?? null);
-  const P = [{ x: -0.2, z: 0.165 }, { x: -0.07, z: 0.165 }, { x: 0.06, z: 0.165 }, { x: 0.19, z: 0.165 }];
-  await drag([[P[0].x, P[0].z], [0.4, 0.3]], 5);
-  check('мимо шпажки — кусочек вернулся', (await sess('s.canapeSupply().bread')) === 8);
+    const P = [{ x: -0.2, z: 0.115 }, { x: -0.07, z: 0.115 }, { x: 0.06, z: 0.115 }, { x: 0.19, z: 0.115 }];
+  const breadBefore = await sess('s.canapeSupply().bread');
+  await drag([[P[0].x, P[0].z], [0.3, 0.12]], 5);
+  const breadAfter = await sess('s.canapeSupply().bread');
+  check('мимо шпажки — кусочек вернулся', breadBefore > 0 && breadAfter === breadBefore && !(await sess('s.tray.drag')), `${breadBefore} → ${breadAfter}`);
   for (let i = 0; i < 8; i++) for (let k = 0; k < 4; k++) { const pr = (k + i) % 4; await drag([[P[pr].x, P[pr].z], [sk[i][k].x, sk[i][k].z]], 5); }
   await shot('d6_canape');
   await btn('Готово — на стол'); await wait(300);
@@ -411,6 +423,7 @@ try {
   await wait(600); await shot('d6_puddle');
   await finishDayUI(6);
 
+  }
   // ---------- день 7 ----------
   await startNext();
   await phoneOrder('Маринад', 1);
@@ -425,15 +438,19 @@ try {
   await goStation('Праздничный стол', 'table'); await wait(400);
   const cards = await page.locator('#panel .dish-card[data-dish]').count();
   for (let i = 0; i < 9; i++) {
-    const card = page.locator('#panel .dish-card[data-dish]').filter({ hasNotText: '✓' }).first();
+    const card = page.locator('#panel .dish-card[data-dish]:not(.placed)').first();
+    await card.waitFor({ state: 'visible', timeout: 10000 });
     const id = await card.getAttribute('data-dish');
     const free = await S(() => { const s = window.__sueta.session; const used = new Set(Object.values(s.table.placed)); for (let k = 0; k < 10; k++) if (!used.has(k)) return k; return -1; });
-    const slot = await S(async (k) => { const v = window.__sueta.view; const L = await import('/src/campaign/layout.js').catch(() => null); return null; }, free);
     const sl = [[-0.27,-0.34],[0,-0.34],[0.27,-0.34],[-0.405,0],[-0.135,0],[0.135,0],[0.405,0],[-0.27,0.34],[0,0.34],[0.27,0.34]][free];
     const target = await S(([x, z]) => window.__sueta.view.localToScreen('table', x, z), sl);
-    const b = await card.boundingBox();
+    let b = null; for (let k = 0; k < 20 && !b; k++) { b = await card.boundingBox(); if (!b) await wait(150); }
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down();
-    await page.mouse.move(target.x, target.y, { steps: 8 }); await page.mouse.up(); await wait(200);
+    await page.mouse.move(target.x, target.y, { steps: 8 }); await page.mouse.up();
+    // дождаться перерисовки панели (при программном рендере 1–3 кадра в секунду)
+    await waitFor((n) => Object.keys(window.__sueta.session.table.placed).length === n && document.querySelectorAll('#panel .dish-card.placed').length >= n, 8000, i + 1);
+    const st = await sess('({ placed: Object.keys(s.table.placed).length, panel: s.panel, action: s.action?.type ?? null, target: !!s.heroine.target, station: s.heroine.station, hint: s.hint?.text ?? null })');
+    if (st.placed !== i + 1) console.log('serve-diag', i, id, free, JSON.stringify(target), JSON.stringify(st));
   }
   await shot('d7_table_serving');
   check('9 блюд расставлены перетаскиванием', (await sess('Object.keys(s.table.placed).length')) === 9);

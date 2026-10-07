@@ -15,6 +15,7 @@ const UNIT = BOARD_UNIT;
 
 export class CampaignView {
   constructor(sv) {
+    this.catVis = { segs: [], seg: 0, t: 0, mode: 'home' };
     this.sv = sv;
     this.scene = sv.scene;
     this.k = sv.k;
@@ -283,8 +284,9 @@ export class CampaignView {
         return false; // базовый крупный план доски
       case 'c-tray': {
         const a = S.tray.anchor;
-        look.set(a.x, ISLAND_H, a.z + 0.04);
-        pos.set(a.x, ISLAND_H + 0.6 * back, a.z + 0.36 * back);
+        // стопки, рабочая тарелка и выкладка у ближнего края должны оставаться выше нижней панели
+        look.set(a.x, ISLAND_H, a.z + 0.06);
+        pos.set(a.x, ISLAND_H + 0.66 * back, a.z + 0.06 + 0.36 * back);
         return true;
       }
       case 'c-bowl': {
@@ -308,15 +310,17 @@ export class CampaignView {
       }
       case 'c-table': {
         const T = CLAYOUT.table;
-        look.set(T.x, T.h, T.z + 0.02);
-        pos.set(T.x + 0.02, T.h + 1.15 * back, T.z + 0.85 * back);
+        // ближний ряд мест должен оставаться выше нижней панели сервировки
+        look.set(T.x, T.h, T.z + 0.15);
+        pos.set(T.x + 0.02, T.h + 1.5 * back, T.z + 0.15 + 1.1 * back);
         return true;
       }
       case 'c-final': {
         const T = CLAYOUT.table;
         const a = this.time * 0.15;
-        look.set(T.x + 0.2, T.h + 0.1, T.z);
-        pos.set(T.x + 0.2 + Math.sin(a) * 0.6, T.h + 0.9, T.z + 1.5 + Math.cos(a) * 0.2);
+        // в кадре стол и героиня за ним (лицо не обрезано)
+        look.set(T.x + 0.2, T.h + 0.32, T.z - 0.1);
+        pos.set(T.x + 0.2 + Math.sin(a) * 0.6, T.h + 1.0, T.z + 1.75 + Math.cos(a) * 0.2);
         return true;
       }
       default:
@@ -590,8 +594,9 @@ export class CampaignView {
     animateHeroine(sv.heroine, hp.pose, t, hp.progress);
     if (mode === 'final') {
       sv.heroine.visible = true;
-      sv.heroine.position.set(CLAYOUT.table.x + 0.7, 0, CLAYOUT.table.z + 0.75);
-      sv.heroine.rotation.y = -0.5;
+      // за дальним краем стола, лицом к камере: стол и героиня в кадре, камера её не задевает
+      sv.heroine.position.set(CLAYOUT.table.x + 0.3, 0, CLAYOUT.table.z - 0.85);
+      sv.heroine.rotation.y = 0.15;
       setExpression(sv.heroine, false);
       animateHeroine(sv.heroine, 'joy', t);
     }
@@ -960,7 +965,6 @@ export class CampaignView {
       case 'chicken':
         o.tex.update();
         o.chicken.visible = !w.inOven;
-        o.overlay.visible = !w.inOven;
         o.form.visible = !w.inOven;
         break;
       default:
@@ -1091,10 +1095,10 @@ export class CampaignView {
         o.chicken = F.chicken();
         o.chicken.position.y = 0.004;
         g.add(o.chicken);
-        o.tex = new F.MaskTexture(w.mask, 0xa8461a, { alphaMax: 0.85 });
+        // маринад окрашивает саму кожу: белый фон маски не меняет цвет, след кисти — тёплый оранжево-коричневый
+        o.tex = new F.MaskTexture(w.mask, 0xe0883a, { alphaMax: 0.85, base: 0xffffff });
         this.trayTex.push(o.tex);
-        o.overlay = F.maskPlane(o.tex, 0.26, 0.17, 0.092);
-        g.add(o.overlay);
+        F.chickenMarinadeMap(o.chicken, o.tex, 0.26, 0.17);
         break;
       }
       default:
@@ -1298,7 +1302,9 @@ export class CampaignView {
 
   _updateTable(s, mode) {
     const base = this.tableBase ?? [];
-    const placed = s.day.finalServe ? s.table.placed : null;
+    // в финале без только что сделанной расстановки (открыт из меню) — все блюда на местах по порядку
+    const fresh = s.day.finalServe && (mode !== 'final' || Object.keys(s.table.placed).length === DISH_ORDER.length);
+    const placed = fresh ? s.table.placed : null;
     const entries = [];
     if (placed) for (const [id, slot] of Object.entries(placed)) entries.push([id, slot]);
     else {

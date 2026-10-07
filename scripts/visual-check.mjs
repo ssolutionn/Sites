@@ -31,6 +31,52 @@ async function day(i) {
   await page.click('[data-ui=enter]'); await wait(1000);
 }
 try {
+  if (process.env.FINAL) {
+    // День 7: маринад на коже курицы, затем финальный стол.
+    await page.goto(url + '?dev&seed=5'); await wait(1500);
+    await S(() => localStorage.clear()); await page.goto(url + '?dev&seed=5'); await wait(2000);
+    await S(() => { const sv = window.__sueta.save; sv.data.days.forEach((d, i) => { if (i < 6) { d.completed = true; d.unlocked = true; d.best = d.last = { D: 90, dishes: {}, order: 100, time: 0 }; } }); sv.data.days[6].unlocked = true; sv.write(); });
+    await page.reload(); await wait(2500);
+    await page.click('[data-ui=continue]'); await wait(400); await page.click('[data-ui=enter]'); await wait(1000);
+    await S(() => { const s = window.__sueta.session; s.triggers = []; s.inventory.add('marinade', 1); });
+    await openPanel('tray');
+    await btn('Курица'); await wait(400);
+    const p0 = await local(-0.1, -0.03); await page.mouse.move(p0.x, p0.y); await page.mouse.down();
+    for (const [x, z] of [[0.0, -0.03], [0.1, -0.03], [0.1, 0.0], [0.0, 0.0], [-0.08, 0.05]]) { const p = await local(x, z); await page.mouse.move(p.x, p.y, { steps: 6 }); }
+    await page.mouse.up(); await wait(800);
+    await shot('v_d7_marinade_half');
+    console.log('zones', JSON.stringify(await sess('s.dishes.chicken.work.mask.zoneCoverage()')));
+    await S(() => { const sv = window.__sueta.save; sv.data.days.forEach((d) => { d.completed = true; d.unlocked = true; d.best = d.last = { D: 90, dishes: {}, order: 100, time: 0 }; }); sv.data.finished = true; delete sv.data.settings.inProgress; sv.write(); });
+    await page.reload(); await wait(2500);
+    await page.click('[data-ui=continue]'); await wait(4000);
+    await shot('v_final_a'); await wait(6000); await shot('v_final_b');
+    throw new Error('final done');
+  }
+  if (process.env.TABLE) {
+    // Стол дня 7: дни 1–6 отмечены пройденными через сохранение, затем крупный план стола и подноса канапе.
+    await page.goto(url + '?dev&seed=5'); await wait(1500);
+    await S(() => localStorage.clear()); await page.goto(url + '?dev&seed=5'); await wait(2000);
+    await S(() => { const sv = window.__sueta.save; sv.data.days.forEach((d, i) => { if (i < 6) { d.completed = true; d.unlocked = true; d.best = d.last = { D: 90, dishes: {}, order: 100, time: 0 }; } }); sv.data.days[6].unlocked = true; sv.write(); });
+    await page.reload(); await wait(2500);
+    await page.click('[data-ui=continue]'); await wait(400); await page.click('[data-ui=enter]'); await wait(1000);
+    await S(() => { window.__sueta.session.triggers = []; });
+    await openPanel('table'); await wait(800);
+    await shot('v_d7_table');
+    const vis = await S(() => { const v = window.__sueta.view; const out = []; for (const [x, z] of [[-0.27,0.46],[0,0.46],[0.27,0.46],[-0.53,0],[0.53,0],[0,-0.46]]) { const p = v.localToScreen('table', x, z); out.push([x, z, Math.round(p.x), Math.round(p.y)]); } return { slots: out, panelTop: Math.round(document.getElementById('panel').getBoundingClientRect().top), W: innerWidth }; });
+    console.log('table', JSON.stringify(vis));
+    const SL = [[-0.27,-0.34],[0,-0.34],[0.27,-0.34],[-0.405,0],[-0.135,0],[0.135,0],[0.405,0],[-0.27,0.34],[0,0.34],[0.27,0.34]];
+    for (let i = 0; i < 9; i++) {
+      const card = page.locator('#panel .dish-card[data-dish]').filter({ hasNotText: '✓' }).first();
+      const id = await card.getAttribute('data-dish');
+      const t = await S(([x, z]) => window.__sueta.view.localToScreen('table', x, z), SL[i]);
+      const b = await card.boundingBox();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down();
+      await page.mouse.move(t.x, t.y, { steps: 8 }); await page.mouse.up(); await wait(300);
+      console.log('serve', i, id, JSON.stringify(t), JSON.stringify(await sess('s.table.placed')), await sess('s.hint?.text ?? s.hint'));
+    }
+    await shot('v_d7_table_served');
+    throw new Error('table done');
+  }
   // День 3: икра на бутербродах
   if (!process.env.SKIP3) {
   await day(2);

@@ -74,8 +74,9 @@ function add(parent, geo, mat, x = 0, y = 0, z = 0) {
 
 // ---------- маска покрытия как текстура ----------
 export class MaskTexture {
-  constructor(mask, color, { soft = true, invert = false, alphaMax = 1 } = {}) {
+  constructor(mask, color, { soft = true, invert = false, alphaMax = 1, base = null } = {}) {
     this.mask = mask;
+    this.base = base === null ? null : `#${new THREE.Color(base).getHexString()}`;
     this.invert = invert;
     this.alphaMax = alphaMax;
     const s = 6;
@@ -96,6 +97,10 @@ export class MaskTexture {
     this.version = this.mask.version;
     const { ctx, s, mask } = this;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    if (this.base) {
+      ctx.fillStyle = this.base;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
     const c = this.color;
     const rgb = `${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)}`;
     for (let r = 0; r < mask.rows; r++)
@@ -378,6 +383,28 @@ export function chicken() {
   }
   g.userData = { skin };
   return g;
+}
+
+// Маска маринада «на коже»: проекция сверху на все части тушки (без плоскости над курицей).
+export function chickenMarinadeMap(g, tex, w, d) {
+  g.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
+  const v = new THREE.Vector3();
+  const mat = g.userData.skin.clone();
+  mat.map = tex.texture;
+  g.traverse((o) => {
+    if (!o.isMesh || o.material !== g.userData.skin) return;
+    const m4 = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+    const pos = o.geometry.attributes.position;
+    const uv = o.geometry.attributes.uv;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m4);
+      uv.setXY(i, v.x / w + 0.5, 0.5 - v.z / d);
+    }
+    uv.needsUpdate = true;
+    o.material = mat;
+  });
+  g.userData.skin = mat;
 }
 
 export function chickenColor(g, stage, doneness = 0) {

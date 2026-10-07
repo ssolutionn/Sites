@@ -171,7 +171,11 @@ function boot() {
 
   function showFinal() {
     mode = 'final';
-    session = session ?? new KitchenSession({ dayIndex: 6, seed: 1, tableDishes: DISH_ORDER });
+    if (!session) {
+      // финал из меню после перезагрузки: сцена ещё не готовилась
+      session = new KitchenSession({ dayIndex: 6, seed: 1, tableDishes: DISH_ORDER });
+      view.reset();
+    }
     view.setActive(true);
     view.setTableDishes(DISH_ORDER);
     ui.hideKitchen();
