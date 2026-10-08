@@ -3,6 +3,8 @@
 import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER } from '../campaign/data.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { NEUTRAL, LOGO_URL } from '../view/textures.js';
+import { FEED_AUTHORS } from '../campaign/feed-data.js';
+import { feedArt, dishArt, heartIcon } from './feed-art.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (sec) => {
@@ -27,6 +29,14 @@ function phoneClock(t) {
   return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
+// Время поста в ленте: сегодня — часы, вчера — «вчера, 15:30», раньше — дата (день 1 = 25 декабря).
+function feedWhen(day, at, today) {
+  const clock = phoneClock(at);
+  if (day === today) return clock;
+  if (day === today - 1) return `вчера, ${clock}`;
+  return `${24 + day} дек., ${clock}`;
+}
+
 const btn = (label, act, args = [], cls = '', disabled = false, title = '') => `<button class="${cls}" data-act="${act}" data-args='${esc(JSON.stringify(args))}' ${disabled ? 'disabled' : ''} title="${esc(title)}">${label}</button>`;
 
 export class PhoneUI {
@@ -38,12 +48,16 @@ export class PhoneUI {
     this.sub = null; // открытый чат или рецепт
     this.tab = null;
     this.sig = null;
+    this.fresh = new Set(); // посты, которые были новыми при открытии ленты (подсвечены до ухода с неё)
+    this.pop = null; // пост, у которого сердечко анимируется в этом кадре
+    this.view = null;
     this.bindInputs();
     root.addEventListener('click', (e) => {
       const nav = e.target.closest('[data-nav]');
       if (nav) {
         this.sound?.unlock();
         this.sound?.play('click');
+        this.fresh.clear();
         const [app, sub, tab] = nav.dataset.nav.split('|');
         this.app = app;
         this.sub = sub || null;
@@ -63,6 +77,7 @@ export class PhoneUI {
       if (b) {
         this.sound?.unlock();
         const args = b.dataset.args ? JSON.parse(b.dataset.args) : [];
+        if (b.dataset.act === 'likePost') this.pop = args[0];
         this.act(b.dataset.act, ...args);
         this.sig = null;
       }
@@ -86,17 +101,40 @@ export class PhoneUI {
     this.lastApp = a;
     this.sig = null;
     this.anim = true;
+    this.fresh.clear();
     this.root.classList.remove('hidden');
   }
 
+  // Вкладка «Андрея» по умолчанию: лента, если новое только там, иначе чаты.
+  _andreyTab(s) {
+    if (this.tab !== 'feed' && this.tab !== 'chats') this.tab = !s.phone.messages.some((m) => !m.read) && s.feedUnread() > 0 ? 'feed' : 'chats';
+    return this.tab;
+  }
+
   render(s) {
-    if (this.app === 'andrey' && s.phone.unread) this.act('markRead');
+    let feedSig = '';
+    if (this.app === 'andrey') {
+      const tab = this._andreyTab(s);
+      if (tab === 'chats' && s.phone.messages.some((m) => !m.read)) this.act('markRead');
+      if (tab === 'feed') {
+        const fresh = s.phone.feed.filter((f) => !f.read);
+        for (const f of fresh) this.fresh.add(f.id);
+        if (fresh.length) this.act('markFeedRead');
+        feedSig = s.feedItems().map((i) => `${i.key}:${i.likes}${i.liked ? '+' : ''}:${i.talk}`).join() + [...this.fresh].join();
+      }
+      feedSig += `|${s.feedUnread()}`;
+    }
     const o = s.delivery.order;
-    const sig = [this.app, this.sub, this.tab, s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, !!s.delivery.bag, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' || this.app === 'home' ? Math.floor(s.t) : '', s.kitchenTimers.length].join('§');
+    const sig = [this.app, this.sub, this.tab, s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, !!s.delivery.bag, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' || this.app === 'home' ? Math.floor(s.t) : '', s.kitchenTimers.length, feedSig, this.app === 'home' ? s.phone.unread : ''].join('§');
     if (sig === this.sig) return;
     this.sig = sig;
+    // Прокрутка того же экрана сохраняется при перерисовке (новый пост, рост лайков).
+    const view = [this.app, this.sub, this.tab].join('|');
+    const keep = view === this.view ? this.root.querySelector('.app-body')?.scrollTop ?? 0 : 0;
+    this.view = view;
     const screen = this.app === 'home' ? this._home(s) : `<div class="app-screen ${this.anim ? 'enter' : ''}">${this._app(s)}</div>`;
     this.anim = false;
+    this.pop = null;
     const push = s.alerts.filter((a) => a.urgent).slice(0, 1).map((a) => `<div class="ph-push">⚠️ ${esc(a.text)}</div>`).join('');
     this.root.innerHTML = `<div class="device ${this.app === 'home' ? '' : 'light'}">
       <div class="island"></div>
@@ -106,6 +144,10 @@ export class PhoneUI {
       <div class="ph-home" data-nav="home" title="Домой"></div>
       ${btn('✕', 'closePanel', [], 'ph-close', false, 'Убрать телефон (Esc)')}
     </div>`;
+    if (keep) {
+      const body = this.root.querySelector('.app-body');
+      if (body) body.scrollTop = keep;
+    }
   }
 
   // ---------- домашний экран ----------
@@ -199,8 +241,10 @@ export class PhoneUI {
 
   // ---------- Андрей: мессенджер и фото ----------
   _andrey(s) {
-    const tab = this.tab === 'feed' ? 'feed' : 'chats';
-    const seg = `<div class="seg"><button data-nav="andrey||chats" class="${tab === 'chats' ? 'on' : ''}">Чаты</button><button data-nav="andrey||feed" class="${tab === 'feed' ? 'on' : ''}">Лента</button></div>`;
+    const tab = this._andreyTab(s);
+    const nMsg = s.phone.messages.filter((m) => !m.read).length;
+    const nFeed = s.feedUnread();
+    const seg = `<div class="seg"><button data-nav="andrey||chats" class="${tab === 'chats' ? 'on' : ''}">Чаты${nMsg && tab !== 'chats' ? `<em>${nMsg}</em>` : ''}</button><button data-nav="andrey||feed" class="${tab === 'feed' ? 'on' : ''}">Лента${nFeed && tab !== 'feed' ? `<em>${nFeed}</em>` : ''}</button></div>`;
     const head = this._head('Андрей', 'ловит даже на кухне');
     if (tab === 'chats' && this.sub) {
       const msgs = s.phone.messages.filter((m) => m.from === this.sub);
@@ -217,18 +261,28 @@ export class PhoneUI {
       return `${head}${seg}<div class="app-body">${rows || '<div class="empty">Пока тихо. Сообщения придут сюда.</div>'}</div>`;
     }
     const done = Object.values(s.dishes).filter((d) => d.done && !s.phone.posts.some((p) => p.dishId === d.id));
-    const mine = s.phone.posts
-      .map((p) => {
-        const d = s.dishes[p.dishId];
-        const likes = s.postLikes(p);
-        const com = likes > 40 ? ['Верка: Вау, как в ресторане! 😍', 'Мама: Умница, дочка!'] : likes > 10 ? ['Верка: Выглядит вкусно!'] : [];
-        return `<div class="post"><div class="post-h"><span class="ava">🙋‍♀️</span><b>Я</b><small>${phoneClock(p.t)}</small></div><div class="post-img dish">${DICON[p.dishId] ?? '🍽'}<span>${esc(d.recipe.name)}</span></div><div class="post-f">❤️ ${likes} · 💬 ${com.length}</div>${com.map((c) => `<div class="com">${esc(c)}</div>`).join('')}</div>`;
-      })
-      .join('');
-    const verka = s.phone.messages.some((m) => m.photo) ? `<div class="post"><div class="post-h"><span class="ava">🌴</span><b>Верка</b><small>у моря</small></div><div class="post-img sea"><div class="sun"></div>🌴</div><div class="post-f">❤️ 128 · «Скучаем по снегу!»</div></div>` : '';
+    const today = s.day?.id ?? 1;
+    const posts = s.feedItems().map((it) => this._post(s, it, today)).join('');
     return `${head}${seg}<div class="app-body feed">
       ${done.length ? `<div class="snap">${done.map((d) => btn(`📷 Сфотографировать: ${esc(d.recipe.short)}`, 'postPhoto', [d.id], 'primary wide')).join('')}<small>+${BONUS.perPhoto} баллов за фото</small></div>` : '<div class="fine">Приготовь блюдо — и сфотографируй его для друзей.</div>'}
-      ${mine}${verka}</div>`;
+      ${posts || '<div class="empty">В ленте пока тихо. Друзья ещё режут салаты.</div>'}</div>`;
+  }
+
+  // Пост ленты: автор и время, текст, картинка или опрос, лайк, превью комментариев.
+  _post(s, it, today) {
+    const a = FEED_AUTHORS[it.author] ?? { name: it.author, ava: '🙂' };
+    const isNew = !it.mine && this.fresh.has(it.id);
+    const pic = it.mine ? dishArt(DICON[it.dishId] ?? '🍽', s.dishes[it.dishId]?.recipe.name ?? '', it.alt) : it.art ? feedArt(it.art, it.alt) : '';
+    const poll = it.poll ? `<div class="poll">${it.poll.map(([label, pct], i) => `<div class="pl ${i === 0 ? 'top' : ''}"><span class="pl-bar" style="width:${pct}%"></span><span class="pl-t">${esc(label)}</span><b>${pct} %</b></div>`).join('')}</div>` : '';
+    const like = it.mine
+      ? `<span class="like mine" title="Лайки друзей">${heartIcon(true)} ${it.likes}</span>`
+      : `<button class="like ${it.liked ? 'on' : ''} ${it.liked && this.pop === it.id ? 'pop' : ''}" data-act="likePost" data-args='${esc(JSON.stringify([it.id]))}' aria-pressed="${it.liked}" title="${it.liked ? 'Убрать лайк' : 'Нравится'}">${heartIcon(it.liked)} ${it.likes}</button>`;
+    const coms = it.comments.map((c) => `<div class="com"><b>${esc(FEED_AUTHORS[c.who]?.name ?? c.who)}</b>${esc(c.text)}</div>`).join('');
+    const more = it.talk > it.comments.length ? `<div class="com-more">Все комментарии (${it.talk})</div>` : '';
+    return `<article class="post ${isNew ? 'new' : ''}" data-post="${esc(it.key)}">
+      <div class="post-h"><span class="ava" style="--ava:${a.color ?? '#8f84ff'}">${a.ava}</span><span class="who"><b>${esc(a.name)}${a.badge ? ' <i class="tick">✓</i>' : ''}</b>${a.note ? `<small>${esc(a.note)}</small>` : ''}</span><span class="when">${isNew ? '<i class="new-dot">новое</i>' : ''}${feedWhen(it.day, it.at, today)}</span></div>
+      ${it.text ? `<p class="post-t">${esc(it.text)}</p>` : ''}${poll}${pic ? `<div class="post-pic">${pic}</div>` : ''}
+      <div class="post-f">${like}<span class="talk">💬 ${it.talk}</span></div>${coms}${more}</article>`;
   }
 
   // ---------- Банк: бонусы ----------

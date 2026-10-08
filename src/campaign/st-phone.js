@@ -1,6 +1,7 @@
 // Телефон: сообщения, список покупок, заказ доставки, получение за кадром.
 import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR } from './data.js';
 import { CLAYOUT } from './layout.js';
+import { FEED_POSTS, FEED_BY_ID, MY_POST, FEED_TUNE } from './feed-data.js';
 
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
 
@@ -91,10 +92,79 @@ export const phoneMethods = {
     this.kitchenTimers = this.kitchenTimers.filter((x) => !x.done || this.t < x.end + 8);
   },
 
+  // Прочитаны чаты; непрочитанные посты ленты остаются в счётчике.
   markRead() {
     for (const m of this.phone.messages) m.read = true;
-    this.phone.unread = 0;
+    this.phone.unread = this.feedUnread();
     this._removeAlert('phone');
+  },
+
+  // ---------- «Андрей»: лента ----------
+  // Посты прошлых дней уже в ленте и прочитаны; посты сегодняшнего дня приходят по часам.
+  _initFeed() {
+    const day = this.practice ? 0 : this.day?.id ?? 0;
+    this.phone.feed = FEED_POSTS.filter((p) => p.day < day).map((p) => ({ id: p.id, read: true }));
+    this.phone.liked = {};
+    this.feedQueue = FEED_POSTS.filter((p) => p.day === day).sort((a, b) => a.at - b.at);
+  },
+
+  _updateFeed() {
+    while (this.feedQueue?.length && this.t >= this.feedQueue[0].at) {
+      const p = this.feedQueue.shift();
+      this.phone.feed.push({ id: p.id, read: false });
+      this.phone.unread++;
+      this._emit('feedPost', { id: p.id });
+    }
+  },
+
+  /** Сколько постов ленты ещё не просмотрено. */
+  feedUnread() {
+    return this.phone.feed.filter((f) => !f.read).length;
+  },
+
+  /** Лента просмотрена: посты прочитаны, в счётчике остаются только сообщения чатов. */
+  markFeedRead() {
+    for (const f of this.phone.feed) f.read = true;
+    this.phone.unread = this.phone.messages.filter((m) => !m.read).length;
+    return true;
+  },
+
+  /** Лайк поста ленты (повторное нажатие снимает). Своё фото лайкнуть нельзя. */
+  likePost(id) {
+    if (!this.phone.feed.some((f) => f.id === id)) return false;
+    const on = !this.phone.liked[id];
+    if (on) this.phone.liked[id] = true;
+    else delete this.phone.liked[id];
+    this._emit('feedLike', { id, on });
+    return true;
+  },
+
+  // Лайки поста друзей: свежий пост добирает их ступеньками, прошлые дни — полностью; +1 за свой лайк.
+  feedLikes(p) {
+    let k = 1;
+    if (p.day === (this.day?.id ?? 0)) {
+      const age = Math.floor(Math.max(0, this.t - p.at) / FEED_TUNE.growStep) * FEED_TUNE.growStep;
+      k = Math.min(1, FEED_TUNE.growFrom + ((1 - FEED_TUNE.growFrom) * age) / FEED_TUNE.growTime);
+    }
+    return Math.round(p.likes * k) + (this.phone.liked[p.id] ? 1 : 0);
+  },
+
+  /** Лента для показа: посты друзей и фото героини, новые сверху.
+   *  Элемент: { key, id, mine, author, text, art, alt, poll, dishId, day, at, likes, liked, comments, talk, unread }. */
+  feedItems() {
+    const day = this.day?.id ?? 0;
+    const npc = this.phone.feed.map((f) => {
+      const p = FEED_BY_ID[f.id];
+      return { key: p.id, id: p.id, mine: false, author: p.author, text: p.text, art: p.art, alt: p.alt, poll: p.poll, dishId: null, day: p.day, at: p.at, likes: this.feedLikes(p), liked: !!this.phone.liked[p.id], comments: p.comments.slice(0, FEED_TUNE.preview), talk: p.talk, unread: !f.read };
+    });
+    const mine = this.phone.posts.map((p) => {
+      const likes = this.postLikes(p);
+      const Q = p.Q ?? 0;
+      const com = MY_POST.comments.filter((c) => likes >= c.likes && (c.minQ == null || Q >= c.minQ) && (c.maxQ == null || Q <= c.maxQ));
+      const name = this.dishes[p.dishId]?.recipe.name ?? '';
+      return { key: `me-${p.id}`, id: p.id, mine: true, author: 'me', text: MY_POST.text.replace('{dish}', name), art: null, alt: name, poll: null, dishId: p.dishId, day, at: p.t, likes, liked: false, comments: com.slice(-FEED_TUNE.preview), talk: com.length, unread: false };
+    });
+    return [...mine, ...npc].sort((a, b) => b.day - a.day || b.at - a.at);
   },
 
   // Что ещё понадобится для незавершённых шагов дня, с учётом уже зарезервированного.
