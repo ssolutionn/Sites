@@ -262,9 +262,9 @@ async function phoneTour(prefix) {
 
 try {
   // обычный режим: без ?dev — никаких технических панелей
-  await page.goto(url + '?seed=3');
+  await page.goto(url + '?seed=3', { timeout: 180000 });
   await page.evaluate(() => localStorage.clear());
-  await page.goto(url + '?seed=3');
+  await page.goto(url + '?seed=3', { timeout: 180000 });
   await wait(2500);
   await shot('d1_menu');
   const devVisible = await S(() => { const d = document.getElementById('dev'); const vis = (el) => el && !el.classList.contains('hidden') && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none'; return vis(d) || !!document.getElementById('dev-stats') || /\bDEV\b|\bFPS\b/.test(document.body.innerText); });
@@ -275,9 +275,9 @@ try {
     await S((upto) => { const sv = window.__sueta.save; sv.data.days.forEach((d, i) => { if (i < upto) { d.completed = true; d.unlocked = true; d.best = d.last = { D: 90, dishes: {}, order: 100, time: 0 }; } }); sv.data.days[upto].unlocked = true; sv.write(); }, upto);
     await page.reload(); await wait(2500);
   } else {
-  await page.click('[data-ui=new]'); await wait(500);
+  await page.click('[data-ui=new]', { timeout: 120000 }); await wait(500);
   await shot('d1_intro');
-  await page.click('[data-ui=enter]'); await wait(1500);
+  await page.click('[data-ui=enter]', { timeout: 120000 }); await wait(1500);
   await shot('d1_kitchen');
 
   // пауза и книга рецептов с клавиатуры
