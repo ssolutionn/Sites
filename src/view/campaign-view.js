@@ -9,6 +9,7 @@ import { animateHeroine, setExpression } from './heroine.js';
 import { animateCat } from './cat.js';
 import { tex } from './textures.js';
 import * as F from './food.js';
+import { CutBoardView } from './cutboard.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 const UNIT = BOARD_UNIT;
@@ -35,6 +36,7 @@ export class CampaignView {
   setActive(on) {
     this.active = on;
     this.root.visible = on;
+    this.sv.board.group.visible = !on;
     // реквизит старого раунда, который в кампании не нужен
     for (const r of Object.values(this.k.rings)) r.visible = false;
   }
@@ -95,6 +97,7 @@ export class CampaignView {
     this.roundGroup = new THREE.Group();
     this.roundGroup.position.copy(k.boardCenter);
     this.root.add(this.roundGroup);
+    this.cutBoard = new CutBoardView(this.root, k.boardCenter);
 
     // раковина
     const sk = S.sink.anchor;
@@ -475,6 +478,7 @@ export class CampaignView {
     this.sinkItem.clear();
     this.shreds.clear();
     this.roundGroup.clear();
+    this.cutBoard.reset();
     this.catVis = { segs: [], seg: 0, t: 0, mode: 'home' };
     this.sv.reset();
     this.sv.cat.visible = true;
@@ -853,23 +857,9 @@ export class CampaignView {
   // ---------- доска ----------
   _updateBoard(s, dt, closeup) {
     const it = s.boardCur();
-    const isCube = it && !it.log && !it.grater;
-    const act = s.action?.type === 'cut' ? s.action : null;
-    const adapter = {
-      board: isCube ? { id: it.product, pieces: it.pieces, selectedId: null } : it?.log ? { id: it.product, pieces: [], selectedId: null } : null,
-      action: act ? { type: 'cut', elapsed: act.elapsed, duration: act.duration, data: { x: act.data.x } } : null,
-      phase: 'running',
-      bowl: { pieces: [], mixProgress: 0, mixed: false },
-      added: {},
-      holds: {},
-      panel: s.panel,
-    };
-    if (closeup && this.pointerLocal && s.panel === 'board') this.sv.board.hover = { x: this.pointerLocal.x / UNIT, z: this.pointerLocal.z / UNIT, pieceId: null };
-    else this.sv.board.hover = null;
-    this.sv.board.sync(adapter, dt, closeup);
-    this.sv.board.sample.visible = !!it && !it.grater;
-    if (it?.log) this.sv.board.sample.scale.set(0.5, 1, 1);
-    else this.sv.board.sample.scale.set(1, 1, 1);
+    // старая доска базового режима в кампании не рисуется: нож, руки и образец — в CutBoardView
+    this.sv.board.group.visible = false;
+    this.cutBoard.sync(s, dt, closeup, closeup && s.panel === 'board' ? this.pointerLocal : null);
     // кружочки
     const key = it?.log ? it.key + ':' + it.log.segments.map((q) => q.a.toFixed(4)).join(',') : null;
     if (key !== this.roundKey) {

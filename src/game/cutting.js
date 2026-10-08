@@ -38,13 +38,18 @@ export function initialBatch(w, d, nextId, profile = null, qty = 1, gap = 0.7) {
   const out = [];
   for (let i = 0; i < n; i++) {
     const dz = -total / 2 + d / 2 + i * (d + gap);
-    for (const p of initialPieces(w, d, nextId, profile)) out.push(shiftPiece(p, 0, dz));
+    for (const p of initialPieces(w, d, nextId, profile)) out.push(shiftPiece({ ...p, m: { cx: 0, cz: 0 } }, 0, dz));
   }
   return out;
 }
 
+// m — центр исходного продукта, из которого вырезан кусок (для рисунка мякоти на срезе).
+function shiftMeta(m, dx, dz) {
+  return m ? { ...m, cx: m.cx + dx, cz: m.cz + dz } : m;
+}
+
 function shiftPiece(p, dx, dz) {
-  return { ...p, x: p.x + dx, z: p.z + dz, ...(p.polygon ? { polygon: p.polygon.map((q) => ({ ...q, x: q.x + dx, z: q.z + dz })) } : {}) };
+  return { ...p, x: p.x + dx, z: p.z + dz, ...(p.m ? { m: shiftMeta(p.m, dx, dz) } : {}), ...(p.polygon ? { polygon: p.polygon.map((q) => ({ ...q, x: q.x + dx, z: q.z + dz })) } : {}) };
 }
 
 // Ломтик, центрированный на доске.
@@ -71,8 +76,8 @@ export function cutPiece(pieces, pieceId, cutX, { minWidth, maxPieces, nextId })
   const w2 = p.x + p.w - cutX;
   if (w1 < minWidth - EPS || w2 < minWidth - EPS) return { ok: false, reason: 'too-close' };
   if (maxPieces != null && pieces.length + 1 > maxPieces) return { ok: false, reason: 'limit' };
-  const left = p.polygon ? polygonPiece(nextId(), clipPolygon(p.polygon, cutX, true)) : makePiece(nextId(), p.x, p.z, w1, p.d);
-  const right = p.polygon ? polygonPiece(nextId(), clipPolygon(p.polygon, cutX, false)) : makePiece(nextId(), cutX, p.z, w2, p.d);
+  const left = withMeta(p.polygon ? polygonPiece(nextId(), clipPolygon(p.polygon, cutX, true)) : makePiece(nextId(), p.x, p.z, w1, p.d), p.m);
+  const right = withMeta(p.polygon ? polygonPiece(nextId(), clipPolygon(p.polygon, cutX, false)) : makePiece(nextId(), cutX, p.z, w2, p.d), p.m);
   if (!left || !right || pieceVolume(left) < EPS || pieceVolume(right) < EPS) return { ok: false, reason: 'too-close' };
   const out = [];
   for (const q of pieces) {
@@ -97,7 +102,7 @@ export function bounds(pieces) {
 // Поворот всего продукта на 90° вокруг центра с повторным центрированием.
 // Точка (x, z) -> (-z, x). Идентификаторы сохраняются.
 export function rotatePieces(pieces) {
-  const rotated = pieces.map((p) => p.polygon ? polygonPiece(p.id, p.polygon.map(q => ({ ...q, x: -q.z, z: q.x }))) : ({ ...p, x: -(p.z + p.d), z: p.x, w: p.d, d: p.w }));
+  const rotated = pieces.map((p) => withMeta(p.polygon ? polygonPiece(p.id, p.polygon.map(q => ({ ...q, x: -q.z, z: q.x }))) : ({ ...p, x: -(p.z + p.d), z: p.x, w: p.d, d: p.w }), p.m && { ...p.m, cx: -p.m.cz, cz: p.m.cx, rot: ((p.m.rot ?? 0) + 1) % 4 }));
   return recenter(rotated);
 }
 
@@ -106,7 +111,12 @@ export function recenter(pieces) {
   const b = bounds(pieces);
   const cx = (b.minX + b.maxX) / 2;
   const cz = (b.minZ + b.maxZ) / 2;
-  return pieces.map((p) => ({ ...p, x: p.x - cx, z: p.z - cz, ...(p.polygon ? { polygon: p.polygon.map(q => ({ ...q, x: q.x - cx, z: q.z - cz })) } : {}) }));
+  return pieces.map((p) => shiftPiece(p, -cx, -cz));
+}
+
+function withMeta(p, m) {
+  if (p && m) p.m = m;
+  return p;
 }
 
 // Свободное место для куска-замены: справа от текущего продукта.
@@ -114,7 +124,8 @@ export function placeBeside(pieces, w, d, id, source = null) {
   const b = bounds(pieces);
   const x = pieces.length ? b.maxX + 0.4 : -w/2;
   const z = pieces.length ? (b.minZ+b.maxZ)/2-d/2 : -d/2;
-  return source?.polygon ? polygonPiece(id,source.polygon.map(q=>({x:q.x-source.x+x,z:q.z-source.z+z}))) : makePiece(id,x,z,w,d);
+  const m = source?.m ? shiftMeta(source.m, x - source.x, z - source.z) : { cx: x + w / 2, cz: z + d / 2 };
+  return withMeta(source?.polygon ? polygonPiece(id, source.polygon.map((q) => ({ ...q, x: q.x - source.x + x, z: q.z - source.z + z }))) : makePiece(id, x, z, w, d), m);
 }
 
 export function largestPiece(pieces) {
@@ -200,7 +211,7 @@ export function cutAcross(pieces, cutX, opts) {
 
 // Зеркало относительно диагонали x = z: разрез «вдоль X» сводится к разрезу «вдоль Z».
 export function transposePieces(pieces) {
-  return pieces.map((p) => (p.polygon ? polygonPiece(p.id, p.polygon.map((q) => ({ ...q, x: q.z, z: q.x }))) : { ...p, x: p.z, z: p.x, w: p.d, d: p.w }));
+  return pieces.map((p) => withMeta(p.polygon ? polygonPiece(p.id, p.polygon.map((q) => ({ ...q, x: q.z, z: q.x }))) : { ...p, x: p.z, z: p.x, w: p.d, d: p.w }, p.m && { ...p.m, cx: p.m.cz, cz: p.m.cx }));
 }
 
 /** Протяжённость куска вдоль линии x = cutX: [min, max] по Z (для контура — реальная хорда). */

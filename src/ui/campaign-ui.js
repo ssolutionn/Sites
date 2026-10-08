@@ -157,7 +157,7 @@ export class CampaignUI {
       <tr><td>Клик по полу</td><td>Пойти в эту точку</td></tr>
       <tr><td>Клик по станции или метке</td><td>Подойти и начать действие</td></tr>
       <tr><td>Зажать и провести у доски</td><td>Росчерк ножом: сверху вниз или слева направо</td></tr>
-      <tr><td><kbd>R</kbd></td><td>Повернуть продукт (необязательно)</td></tr>
+
       <tr><td>Удержание и движение</td><td>Намазывание, перемешивание, тёрка, мытьё, уборка, маринад</td></tr>
       <tr><td>Перетаскивание</td><td>Шпажки, фрукты, сервировка стола</td></tr>
       <tr><td><kbd>Q</kbd></td><td>Рецепт</td></tr>
@@ -497,6 +497,9 @@ export class CampaignUI {
     this.lastTip = topic;
     this.el.tip.innerHTML = `<div class="tip-text">💡 ${esc(TIPS[topic])}</div><button class="ghost" id="tip-ok">Понятно</button>`;
     this.el.tip.classList.remove('hidden');
+    // в крупном плане совет уходит в левую колонку и не закрывает продукт
+    const CLOSE = ['board', 'bowl', 'tray', 'sink', 'puddle'];
+    this.el.tip.classList.toggle('side', CLOSE.includes(this.app.session?.panel));
     $('#tip-ok').addEventListener('click', () => this.el.tip.classList.add('hidden'));
     this.tipT = 14;
   }
@@ -995,7 +998,7 @@ export class CampaignUI {
         return `<h2>${it.grater ? '🧀 Тёрка' : '🔪 Доска'} · ${PICON[it.product] ?? ''} ${PRODUCTS[it.product].name}${it.qty > 1 ? ' × ' + it.qty : ''}<span class="sub">${esc(s.recipes[it.dishId].name)}</span></h2>
           <div class="row tabs">${tabs}</div>
           <div class="row">
-            ${it.grater || it.log ? '' : this._btn('⟳ Повернуть <kbd>R</kbd>', 'rotate', [], 'ghost', busy)}
+
             ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
             ${it.grater && !s.practice ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary ' + (block ? 'soft-disabled' : ''), busy, block ?? '')}
             ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], 'ghost') : ''}

@@ -1,6 +1,6 @@
 // Доска: нарезка кубиками (по реальному контуру), кружочки, тёрка.
 import { PRODUCTS } from './data.js';
-import { initialBatch, cutLine, rotatePieces, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
+import { initialBatch, cutLine, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
 import { Stroke, classifyCut, CUT_HINTS, CUT_RULES } from './gestures.js';
 import { TEMPTING } from './st-extra.js';
 import { makeRoundLog, cutRound, roundSlices, roundQuality, cutQuality, Grater } from './mechanics.js';
@@ -172,18 +172,13 @@ export const boardMethods = {
     return 'cut';
   },
 
+  // Поворот больше не нужен: нож ведут и вдоль, и поперёк. Клавиша R только подсказывает.
   rotate() {
     if (!this._isIdleAt('board') || this.action) return false;
     const it = this.boardCur();
     if (!it || it.grater) return false;
-    if (it.log) {
-      this.setHint('Кружочки режутся только поперёк — поворот здесь не нужен', 2.5);
-      return false;
-    }
-    if (!it.pieces.length) return false;
-    it.pieces = rotatePieces(it.pieces);
-    this._emit('rotate', { key: it.key });
-    return true;
+    this.setHint(it.log ? 'Кружочки режутся только поперёк — веди нож сверху вниз' : 'Поворачивать не нужно — веди нож слева направо, и полоски станут кубиками', 2.5);
+    return false;
   },
 
   boardQuality(it) {

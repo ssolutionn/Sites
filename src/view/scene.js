@@ -102,8 +102,8 @@ export class SceneView {
     if (mode === 'board') {
       const c = this.k.boardCenter;
       const back = aspect < 1.4 ? 1.25 : 1;
-      look.set(c.x, c.y, c.z + 0.035);
-      pos.set(c.x, c.y + 0.5 * back, c.z + 0.33 * back);
+      look.set(c.x, c.y, c.z + 0.03);
+      pos.set(c.x, c.y + 0.47 * back, c.z + 0.39 * back);
     } else if (mode === 'menu') {
       look.set(-0.35, 1.1, -0.5);
       pos.set(0.15, 1.55, 2.4);
