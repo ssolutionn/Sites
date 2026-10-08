@@ -356,7 +356,7 @@ function buildKnife() {
     grip.add(rivet);
   }
   // рука в свитере держит рукоять
-  const skin = new THREE.MeshStandardMaterial({ color: 0xf1c3a0, roughness: 0.65 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0xf1b992, roughness: 0.65 });
   const fist = new THREE.Mesh(new THREE.SphereGeometry(0.019, 16, 12), skin);
   fist.scale.set(1.15, 0.95, 1.5);
   fist.position.set(0.004, 0.032, 0.122);
@@ -388,7 +388,7 @@ function buildKnife() {
 
 function buildLeftHand() {
   const g = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: 0xf1c3a0, roughness: 0.65 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0xf1b992, roughness: 0.65 });
   const palm = new THREE.Mesh(new THREE.SphereGeometry(0.019, 16, 12), skin);
   palm.scale.set(1.05, 0.55, 1.3);
   g.add(palm);
@@ -398,7 +398,7 @@ function buildLeftHand() {
     f.position.set(0.02, -0.004 - i * 0.0005, -0.012 + i * 0.0085);
     g.add(f);
   }
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.017, 0.028, 14), new THREE.MeshStandardMaterial({ color: 0xc62f35, roughness: 0.9 }));
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.017, 0.028, 14), new THREE.MeshStandardMaterial({ color: 0xf3ead8, roughness: 0.95 }));
   sleeve.position.set(-0.026, 0.014, 0.004);
   sleeve.rotation.set(0, 0, 1.1);
   g.add(sleeve);

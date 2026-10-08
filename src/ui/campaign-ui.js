@@ -23,7 +23,7 @@ export const TIPS = {
   cube: 'Нарезка как в жизни: зажми кнопку мыши и проведи ножом через продукт. Сверху вниз — полоски, слева направо — поперёк полосок, получатся кубики. Нож режет то, над чем прошёл: можно резать обе морковки сразу или по одной. Размер — на глаз, по кубику-образцу.',
   round: 'Кружочки: проведи ножом сверху вниз через продукт — отрежешь кружок. Толщина — расстояние до прошлого разреза, сравни с образцом. Вдоль кружочки не режут.',
   grate: 'Тёрка: зажми левую кнопку и води мышью вверх-вниз. Засчитываются только полные движения.',
-  bowl: 'Перемешивание: зажми кнопку и веди мышь по кругу внутри миски — нужно 4 оборота. Просто держать кнопку бесполезно.',
+  bowl: 'Миска руками: выбери банку или майонез внизу, зажми кнопку и веди над миской — горошек высыпается, майонез ложится там, где ведёшь (меньше выдавишь — будет «поменьше»). Солонку встряхивай вниз-вверх. Ложкой мешай по кругу — кучки смешаются и покроются заправкой.',
   sink: 'Мытьё: зажми кнопку и три губкой, пока грязь не исчезнет.',
   puddle: 'Уборка: зажми кнопку и води тряпкой по луже.',
   'tray:sandwiches': 'Бутерброды: лопаткой (зажми кнопку) намажь каждый ломтик — масло видно там, где прошла лопатка. Потом ложкой кликай по ломтикам: норма — 2 ложки икры.',
@@ -880,7 +880,7 @@ export class CampaignUI {
       case 'bowl': {
         const mt = s.mixTarget();
         const se = s.bowl.owner && s.dishes[s.bowl.owner]?.season;
-        return `${base}|${s.bowlTasks().map((t) => t.stepId + t.state + (t.block ?? '')).join(',')}|${mt?.ok}|${Math.floor(s.mixTurns() * 4)}|${s.equipment.bowl.clean}|${se ? se.salt + ':' + se.pepper + ':' + se.tastes + (se.last?.verdict ?? '') : ''}`;
+        return `${base}|${s.bowlTasks().map((t) => t.stepId + t.state + (t.block ?? '')).join(',')}|${mt?.ok}|${s.equipment.bowl.clean}|${se ? se.salt + ':' + se.pepper + ':' + se.tastes + (se.last?.verdict ?? '') : ''}|${s.bowlHand()}`;
       }
       case 'tray': {
         const id = s.tray.owner;
@@ -945,8 +945,24 @@ export class CampaignUI {
         return `<span class="qbar" title="Аккуратность"><i style="width:${Math.round(q.score * 100)}%"></i></span><span class="q">${it.cuts ? `Ровно на ${Math.round(q.score * 100)} %` : 'Ещё ни одного разреза'}</span><span>кусочков: ${it.pieces?.length ?? it.log.segments.length}</span>${block && it.cuts ? `<span>· ${esc(block)}</span>` : ''}`;
       }
       case 'bowl': {
+        const p = s.bowl.pouring;
+        if (p) {
+          const a = p.tracker.amount;
+          if (p.squeeze) return `<span class="qbar"><i style="width:${Math.min(100, (a / 1.4) * 100)}%"></i></span><span class="q">Майонез: ${a < p.need ? 'маловато' : a < s.cfg.pour.mayo.light ? 'поменьше' : a < 1.3 ? 'как обычно' : 'щедро'}</span><span>зажми и веди над миской, отпусти — хватит</span>`;
+          return `<span class="qbar"><i style="width:${Math.min(100, (a / p.need) * 100)}%"></i></span><span class="q">${esc(PRODUCTS[p.product].name)}: высыпано ${Math.round(Math.min(1, a / p.need) * 100)} %</span><span>зажми и веди банку над миской</span>`;
+        }
+        if (s.bowl.shaker) {
+          const se = s.dishes[s.bowl.shaker.dishId].season;
+          return `<span class="q">${s.bowl.shaker.kind === 'salt' ? '🧂 Соль' : '🌶 Перец'}: ${se[s.bowl.shaker.kind]} щеп.</span><span>зажми и встряхни над миской — вниз-вверх</span>${se.last ? `<span>· проба: ${esc(se.last.verdict)}</span>` : ''}`;
+        }
         const mt = s.mixTarget();
-        return mt?.ok ? `Перемешано: ${Math.min(4, s.mixTurns()).toFixed(1)} из ${CAMPAIGN.mix.turnsRequired} оборотов` : '';
+        if (mt?.ok) {
+          const m = Math.min(1, s.mixTurns() / CAMPAIGN.mix.turnsRequired);
+          return `<span class="qbar"><i style="width:${m * 100}%"></i></span><span class="q">Однородность ${Math.round(m * 100)} %</span><span>зажми и веди ложку по кругу</span>`;
+        }
+        const se = s.bowl.owner && s.dishes[s.bowl.owner]?.season;
+        if (se?.last) return `<span class="q">Проба: ${esc(se.last.verdict)}</span>`;
+        return mt?.block ? `<span>${esc(mt.block)}</span>` : '';
       }
       case 'tray': {
         const id = s.tray.owner;
@@ -1010,34 +1026,31 @@ export class CampaignUI {
           </div>${it.missing.length ? bar : ''}<div class="dock-live" data-live></div>`;
       }
       case 'bowl': {
+        // Док миски: что в руке. Банку высыпают, майонез выдавливают, солонку трясут, ложкой мешают.
         const tasks = s.bowlTasks();
-        const btns = tasks
+        const hand = s.bowlHand();
+        const chip = (icon, name, act, args, cls, dis, title = '') => this._btn(`<span class="pi">${icon}</span><span class="pn">${name}</span>`, act, args, 'prod-chip ' + cls, dis, title);
+        const adds = tasks
           .filter((t) => t.type === 'add')
           .map((t) => {
-            const cls = t.state === 'done' ? 'ghost' : t.block ? 'soft-disabled' : 'primary';
-            if (t.product === 'mayo' && t.state !== 'done') return this._btn(`${PICON.mayo} ${esc(t.label)}`, 'bowlAdd', [t.dishId, t.stepId, 'full'], cls, busy, t.block ?? '') + this._btn(`${PICON.mayo} Поменьше майонеза`, 'bowlAdd', [t.dishId, t.stepId, 'light'], t.block ? 'soft-disabled' : 'ghost', busy, t.block ?? '');
-            const lbl = t.state === 'done' ? PRODUCTS[t.product].name + (t.product === 'mayo' && s.dishes[t.dishId].mayo === 'light' ? ' (поменьше)' : '') + ' ✓' : esc(t.label);
-            return this._btn(`${PICON[t.product] ?? ''} ${lbl}`, 'bowlAdd', [t.dishId, t.stepId], cls, busy || t.state === 'done', t.block ?? '');
+            const done = t.state === 'done';
+            return chip(PICON[t.product] ?? '🫙', esc(PRODUCTS[t.product].name) + (t.product === 'mayo' && done && s.dishes[t.dishId].mayo === 'light' ? ' · поменьше' : ''), 'bowlPick', [t.dishId, t.stepId], `${done ? 'done' : ''} ${hand === t.product && !done ? 'active' : ''} ${t.block && !done ? 'locked' : ''}`, busy || done, t.block ?? '');
           })
           .join('');
         const seasonTask = tasks.find((t) => t.type === 'season' && t.state !== 'done' && t.dishId === s.bowl.owner);
-        let seasonRow = '';
+        let season = '', main = '';
         if (seasonTask) {
           const ss = s.seasonState(seasonTask.dishId);
           const dis = busy || !!ss.block;
-          seasonRow = `<div class="season"><div class="row">
-            ${this._btn(`🧂 Соль · ${ss.salt}`, 'seasonAdd', [seasonTask.dishId, 'salt'], '', dis, ss.block ?? '')}
-            ${this._btn(`🌶 Перец · ${ss.pepper}`, 'seasonAdd', [seasonTask.dishId, 'pepper'], '', dis, ss.block ?? '')}
-            ${this._btn('👅 Попробовать', 'seasonTaste', [seasonTask.dishId], 'primary', dis, ss.block ?? '')}
-            ${this._btn('💧 Разбавить', 'seasonDilute', [seasonTask.dishId], 'ghost', dis || (!ss.salt && !ss.pepper))}
-            ${this._btn('✓ Вкус готов', 'seasonDone', [seasonTask.dishId], 'primary', dis)}
-          </div><div class="small">${ss.block ? '⏳ ' + esc(ss.block) : ss.last ? `Последняя проба: <b>${esc(ss.last.verdict)}</b> (проб: ${ss.tastes})` : 'Норма скрыта — пробуй ложкой.'}</div></div>`;
+          season = chip('🧂', `Соль · ${ss.salt}`, 'seasonPick', [seasonTask.dishId, 'salt'], hand === 'salt' ? 'active' : '', dis, ss.block ?? '') + chip('🌶', `Перец · ${ss.pepper}`, 'seasonPick', [seasonTask.dishId, 'pepper'], hand === 'pepper' ? 'active' : '', dis, ss.block ?? '') + chip('👅', 'Попробовать', 'seasonTaste', [seasonTask.dishId], '', dis, ss.block ?? '') + (ss.salt || ss.pepper ? chip('💧', 'Разбавить', 'seasonDilute', [seasonTask.dishId], '', dis) : '');
+          main = this._btn('✓ Вкус готов', 'seasonDone', [seasonTask.dishId], 'primary big', dis);
         }
         const mt = s.mixTarget();
+        const spoon = chip('🥄', 'Ложка', 'bowlSpoon', [], hand === 'spoon' ? 'active' : '', busy);
         const dirty = !s.equipment.bowl.clean ? '<p class="note warn">Миска грязная — помой её у раковины.</p>' : '';
         return `<h2>🥣 Миска${s.bowl.owner ? `<span class="sub">${esc(s.recipes[s.bowl.owner].name)}</span>` : ''}</h2>
-          <div class="row">${btns}${back}</div>${seasonRow}<div class="row">${bar}</div>${live}${dirty}
-          <p class="note">${mt ? (mt.ok ? 'Зажми кнопку и веди мышь по кругу внутри миски — 4 оборота.' : 'Перемешивание после полного состава: ' + esc(mt.block ?? '')) : s.bowl.contents.length ? 'Добавь всё по рецепту.' : 'Сюда идут нарезанные продукты с доски и заправка.'}</p>`;
+          <div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${adds}${season}${mt || hand !== 'spoon' ? spoon : ''}</div><div class="dock-main">${main}</div></div>
+          <div class="row">${bar}</div><div class="dock-live" data-live></div>${dirty}`;
       }
       case 'tray':
         return this._trayPanel(s, back, bar, live, busy);

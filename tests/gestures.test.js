@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Stroke, classifyCut, CUT_RULES, ShakeTracker, PourTracker } from '../src/campaign/gestures.js';
 import { initialBatch, cutLine, totalVolume, transposePieces, chordAt, initialPieces } from '../src/game/cutting.js';
-import { KitchenSession, arrive, cutCubes, knife } from './helpers-campaign.js';
+import { KitchenSession, arrive, cutCubes, knife, run } from './helpers-campaign.js';
 
 // Росчерк по точкам; dx/dz — смещение каждой точки (дрожание руки).
 function strokeOf(points) {
@@ -172,4 +172,69 @@ test('выдавливание: растёт только над целью и �
   p.move(0.2, 0, true);
   p.move(0.3, 0, true);
   assert.equal(p.amount, 1);
+});
+
+// ---------- миска руками ----------
+function circle(s, r, turns, steps = 40) {
+  s.pointer('down', r, 0);
+  for (let i = 1; i <= steps * turns; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    s.pointer('move', Math.cos(a) * r, Math.sin(a) * r);
+  }
+}
+
+test('горошек высыпают движением над миской, мимо миски не считается', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  arrive(s, 'bowl');
+  assert.ok(s.bowlPick('olivier', 'peas'));
+  assert.equal(s.bowlHand(), 'peas');
+  s.pointer('down', 0.3, 0.3);
+  for (let i = 0; i < 20; i++) s.pointer('move', 0.3 + i * 0.01, 0.3);
+  assert.equal(s.stepDone('olivier', 'peas'), false);
+  s.pointer('up', 0, 0);
+  circle(s, 0.08, 1);
+  s.pointer('up', 0, 0);
+  assert.equal(s.stepDone('olivier', 'peas'), true);
+  assert.equal(s.bowlHand(), 'spoon');
+  const peas = s.bowl.contents.find((c) => c.product === 'peas');
+  assert.ok(peas.path.length > 3, 'путь высыпания сохранён для картинки');
+});
+
+test('майонез: сколько выдавила — столько и будет (поменьше / как обычно)', () => {
+  for (const [turns, expect] of [[0.45, 'light'], [0.8, 'full']]) {
+    const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+    arrive(s, 'bowl');
+    assert.ok(s.bowlPick('olivier', 'mayo'));
+    circle(s, 0.08, turns);
+    s.pointer('up', 0, 0);
+    assert.equal(s.stepDone('olivier', 'mayo'), true, `оборотов ${turns}`);
+    assert.equal(s.dishes.olivier.mayo, expect);
+  }
+});
+
+test('майонез: капля — ещё не заправка', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  arrive(s, 'bowl');
+  s.bowlPick('olivier', 'mayo');
+  s.pointer('down', 0.05, 0);
+  s.pointer('move', 0.06, 0);
+  s.pointer('up', 0.06, 0);
+  assert.equal(s.stepDone('olivier', 'mayo'), false);
+  assert.match(s.hint.text, /выдави ещё/);
+});
+
+test('солонку встряхивают: каждый полный взмах — щепотка', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  const d = s.dishes.olivier;
+  for (const st of d.recipe.steps) if (!['season', 'mix'].includes(st.id)) d.steps[st.id].done = true;
+  s.bowl.owner = 'olivier';
+  arrive(s, 'bowl');
+  assert.ok(s.seasonPick('olivier', 'salt'), s.hint?.text);
+  s.pointer('down', 0, 0);
+  for (let i = 0; i < 9; i++) {
+    run(s, 0.2);
+    s.pointer('move', 0, i % 2 ? 0.04 : -0.0);
+  }
+  s.pointer('up', 0, 0);
+  assert.ok(d.season.salt >= 3 && d.season.salt <= 5, `щепоток ${d.season.salt}`);
 });

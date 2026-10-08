@@ -67,7 +67,7 @@ export class KitchenSession {
     this.requestKnown = false;
 
     this.board = { current: null, items: {}, grated: null, stroke: null };
-    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null };
+    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null, pouring: null, shaker: null };
     this.workPlate = { owner: null, amount: 0 };
     this.spoon = { load: 0 };
     this.tool = 'hand';
@@ -568,7 +568,7 @@ export class KitchenSession {
     if (this.isOver() || this.heroine.away || this.heroine.target) return 'ignored';
     if (type === 'down') this.pointerDown = true;
     if (type === 'up') {
-      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : 'up';
+      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : this.panel === 'bowl' ? this._bowlPointer('up', x, z) : 'up';
       this.pointerUp();
       return r;
     }
@@ -594,6 +594,7 @@ export class KitchenSession {
     this.pointerDown = false;
     if (this.board) this.board.stroke = null;
     this.bowl.stirrer?.release();
+    this.bowl.pouring?.tracker.release();
     const it = this.board.current && this.board.items[this.board.current];
     it?.grater?.release();
     this.tray.lastStroke = null;

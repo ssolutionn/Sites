@@ -10,6 +10,7 @@ import { animateCat } from './cat.js';
 import { tex } from './textures.js';
 import * as F from './food.js';
 import { CutBoardView } from './cutboard.js';
+import { BowlView } from './bowl3d.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 const UNIT = BOARD_UNIT;
@@ -168,6 +169,7 @@ export class CampaignView {
     // содержимое миски кампании
     this.bowlContent = new THREE.Group();
     k.bowl.content.add(this.bowlContent);
+    this.bowlView = new BowlView(k);
     this.bowlSpoon = new THREE.Group();
     const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.26, 8), F.m(0xd9a066, 0.6));
     stick.position.y = 0.13;
@@ -924,82 +926,22 @@ export class CampaignView {
   _clearBowl() {
     for (const c of this.bowlContent.children.slice()) F.disposeGroup(c);
     this.bowlKey = null;
+    this.bowlView?.reset();
   }
 
   _updateBowl(s, dt, t) {
-    const key = s.bowl.owner + ':' + s.bowl.contents.map((c) => c.product + c.kind).join(',');
-    if (key !== this.bowlKey) {
-      this._clearBowl();
-      this.bowlKey = key;
-      let layer = 0;
-      for (const c of s.bowl.contents) {
-        const g = new THREE.Group();
-        const col = c.kind === 'yolk' ? F.COL.yolk : PRODUCTS[c.product]?.color ?? 0xffffff;
-        if (c.kind === 'pieces') {
-          const n = Math.min(40, c.pieces?.length ?? 12);
-          const geo = new THREE.BoxGeometry(0.014, 0.014, 0.014);
-          const inst = new THREE.InstancedMesh(geo, F.m(col, 0.6), n);
-          inst.frustumCulled = false;
-          const mtx = new THREE.Matrix4();
-          for (let i = 0; i < n; i++) {
-            const a = i * 2.4 + layer, r = 0.015 + Math.sqrt(i / n) * 0.12;
-            mtx.makeRotationFromEuler(new THREE.Euler(i, i * 2, i * 3));
-            mtx.setPosition(Math.cos(a) * r, 0.03 + layer * 0.006 + (i % 3) * 0.004, Math.sin(a) * r);
-            inst.setMatrixAt(i, mtx);
-          }
-          g.add(inst);
-        } else if (c.kind === 'grated') {
-          for (let i = 0; i < 30; i++) {
-            const sh = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.003, 0.018), F.m(col, 0.7));
-            const a = i * 2.4 + layer, r = Math.sqrt(i / 30) * 0.1;
-            sh.position.set(Math.cos(a) * r, 0.035 + layer * 0.006, Math.sin(a) * r);
-            sh.rotation.y = a;
-            g.add(sh);
-          }
-        } else if (c.product === 'peas' || c.product === 'corn') {
-          for (let i = 0; i < 36; i++) {
-            const a = i * 2.4, r = 0.02 + Math.sqrt(i / 36) * 0.12;
-            const p = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), F.m(col, 0.5));
-            p.position.set(Math.cos(a) * r, 0.045 + (i % 4) * 0.008, Math.sin(a) * r);
-            g.add(p);
-          }
-        } else if (c.product === 'mayo') {
-          for (let i = 0; i < 4; i++) {
-            const b = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), F.m(0xfffbea, 0.7));
-            b.scale.set(1, 0.45, 1);
-            b.position.set(Math.cos(i * 1.6) * 0.05, 0.06, Math.sin(i * 1.6) * 0.05);
-            g.add(b);
-          }
-        } else if (c.kind === 'yolk') {
-          const y = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), F.m(F.COL.yolk, 0.5));
-          const n = s.bowl.contents.filter((q) => q.kind === 'yolk').indexOf(c);
-          y.position.set(Math.cos(n * 1.05) * 0.06, 0.035, Math.sin(n * 1.05) * 0.06);
-          g.add(y);
-        } else if (c.product === 'greens') {
-          for (let i = 0; i < 6; i++) {
-            const sp = F.herbSprig();
-            sp.position.set(Math.cos(i) * 0.06, 0.06, Math.sin(i) * 0.06);
-            g.add(sp);
-          }
-        }
-        this.bowlContent.add(g);
-        layer++;
-      }
-    }
+    const active = s.panel === 'bowl' && this.sv.camT > 0.9;
+    this.bowlView.sync(s, dt, active, active ? this.pointerLocal : null, t);
     const st = s.bowl.stirrer;
-    const stirring = s.panel === 'bowl' && s.pointerDown && st;
-    if (stirring) this.bowlContent.rotation.y += dt * 2.5;
-    this.bowlSpoon.visible = s.panel === 'bowl' && (s.pointerDown || (st && st.turns > 0));
+    const hand = s.bowlHand?.() ?? 'spoon';
+    this.bowlSpoon.visible = s.panel === 'bowl' && hand === 'spoon' && (s.pointerDown || (st && st.turns > 0) || !!s.mixTarget()?.ok);
     if (this.bowlSpoon.visible && this.pointerLocal && s.panel === 'bowl') {
       const p = this.pointerLocal;
-      const r = Math.min(BOWL.r * 0.85, Math.hypot(p.x, p.z));
+      const r = Math.min(BOWL.r * 0.75, Math.hypot(p.x, p.z));
       const a = Math.atan2(p.z, p.x);
       this.bowlSpoon.position.set(Math.cos(a) * r, 0.03, Math.sin(a) * r);
       this.bowlSpoon.rotation.y = -a;
     }
-    // смесь становится однородной: после перемешивания всё одного кремового оттенка
-    const mixed = st ? Math.min(1, st.turns / 4) : 0;
-    this.bowlContent.scale.setScalar(1 - mixed * 0.05);
   }
 
   // ---------- поднос ----------

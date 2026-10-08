@@ -1,5 +1,9 @@
 // Миска: добавление продуктов, перемешивание круговым движением, начинка на рабочую тарелку.
+// Руками, как в жизни: банку горошка наклоняют и высыпают над миской, майонез выдавливают
+// (сколько выдавила — столько и будет), солонку встряхивают, мешают ложкой по кругу.
 import { Stirrer } from './mechanics.js';
+import { PourTracker, ShakeTracker } from './gestures.js';
+import { BOWL } from './layout.js';
 
 export const bowlMethods = {
   _bowlBlock(dishId) {
@@ -16,7 +20,7 @@ export const bowlMethods = {
   },
 
   _dirtyBowl() {
-    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null };
+    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null, pouring: null, shaker: null };
     this.equipment.bowl.clean = false;
     this.equipment.bowl.owner = null;
     this._emit('dirty', { item: 'bowl' });
@@ -49,11 +53,101 @@ export const bowlMethods = {
     if (!this._reserveStep(dishId, stepId)) return false;
     return this._startAction('add', this.cfg.durations.addProduct, () => {
       if (this.dishes[dishId].steps[stepId].done) return;
-      this._bowlReceive(dishId, { product: step.product, kind: 'add' });
-      if (step.product === 'mayo') this.dishes[dishId].mayo = amount === 'light' ? 'light' : 'full';
-      this._completeStep(dishId, stepId, 1);
-      this._emit('added', { dishId, product: step.product });
+      this._bowlAddDone(dishId, stepId, amount === 'light' ? this.cfg.pour.mayo.light * 0.8 : 1, null);
     }, { product: step.product });
+  },
+
+  _bowlAddDone(dishId, stepId, amount, path) {
+    const step = this.stepDef(dishId, stepId);
+    this._bowlReceive(dishId, { product: step.product, kind: 'add', amount, path });
+    if (step.product === 'mayo') this.dishes[dishId].mayo = amount < this.cfg.pour.mayo.light ? 'light' : 'full';
+    this.bowl.pouring = null;
+    this._completeStep(dishId, stepId, 1);
+    this._emit('added', { dishId, product: step.product, amount });
+  },
+
+  /** Взять продукт в руку: дальше его высыпают или выдавливают движением над миской. */
+  bowlPick(dishId, stepId) {
+    if (!this._isIdleAt('bowl') || this.action) return false;
+    const step = this.stepDef(dishId, stepId);
+    if (!step || step.type !== 'add' || this.dishes[dishId].steps[stepId].done) return false;
+    const block = this.stepBlock(dishId, stepId) || this._bowlBlock(dishId);
+    if (block) {
+      this.setHint(block);
+      return false;
+    }
+    if (this.bowl.pouring?.dishId === dishId && this.bowl.pouring.stepId === stepId) return true;
+    if (!this._reserveStep(dishId, stepId)) return false;
+    const pc = this.cfg.pour[step.product] ?? this.cfg.pour.default;
+    this.bowl.shaker = null;
+    this.bowl.pouring = { dishId, stepId, product: step.product, squeeze: !!pc.squeeze, need: pc.need, tracker: new PourTracker({ rate: pc.rate, max: pc.max }), path: [] };
+    this._emit('pick', { product: step.product });
+    return true;
+  },
+
+  /** Взять солонку или перечницу: щепотка — один полный взмах вниз-вверх над миской. */
+  seasonPick(dishId, kind) {
+    if (!['salt', 'pepper'].includes(kind) || !this._seasonReady(dishId)) return false;
+    this.bowl.pouring = null;
+    this.bowl.shaker = { dishId, kind, tracker: new ShakeTracker(this.cfg.shake) };
+    this._emit('pick', { product: kind });
+    return true;
+  },
+
+  /** Снова взять ложку (положить банку, солонку). */
+  bowlSpoon() {
+    this.bowl.pouring = null;
+    this.bowl.shaker = null;
+    return true;
+  },
+
+  bowlHand() {
+    if (this.bowl.pouring) return this.bowl.pouring.product;
+    if (this.bowl.shaker) return this.bowl.shaker.kind;
+    return 'spoon';
+  },
+
+  _bowlPour(type, x, z) {
+    const p = this.bowl.pouring;
+    const inside = Math.hypot(x, z) < BOWL.r * 0.85;
+    if (type === 'down') {
+      p.tracker.release();
+      p.tracker.move(x, z, inside);
+      return 'pour';
+    }
+    if (type === 'up') {
+      p.tracker.release();
+      if (p.squeeze && p.tracker.amount >= p.need) {
+        this._bowlAddDone(p.dishId, p.stepId, p.tracker.amount, p.path);
+        return 'added';
+      }
+      if (p.squeeze && p.tracker.amount > 0) this.setHint('Маловато — выдави ещё немного', 2);
+      return 'pour';
+    }
+    if (!this.pointerDown) return 'idle';
+    const gain = p.tracker.move(x, z, inside);
+    if (gain > 0) {
+      if (p.path.length < 240) p.path.push({ x, z, a: p.tracker.amount });
+      this._emit('pour', { product: p.product, amount: p.tracker.amount });
+      if (!p.squeeze && p.tracker.amount >= p.need) {
+        this._bowlAddDone(p.dishId, p.stepId, p.tracker.amount, p.path);
+        return 'added';
+      }
+    } else if (!inside) return 'outside';
+    return 'pour';
+  },
+
+  _bowlShake(type, x, z) {
+    const sh = this.bowl.shaker;
+    if (type !== 'move' || !this.pointerDown) return 'idle';
+    if (Math.hypot(x, z) > BOWL.r * 1.1) return 'outside';
+    if (sh.tracker.move(z, this.clock)) {
+      const se = this.dishes[sh.dishId].season;
+      se[sh.kind]++;
+      this._emit('pinch', { dishId: sh.dishId, kind: sh.kind, n: se[sh.kind], x, z });
+      return 'pinch';
+    }
+    return 'shake';
   },
 
   // Какое перемешивание сейчас возможно в миске.
@@ -75,6 +169,9 @@ export const bowlMethods = {
   },
 
   _bowlPointer(type, x, z) {
+    if (this.bowl.pouring) return this._bowlPour(type, x, z);
+    if (this.bowl.shaker) return this._bowlShake(type, x, z);
+    if (type === 'up') return 'up';
     const tgt = this.mixTarget();
     if (type === 'down') {
       if (!tgt) {

@@ -46,6 +46,10 @@ export const CAMPAIGN = {
 
   // Ручные механики
   mix: { turnsRequired: 4, minRadius: 0.02, maxRadius: 0.17, minStep: 0.002, maxJump: 0.09 },
+  // Высыпать и выдавить над миской: rate — порции за метр движения руки над миской, need — сколько нужно.
+  // Майонез: меньше light — «поменьше майонеза», как просят гости.
+  pour: { default: { rate: 5, max: 1, need: 1 }, mayo: { rate: 2.4, max: 1.6, need: 0.45, light: 0.8, squeeze: true } },
+  shake: { amplitude: 0.03, minInterval: 0.22 }, // солонка: взмах не меньше 3 см, не чаще ~4 раз в секунду
   grate: { cyclesPerPortion: 8, zoneTop: -0.035, zoneBottom: 0.035, maxJump: 0.12 },
   spread: { cols: 16, rows: 12, brush: 0.016, complete: 0.8 },
   marinade: { cols: 18, rows: 12, brush: 0.022, complete: 0.75 },
