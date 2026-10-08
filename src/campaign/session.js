@@ -87,7 +87,7 @@ export class KitchenSession {
     this.puddles = [];
     this.sinkJob = null;
     this.sinkCool = null; // остужаем под краном: { product, run, open }
-    this.phone = { messages: [], unread: 0, posts: [] };
+    this.phone = { messages: [], unread: 0, posts: [], feed: [], liked: {} };
     this.bonus = { points: Math.max(0, Math.round(bonus) || 0), history: [] }; // баллы бонусной программы (между днями — в сохранении)
     this.decor = [...decor]; // купленный декор кухни
     this.kitchenTimers = [];
@@ -96,6 +96,7 @@ export class KitchenSession {
 
     this.triggers = practice ? [] : (this.day.events ?? []).map((e, i) => ({ ...e, id: i, fired: false, since: null }));
     this.msgQueue = practice ? [] : (this.day.messages ?? []).map((m, i) => ({ ...m, id: i, sent: false }));
+    this._initFeed();
     this._initRequests();
     this.lastUrgentT = -1e9;
     this.penalties = []; // однократные происшествия: { kind, points, label }
@@ -643,6 +644,7 @@ export class KitchenSession {
       m.sent = true;
       this.pushMessage(m.from, m.text, { photo: m.photo, request: m.request });
     }
+    this._updateFeed();
     for (const e of this.triggers) {
       if (e.fired) continue;
       switch (e.type) {
