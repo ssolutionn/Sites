@@ -425,3 +425,9 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 #recipe { background: linear-gradient(180deg, var(--paper), #f8ebd2); border-radius: var(--r-l); box-shadow: var(--shadow-2); top: 150px; }
 #recipe .recipe-head b { font-size: 17px; font-weight: 900; color: var(--pine); }
 #recipe .recipe-dish h3 { justify-content: space-between; }
+/* меню: героиня в кадре видна, панель действий ниже её лица */
+.menu2 { align-items: end; padding-bottom: 6vh; }
+.menu2 .brand { align-self: center; }
+#overlay.center:has(.menu2) { background: linear-gradient(90deg, rgba(18, 40, 30, 0.72) 0%, rgba(18, 40, 30, 0.25) 55%, rgba(18, 30, 24, 0.15) 100%); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.menu2 { grid-template-columns: minmax(280px, 1fr) 320px; width: min(1240px, calc(100vw - 48px)); }
+.menu2 .side { justify-self: end; width: 320px; }

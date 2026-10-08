@@ -198,15 +198,16 @@ async function phoneTour(prefix) {
   await shot(`${prefix}_phone_home`);
   const box = await page.locator('#phone').evaluate((el) => { const r = (el.firstElementChild || el).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
   check('телефон целиком в кадре', box.x >= 0 && box.y >= 0 && box.x + box.w <= W && box.y + box.h <= H, `${Math.round(box.w)}×${Math.round(box.h)} в ${Math.round(box.x)},${Math.round(box.y)}`);
-  const ids = [...new Set(await page.locator('#phone [data-tab], #phone [data-app]').evaluateAll((els) => els.map((e) => e.dataset.tab || e.dataset.app)))];
+  await page.locator('#tip button').click({ timeout: 800 }).catch(() => {});
+  const ids = await page.locator('#phone .apps [data-nav]').evaluateAll((els) => els.map((e) => e.dataset.nav));
   for (const t of ids) {
-    let el = page.locator(`#phone [data-tab="${t}"], #phone [data-app="${t}"]`).first();
-    if (!(await el.count())) { await page.locator('#phone [data-home], #phone [data-app="home"], #phone [data-tab="home"]').first().click().catch(() => {}); await wait(300); el = page.locator(`#phone [data-tab="${t}"], #phone [data-app="${t}"]`).first(); }
-    await el.click().catch(() => {});
+    await page.locator(`#phone .apps [data-nav="${t}"]`).click().catch(() => {});
     await wait(600);
     await shot(`${prefix}_phone_${t}`);
+    await page.locator('#phone .ph-home').click().catch(() => {});
+    await wait(300);
   }
-  check('у телефона есть вкладки или приложения', ids.length >= 3, ids.join(', '));
+  check('у телефона пять приложений на домашнем экране', ids.length === 5, ids.join(', '));
   await closePanel();
   check('телефон закрывается', await waitFor(() => !window.__sueta.session.panel && document.getElementById('phone').classList.contains('hidden'), 5000));
 }
@@ -323,18 +324,32 @@ try {
   check('все пять продуктов нарезаны', await sess("['carrot','sausage','cucumber','egg','potato'].every(k => s.stepDone('olivier', k))"));
   // миска
   check('миска', await goStation('Миска', 'bowl'));
-  await actBtn('bowlAdd', '"peas"'); await noAction();
-  await actBtn('bowlAdd', '"mayo","full"'); await noAction();
+  // руками: банку горошка наклоняют над миской, майонез выдавливают зигзагом
+  await actBtn('bowlPick', '"peas"'); await wait(200);
+  await stir(1.1);
+  check('горошек высыпан движением над миской', await sess("s.stepDone('olivier','peas')"));
+  await actBtn('bowlPick', '"mayo"'); await wait(200);
+  { const pts = []; for (let i = 0; i <= 24; i++) pts.push([-0.09 + i * 0.0075, i % 2 ? 0.035 : -0.035]); await drag(pts, 3); }
+  check('майонез выдавлен — обычная порция', (await sess("s.stepDone('olivier','mayo')")) && (await sess('s.dishes.olivier.mayo')) === 'full', await sess('s.dishes.olivier.mayo'));
   await shot('d1_bowl');
-  // вкус: щепотки по ответам пробы
+  // вкус: соль и перец встряхиванием, проба ложкой
+  const shake = async (kind, n) => {
+    await actBtn('seasonPick', `"${kind}"`); await wait(200);
+    const pts = [[0, 0]];
+    for (let i = 0; i < n * 2; i++) pts.push([0, i % 2 ? 0 : 0.05]);
+    let p = await local(0, 0); await page.mouse.move(p.x, p.y); await page.mouse.down();
+    for (const [x, z] of pts.slice(1)) { p = await local(x, z); await page.mouse.move(p.x, p.y, { steps: 3 }); await wait(280); }
+    await page.mouse.up();
+  };
   for (let k = 0; k < 8; k++) {
     await actBtn('seasonTaste'); await noAction(); await wait(200);
     const v = await sess('s.dishes.olivier.season.last');
     if (v.ok) break;
     if (v.salt > 0 || v.pepper > 0) { await actBtn('seasonDilute'); await noAction(); }
-    if (v.salt < 0) { await actBtn('seasonAdd', '"salt"'); await noAction(); }
-    if (v.pepper < 0) { await actBtn('seasonAdd', '"pepper"'); await noAction(); }
+    if (v.salt < 0) await shake('salt', 1);
+    if (v.pepper < 0) await shake('pepper', 1);
   }
+  await actBtn('bowlSpoon').catch(() => {});
   await shot('d1_bowl_season');
   check('вкус по пробам — в самый раз', await sess('s.dishes.olivier.season.last.ok'), await sess('s.dishes.olivier.season.last.verdict'));
   await actBtn('seasonDone'); await noAction();
@@ -393,10 +408,14 @@ try {
   async function bowlAdds() {
     await goStation('Миска', 'bowl');
     for (let i = 0; i < 4; i++) {
-      const lbl = await sess("(() => { const t = s.bowlTasks().find(t => t.type === 'add' && t.state === 'ready' && !t.block); return t ? t.label : null; })()");
-      if (!lbl) break;
-      await btn(lbl.split(' ').slice(-1)[0]); await noAction(); await wait(150);
+      const t = await sess("(() => { const t = s.bowlTasks().find(t => t.type === 'add' && t.state === 'ready' && !t.block); return t ? { stepId: t.stepId, product: t.product } : null; })()");
+      if (!t) break;
+      await actBtn('bowlPick', `"${t.stepId}"`); await wait(200);
+      if (t.product === 'mayo') { const pts = []; for (let k = 0; k <= 24; k++) pts.push([-0.09 + k * 0.0075, k % 2 ? 0.035 : -0.035]); await drag(pts, 3); }
+      else await stir(1.1);
+      await wait(150);
     }
+    await actBtn('bowlSpoon').catch(() => {});
   }
   async function wash(itemLabel) {
     await goStation('Раковина', 'sink'); await btn(itemLabel); await wait(200);
@@ -404,13 +423,13 @@ try {
   }
   async function phoneOrder(product, qty) {
     await goStation('Телефон', 'phone'); await wait(300);
-    await page.locator('#phone [data-tab=order]').click(); await wait(200);
-    for (let i = 0; i < qty; i++) { await page.locator('#phone tr', { hasText: product }).locator('button', { hasText: '+' }).click(); await wait(120); }
+    await page.locator('#phone .apps [data-nav=shop]').click(); await wait(300);
+    for (let i = 0; i < qty; i++) { await page.locator('#phone .pcard', { hasText: product }).first().locator('button', { hasText: '+' }).click(); await wait(120); }
     await shot(`phone_order_${product}`);
-    await page.locator('#phone button', { hasText: 'Подтвердить заказ' }).click(); await wait(300);
+    await page.locator('#phone button.mode', { hasText: 'Обычная' }).click(); await wait(300);
   }
   async function collectAndUnpack() {
-    await goStation('Телефон', 'phone'); await page.locator('#phone [data-tab=order]').click(); await wait(200);
+    await goStation('Телефон', 'phone'); await page.locator('#phone .apps [data-nav=shop]').click().catch(() => {}); await wait(300);
     const w = page.locator('#phone button', { hasText: 'Подождать' });
     if (await w.count()) await w.click();
     await wait(400);
