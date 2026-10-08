@@ -14,6 +14,8 @@ import { trayMethods } from './st-tray.js';
 import { homeMethods } from './st-home.js';
 import { phoneMethods } from './st-phone.js';
 import { extraMethods } from './st-extra.js';
+import { radioMethods } from './st-radio.js';
+import { RADIO } from './radio-data.js';
 
 const EPS = 1e-6;
 export const URGENT = new Set(['cat', 'pot', 'pot2', 'oven', 'spillWarn']);
@@ -76,7 +78,7 @@ export class KitchenSession {
     this.burners = Array.from({ length: cfg.burners ?? 1 }, (_, i) => emptyBurner(i));
     this.hot = {}; // продукт → время, до которого он горячий
     this.oven = { state: 'empty', owner: null, t: 0, readyAt: 0, windowEnd: 0, doneness: 0 };
-    this.radio = { enabled: true, broken: false, progress: 0, repairs: 0, breaks: 0 };
+    this.radio = { enabled: true, broken: false, progress: 0, repairs: 0, breaks: 0, freq: RADIO.startFreq }; // freq — МГц, ручка настройки (st-radio.js)
     this.garland = { broken: false, progress: 0, repairs: 0 };
     this.cat = { state: 'home', kind: null, deadline: 0, startedAt: 0, visitUntil: 0 };
     this.catNeeds = { hunger: practice ? 0 : cfg.cat.hungerStart, warned: false, lastTry: -1e9 };
@@ -588,6 +590,8 @@ export class KitchenSession {
         return this._sinkPointer(type, x, z);
       case 'puddle':
         return this._puddlePointer(type, x, z);
+      case 'radio':
+        return this._radioPointer(type, x, z);
       default:
         return 'ignored';
     }
@@ -608,6 +612,7 @@ export class KitchenSession {
     this._sinkLast = null;
     this._wipeLast = null;
     if (this.tray.drag) this._dropDrag(null);
+    this._radioRelease();
   }
 
   // ---------- расписание помех и сообщений ----------
@@ -853,7 +858,7 @@ export class KitchenSession {
 }
 
 // Методы станций в отдельных модулях — общий источник состояния остаётся один.
-Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods);
+Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods);
 
 export function emptyBurner(i) {
   return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null };

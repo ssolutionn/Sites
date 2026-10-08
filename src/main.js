@@ -9,6 +9,9 @@ import { CampaignView } from './view/campaign-view.js';
 import { loadLogo } from './view/textures.js';
 import { CampaignUI } from './ui/campaign-ui.js';
 import { Sound } from './audio/sound.js';
+import { RadioMusic } from './audio/radio-music.js';
+import { RADIO } from './campaign/radio-data.js';
+import { clampFreq } from './campaign/st-radio.js';
 import { StreamVotes, dailyChallenge } from './stream.js';
 
 const params = new URLSearchParams(location.search);
@@ -55,6 +58,7 @@ function boot() {
   }
   loadLogo();
   const sound = new Sound();
+  const radioMusic = new RadioMusic(sound);
   const save = new SaveStore();
   let mode = 'menu'; // menu | intro | kitchen | paused | dayResult | final
   let session = null;
@@ -102,6 +106,11 @@ function boot() {
       save.data.decor = [...session.decor];
       save.write();
     }
+    // любимая волна радио переходит из дня в день
+    if (e.type === 'radioTuned' && !session.practice) {
+      save.data.settings.radioFreq = e.freq;
+      save.write();
+    }
     view.onEvent(e);
     ui.onEvent(e, session);
     if (e.type === 'speedDone') speedFinished(e.time);
@@ -122,6 +131,7 @@ function boot() {
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
     session = new KitchenSession({ dayIndex: i, seed, tableDishes: completedDishes(i), mods, bonus: save.data.bonus ?? 0, decor: save.data.decor ?? [] });
+    if (Number.isFinite(save.data.settings.radioFreq)) session.radio.freq = clampFreq(save.data.settings.radioFreq);
     view.reset();
     view.setActive(true);
     view.setTableDishes(completedDishes(i));
@@ -412,7 +422,7 @@ function boot() {
     const r = canvas.getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
   }
-  const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'puddle']);
+  const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'radio']);
   function closeupActive() {
     return session && CLOSE.has(session.panel) && !session.heroine.target && sv.camT >= 0.95;
   }
@@ -459,6 +469,21 @@ function boot() {
   };
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', () => session?.pointerUp());
+  // радио: колёсико мыши — точная подстройка частоты
+  let wheelAcc = 0;
+  canvas.addEventListener(
+    'wheel',
+    (e) => {
+      if (!session || mode !== 'kitchen' || session.panel !== 'radio') return;
+      e.preventDefault();
+      wheelAcc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      const steps = Math.trunc(wheelAcc / RADIO.wheelPx);
+      if (!steps) return;
+      wheelAcc -= steps * RADIO.wheelPx;
+      act('tuneRadio', -steps * RADIO.wheelStep);
+    },
+    { passive: false },
+  );
 
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
@@ -521,7 +546,8 @@ function boot() {
     ui.renderVotes(stream && mode === 'kitchen' && session && !session.practice ? stream.view() : null);
     if (mode === 'final' && session) ui.updateFinal(Math.min(real, 0.25), dishScreen);
     const animDt = mode === 'paused' ? 0 : Math.min(real, CAMPAIGN.maxFrameDt);
-    sound.syncRadio(mode === 'kitchen' && !!session && !session.practice && session.radio.enabled && !session.radio.broken, session?.clock ?? 0);
+    // радио звучит только на кухне во время дня: пауза, итоги, меню и практика — тишина
+    radioMusic.sync(mode === 'kitchen' && session && !session.practice && !session.isOver() ? session.radioTuning() : null);
 
     if (session && (mode === 'kitchen' || mode === 'paused' || mode === 'final')) {
       if (!closeupActive() && lastNdc && mode === 'kitchen') {
@@ -563,14 +589,14 @@ function boot() {
       booted = true;
       startDay(i, true);
       requestAnimationFrame(frame);
-      window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save };
+      window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save, radio: radioMusic };
       return;
     }
   }
   ui.showMenu(save);
   booted = true;
   requestAnimationFrame(frame);
-  window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save, stats };
+  window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save, stats, radio: radioMusic };
 }
 
 boot();

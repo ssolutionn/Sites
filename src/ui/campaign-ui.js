@@ -7,6 +7,7 @@ import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
 import { LOGO_URL, NEUTRAL } from '../view/textures.js';
+import { formatFreq } from '../campaign/st-radio.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -40,7 +41,8 @@ export const TIPS = {
   catSpill: 'Кот подбирается к стакану компота. Прогони его — иначе на полу будет лужа, которую придётся вытирать.',
   pot: 'Вода в кастрюле поднимается. Подойди к плите и нажми «Убавить огонь», пока не кончилась полоска.',
   delivery: 'Заказ оформлен. Пока курьер едет, занимайся другими делами — уведомление придёт само.',
-  radio: 'Радио замолчало. Это не срочно: подойди к нему и удерживай «Настроить», когда будет минутка.',
+  radio: 'Радио замолчало. Это не срочно: подойди к нему, зажми ручку настройки и подержи пару секунд — треск стихнет, музыка вернётся.',
+  radioTune: 'Радио: зажми ручку настройки и веди по кругу — по часовой частота выше. Между станциями шипит. Колёсико мыши — точная подстройка, ◀ ▶ — соседняя станция.',
   garland: 'Часть гирлянды погасла. Не срочно, но к концу дня её стоит починить — это влияет на порядок.',
   stove: 'Плита: две конфорки. Ставь вариться всё сразу и режи остальное, пока варится. У картофеля 2:00, у яиц 1:00, у свёклы 2:30.',
   hot: 'Сваренное горячее: резать сразу нельзя. Подожди полминуты или остуди под холодной водой у раковины — это быстрее.',
@@ -545,6 +547,7 @@ export class CampaignUI {
       const it = s.boardCur();
       topic = it?.grater ? 'grate' : it?.log ? 'round' : 'cube';
     } else if (s?.panel === 'tray' && s.tray.owner) topic = 'tray:' + s.trayLayoutId(s.tray.owner);
+    else if (s?.panel === 'radio') topic = s.radio.broken ? 'radio' : 'radioTune';
     else if (s?.panel && TIPS[s.panel]) topic = s.panel;
     if (topic) this.tip(topic, true);
   }
@@ -557,6 +560,7 @@ export class CampaignUI {
       case 'open':
         if (['bowl', 'sink', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
         if (e.station === 'phone') this.tip('money');
+        if (e.station === 'radio') this.tip('radioTune');
         if (e.station === 'phone') {
           this.openPhone();
         }
@@ -813,7 +817,7 @@ export class CampaignUI {
   }
 
   _renderLabels(s) {
-    const closeup = ['board', 'tray', 'bowl', 'sink', 'puddle', 'table'].includes(s.panel) || s.practice;
+    const closeup = ['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'radio'].includes(s.panel) || s.practice;
     for (const [id, el] of Object.entries(this.labelEls)) {
       let show = !closeup && !s.heroine.away && s.phase !== 'finished';
       if (id === 'bag') show = show && !!s.delivery.bag;
@@ -1061,8 +1065,19 @@ export class CampaignUI {
         const p = s._activePuddle();
         return p ? `Вытерто: ${Math.round(p.mask.coverage() * 100)} %` : '';
       }
-      case 'radio':
-        return s.radio.broken ? `Ремонт: ${Math.round((s.radio.progress / CAMPAIGN.durations.radioHold) * 100)} %` : '';
+      case 'radio': {
+        // шкала-индикатор: «102,4 МГц · Ретро 102» и сила сигнала
+        const t = s.radioTuning();
+        const lit = s.radio.enabled && !s.radio.broken ? Math.round(t.signal * 4) : 0;
+        const bars = [0, 1, 2, 3].map((i) => `<i class="${i < lit ? 'on' : ''}"></i>`).join('');
+        let name = 'Шум';
+        let cls = 'off';
+        if (s.radio.broken) [name, cls] = [`Помехи · ремонт ${Math.round((s.radio.progress / CAMPAIGN.durations.radioHold) * 100)} %`, 'bad'];
+        else if (!s.radio.enabled) name = 'Выключено';
+        else if (t.tuned) [name, cls] = [t.tuned.name, ''];
+        else if (t.signal > 0.02) [name, cls] = [`${t.station.name}…`, 'weak'];
+        return `<span class="rf">${formatFreq(t.freq)}</span><span class="rdot">·</span><span class="rs ${cls}">${esc(name)}</span><span class="rbars" title="Сигнал">${bars}</span>`;
+      }
       case 'garland':
         return s.garland.broken ? `Контакт: ${Math.round((s.garland.progress / CAMPAIGN.durations.garlandHold) * 100)} %` : '';
       case 'stove':
@@ -1175,8 +1190,14 @@ export class CampaignUI {
       }
       case 'puddle':
         return `<h2>🧽 Лужа</h2><div class="row">${back}</div>${live}<p class="note">Зажми кнопку и води тряпкой по луже.</p>`;
-      case 'radio':
-        return `<h2>📻 Радио</h2><div class="row">${s.radio.broken ? `<button class="primary big hold-btn" data-hold="radio" data-act="hold">🎛 Настроить (удерживай)</button>` : this._btn(s.radio.enabled ? '⏻ Выключить' : '⏻ Включить', 'toggleRadio', [], 'ghost', busy)}${back}</div>${live}<p class="note">${s.radio.broken ? 'Удерживай 2 секунды. Прогресс сохраняется, если отойти.' : 'Выключение радио — просто настройка, без штрафа.'}</p>`;
+      case 'radio': {
+        // док радио: ◀ шкала-индикатор ▶ и одна главная кнопка; крутят ручку на самом радио
+        const seek = (dir, label, title) => this._btn(label, 'seekRadio', [dir], 'radio-seek', busy, title);
+        const main = s.radio.broken
+          ? `<button class="primary big hold-btn" data-hold="radio" data-act="hold">🎛 Настроить (удерживай)</button>`
+          : this._btn(s.radio.enabled ? '⏻ Выключить' : '⏻ Включить', 'toggleRadio', [], s.radio.enabled ? '' : 'primary', busy);
+        return `<h2>📻 Радио</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items radio-tuner">${seek(-1, '◀', 'Предыдущая станция')}<div class="radio-readout" data-live></div>${seek(1, '▶', 'Следующая станция')}</div><div class="dock-main">${main}</div></div>`;
+      }
       case 'garland':
         return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
       case 'fridge': {

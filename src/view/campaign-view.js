@@ -12,6 +12,8 @@ import * as F from './food.js';
 import { CutBoardView } from './cutboard.js';
 import { BowlView } from './bowl3d.js';
 import { DecorView } from './decor.js';
+import { RadioView } from './radio3d.js';
+import { RADIO } from '../campaign/radio-data.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 const UNIT = BOARD_UNIT;
@@ -161,6 +163,7 @@ export class CampaignView {
     this.root.add(fridgeHit);
     tag(fridgeHit, 'fridge');
     for (const id of ['radio', 'garland', 'phone', 'bowl', 'board']) for (const o of k.stations[id] ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = id, this.clickables.push(q)));
+    this.radioView = new RadioView(k.radio);
 
     // кукуруза у миски
     this.cornJar = F.jar(0xf4c430, 0x2f8f3a, 0.09, 0.034);
@@ -353,6 +356,14 @@ export class CampaignView {
         pos.set(a.x, ISLAND_H + 0.55 * back, a.z + 0.42 * back);
         return true;
       }
+      case 'c-radio': {
+        // лицевая панель радио выше дока и левее колонки уведомлений: смотрим чуть ниже и правее центра корпуса
+        const a = S.radio.anchor;
+        const fz = a.z + RADIO.face.z;
+        look.set(a.x + 0.06, a.y - 0.04, fz);
+        pos.set(a.x + 0.06, a.y + 0.06 * back, fz + 0.78 * back);
+        return true;
+      }
       case 'c-puddle': {
         const p = this.session?._activePuddle();
         const c = p ?? { x: 0, z: 0 };
@@ -385,7 +396,7 @@ export class CampaignView {
     if (!session || session.heroine.away) return 'c-overview';
     const p = session.panel;
     if (p === 'board') return 'board';
-    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table') return 'c-' + p;
+    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'radio') return 'c-' + p;
     return 'c-overview';
   }
 
@@ -429,6 +440,11 @@ export class CampaignView {
         const T = CLAYOUT.table;
         return { c: new THREE.Vector3(T.x, T.h, T.z), y: T.h };
       }
+      case 'radio': {
+        // вертикальная лицевая панель: x — вправо, z — вниз по панели (как на экране)
+        const a = S.radio.anchor;
+        return { c: new THREE.Vector3(a.x, a.y, a.z + RADIO.face.z), y: a.y, vertical: true };
+      }
       default:
         return null;
     }
@@ -439,6 +455,10 @@ export class CampaignView {
     if (!wp) return null;
     const rc = this.sv._ray(ndc);
     const p = new THREE.Vector3();
+    if (wp.vertical) {
+      if (!rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -wp.c.z), p)) return null;
+      return { x: p.x - wp.c.x, z: wp.c.y - p.y };
+    }
     if (!rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -wp.y), p)) return null;
     return { x: p.x - wp.c.x, z: p.z - wp.c.z };
   }
@@ -446,7 +466,7 @@ export class CampaignView {
   localToScreen(station, x, z, dy = 0) {
     const wp = this.workPlane(station);
     if (!wp) return null;
-    const v = new THREE.Vector3(wp.c.x + x, wp.y + dy, wp.c.z + z).project(this.sv.camera);
+    const v = (wp.vertical ? new THREE.Vector3(wp.c.x + x, wp.c.y - z, wp.c.z + dy) : new THREE.Vector3(wp.c.x + x, wp.y + dy, wp.c.z + z)).project(this.sv.camera);
     const c = this.sv.canvas;
     return { x: (v.x * 0.5 + 0.5) * c.clientWidth, y: (-v.y * 0.5 + 0.5) * c.clientHeight };
   }
@@ -835,7 +855,7 @@ export class CampaignView {
     r.led.material.color.setHex(rb ? 0xd65037 : ron ? 0x64d48b : 0x6c7367);
     r.led.material.emissive.setHex(rb ? 0x9a180b : ron ? 0x2faa64 : 0x000000);
     r.led.material.emissiveIntensity = rb ? 0.3 + Math.abs(Math.sin(t * 5)) * 0.5 : ron ? 0.8 : 0;
-    r.dial.rotation.y = s.holds.radio ? Math.sin(t * 9) * 0.5 : 0;
+    this.radioView.sync(s, dt, t, s.panel === 'radio' ? this.pointerLocal : null);
     const unread = s.phone.unread > 0 || s.alerts.some((a) => a.phone);
     this.k.phone.screen.material.color.setScalar(unread ? 0.75 + Math.sin(t * 8) * 0.25 : s.panel === 'phone' ? 1 : 0.35);
     // стакан
