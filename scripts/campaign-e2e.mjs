@@ -330,7 +330,8 @@ try {
   await shot('d1_board_carrot');
   // ошибки игрока: мимо, клик без движения, перенос до разреза — игра не зависает
   const b0 = await boardBox();
-  await knife(b0.x1 + 2.5, b0.z0 - 0.5, b0.x1 + 2.5, b0.z1 + 0.5);
+  // справа от продукта, ниже карточек уведомлений в правом верхнем углу (они перехватывают нажатие)
+  await knife(b0.x1 + 2, -1, b0.x1 + 2, b0.z1 + 0.5);
   check('росчерк мимо продукта — без разреза, с подсказкой', (await sess('s.boardCur().cuts')) === 0 && /мимо/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
   { const c = await local(0, 0); await page.mouse.move(c.x, c.y); await page.mouse.down(); await wait(120); await page.mouse.up(); await wait(100); }
   check('клик без движения — не режет', (await sess('s.boardCur().cuts')) === 0, await sess('s.hint?.text'));
