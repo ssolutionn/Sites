@@ -28,7 +28,9 @@ async function turnKnob(i, heat) {
 try {
   await page.goto(url, { timeout: 180000 }); await wait(1500);
   await S(() => localStorage.clear()); await page.goto(url, { timeout: 180000 }); await wait(2500);
-  await page.click('[data-ui=new]'); await wait(500); await page.click('[data-ui=enter]'); await wait(1500);
+  // клики по меню — через DOM: на программном рендере проверка «элемент неподвижен» может не дождаться кадра
+  await page.waitForSelector('[data-ui=new]', { timeout: 120000 }); await S(() => document.querySelector('[data-ui=new]').click()); await wait(800);
+  await page.waitForSelector('[data-ui=enter]', { timeout: 120000 }); await S(() => document.querySelector('[data-ui=enter]').click()); await wait(1500);
   log('loaded');
   await S(() => window.__sueta.session.goTo('stove'));
   await waitFor(() => window.__sueta.session.panel === 'stove' && window.__sueta.sv.camT >= 1);
