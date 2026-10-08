@@ -475,6 +475,24 @@ export class CutBoardView {
     saucer.receiveShadow = true;
     this.sample.add(saucer);
     this.sample.position.set(0.215, 0, -0.1);
+    // подпись, чтобы образец не принимали за ещё один продукт
+    const tagC = document.createElement('canvas');
+    tagC.width = 256;
+    tagC.height = 64;
+    const tg = tagC.getContext('2d');
+    tg.fillStyle = 'rgba(26,21,18,0.78)';
+    tg.beginPath();
+    tg.roundRect(4, 8, 248, 48, 24);
+    tg.fill();
+    tg.fillStyle = '#ffd06a';
+    tg.font = '800 28px Nunito, sans-serif';
+    tg.textAlign = 'center';
+    tg.fillText('образец кубика', 128, 42);
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagC), depthTest: false, transparent: true }));
+    tag.scale.set(0.07, 0.0175, 1);
+    tag.position.set(0, 0.07, 0);
+    tag.renderOrder = 8;
+    this.sample.add(tag);
     this.sampleCube = null;
     this.sampleProduct = null;
     this.group.add(this.sample);

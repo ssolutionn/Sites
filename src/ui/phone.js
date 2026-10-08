@@ -80,8 +80,10 @@ export class PhoneUI {
   }
 
   open(app = 'home') {
-    this.app = app;
-    this.sub = null;
+    const [a, sub] = app.split('|');
+    this.app = a;
+    this.sub = sub || null;
+    this.lastApp = a;
     this.sig = null;
     this.anim = true;
     this.root.classList.remove('hidden');

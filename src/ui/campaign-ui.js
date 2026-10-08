@@ -1,6 +1,7 @@
 // Интерфейс кампании (DOM). Читает состояние и отправляет команды через act().
 import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER } from '../campaign/data.js';
-import { PhoneUI } from './phone.js';
+import { PhoneUI, saveRecipeCard } from './phone.js';
+import { LESSONS } from '../campaign/lessons.js';
 import { CLAYOUT, TABLE_SLOTS } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
@@ -83,6 +84,30 @@ export class CampaignUI {
     this._bindPanel();
     this._bindPhone();
     this._bindRecipe();
+    // заметка из кулинарной книги: «как на самом деле», «зачем», факт
+    this.el.note = document.createElement('div');
+    this.el.note.id = 'lesson-note';
+    this.el.note.className = 'hidden';
+    $('#app').appendChild(this.el.note);
+    this.noteT = 0;
+    this.noteIdle = 0;
+    this.factIdx = 0;
+  }
+
+  // Показать заметку книги: kind — подпись («Как на самом деле»), text — одна-две фразы.
+  _note(kind, text) {
+    if (!text) return;
+    this.el.note.innerHTML = `<div class="ln-k">📖 ${esc(kind)}</div><div class="ln-t">${esc(text)}</div>`;
+    this.el.note.classList.remove('hidden');
+    this.el.note.classList.remove('pop');
+    void this.el.note.offsetWidth;
+    this.el.note.classList.add('pop');
+    this.noteT = 9;
+    this.noteIdle = 0;
+  }
+
+  _lessonStep(dishId, stepId) {
+    return LESSONS[dishId]?.steps?.[stepId] ?? null;
   }
 
   _label(id, text) {
@@ -212,6 +237,7 @@ export class CampaignUI {
         <h2>${esc(day.title)}</h2>
         <p>${esc(day.intro)}</p>
         <ul class="dish-list">${dishes}</ul>
+        ${day.dishes.map((id) => LESSONS[id] ? `<div class="book-page"><div class="bp-k">📖 из кулинарной книги</div><p class="hand">${esc(LESSONS[id].intro)}</p><div class="bp-ingr">${LESSONS[id].ingredients.slice(0, 7).map((g) => `<span>${esc(g.product ? PRODUCTS[g.product]?.name ?? g.name : g.name)} — ${esc(g.amount)}</span>`).join('')}</div><p class="bp-fact">✨ ${esc(LESSONS[id].facts[0] ?? '')}</p></div>` : '').join('')}
         <div class="skills">Новое: ${skills}</div>
         ${resumed ? '<p class="small warn">Страница перезагружалась во время дня: начинаем этот день заново, прошлые результаты сохранены.</p>' : ''}
         <p class="small">Ориентир: около ${day.targetMinutes} минут — уложишься, получишь медаль «В ритме». Время не ограничено. Бюджет на покупки: <b>${day.budget ?? 0} ₽</b>.</p>
@@ -257,7 +283,8 @@ export class CampaignUI {
     const rows = day.dishes
       .map((id) => {
         const notes = (r.notes[id] ?? []).map((n) => `<li>${esc(n)}</li>`).join('');
-        return `<div class="dish-res"><div class="dish-q">${r.dishes[id]}</div><div><b>${ICON[id]} ${RECIPES[id].name}</b><ul>${notes}</ul></div></div>`;
+        const L = LESSONS[id];
+        return `<div class="dish-res"><div class="dish-q">${r.dishes[id]}</div><div><b>${ICON[id]} ${RECIPES[id].name}</b><ul>${notes}</ul>${L ? `<p class="bp-check">📖 ${esc(L.check)}</p><button class="ghost small-btn" data-card="${id}">💾 Карточка рецепта</button>` : ''}</div></div>`;
       })
       .join('');
     const best = r.challenge ? null : save.data.days[day.id - 1].best;
@@ -282,6 +309,7 @@ export class CampaignUI {
       </div>`,
       'dim',
     );
+    this.el.overlay.querySelectorAll('[data-card]').forEach((b) => b.addEventListener('click', () => saveRecipeCard(b.dataset.card)));
   }
 
   showFinal(save) {
@@ -471,6 +499,7 @@ export class CampaignUI {
   }
 
   hideKitchen() {
+    this.el.note?.classList.add('hidden');
     this.el.hud.classList.add('hidden');
     this.el.panel.classList.add('hidden');
     this.el.panel.innerHTML = '';
@@ -632,9 +661,33 @@ export class CampaignUI {
       case 'washed':
         this.toast(esc(s.equipment[e.item].cleanText) + ' ✨', 'good');
         break;
-      case 'transfer':
+      case 'transfer': {
         this.toast(`${PICON[e.product] ?? ''} ${esc(PRODUCTS[e.product].name)} — готово (${Math.round(e.q * 100)} % аккуратно)`, 'good', 2.2);
+        const l = this._lessonStep(e.dishId, e.stepId);
+        if (l) e.q < 0.75 ? this._note('Частая ошибка', l.mistake) : this._note('Зачем так', l.why);
         break;
+      }
+      case 'boardSwitch':
+        if (e.fresh) {
+          const [dishId, stepId] = e.key.split(':');
+          this._note('Как на самом деле', this._lessonStep(dishId, stepId)?.how);
+        }
+        break;
+      case 'potPlaced': {
+        const d = s.dishes[e.dishId];
+        const st = d?.recipe.steps.find((x) => x.type === 'boil' && x.product === e.product);
+        if (st) this._note('Как на самом деле', this._lessonStep(e.dishId, st.id)?.how);
+        break;
+      }
+      case 'added':
+      case 'seasoned':
+      case 'stepDone': {
+        if (e.type === 'stepDone' && !['add', 'season', 'mix'].includes(s.stepDef(e.dishId, e.stepId)?.type)) break;
+        const stepId = e.stepId ?? s.dishes[e.dishId]?.recipe.steps.find((x) => x.product === e.product)?.id;
+        const l = stepId && this._lessonStep(e.dishId, stepId);
+        if (l) this._note('Зачем так', l.why);
+        break;
+      }
       case 'practiceResult':
         this.toast(`<b>Результат: ${Math.round(e.q * 100)} %</b>`, 'good', 4);
         break;
@@ -677,6 +730,20 @@ export class CampaignUI {
       if (this.tipT <= 0) this.el.tip.classList.add('hidden');
     }
     if (!s || (mode !== 'kitchen' && mode !== 'paused')) return;
+    if (this.noteT > 0) {
+      this.noteT -= dt;
+      if (this.noteT <= 0) this.el.note.classList.add('hidden');
+    }
+    // пока что-то варится и руки свободны — факт из книги, раз в ~40 с
+    if (mode === 'kitchen' && !s.practice) {
+      this.noteIdle += dt;
+      const busy = s.burners.some((b) => b.state === 'boiling') || s.oven.state === 'baking' || !!s.delivery.order;
+      if (busy && this.noteIdle > 40 && this.el.tip.classList.contains('hidden')) {
+        const facts = Object.keys(s.dishes).flatMap((id) => LESSONS[id]?.facts ?? []);
+        if (facts.length) this._note('А вы знали?', facts[this.factIdx++ % facts.length]);
+      }
+    }
+    this.el.note.classList.toggle('under-tip', !this.el.tip.classList.contains('hidden'));
     this._renderHud(s);
     this._renderLabels(s);
     this._renderAlerts(s);
@@ -1168,6 +1235,14 @@ export class CampaignUI {
         this.recipeSig = null;
       }
       if (e.target.closest('[data-close]')) this.toggleRecipe(false);
+      const book = e.target.closest('[data-book]');
+      if (book) {
+        // книга живёт в телефоне: открыть сразу нужный рецепт
+        this.toggleRecipe(false);
+        this.phoneNext = 'book|' + book.dataset.book;
+        if (this.app.session?.panel === 'phone') this.openPhone();
+        else this.act('goTo', 'phone');
+      }
     });
   }
 
@@ -1197,7 +1272,7 @@ export class CampaignUI {
         if (d.recipe.onionOption && !d.done) {
           variant = `${reqs}<div class="row">${this._btn('С луком', 'setVariant', [d.id, true], d.variant.onion ? 'active' : 'ghost')}${this._btn('Без лука', 'setVariant', [d.id, false], !d.variant.onion ? 'active' : 'ghost')}${this._btn('↺ Переделать начинку', 'redoFilling', [d.id], 'ghost')}</div>`;
         }
-        return `<div class="recipe-dish ${d.done ? 'done' : ''}"><h3>${ICON[d.id]} ${esc(d.recipe.name)} ${d.done ? `<span class="score-pill">${d.Q}</span>` : ''}</h3><div class="small">${esc(d.recipe.look)}</div>${variant}<ul class="steps">${steps}</ul></div>`;
+        return `<div class="recipe-dish ${d.done ? 'done' : ''}"><h3>${ICON[d.id]} ${esc(d.recipe.name)} ${d.done ? `<span class="score-pill">${d.Q}</span>` : ''}${LESSONS[d.id] ? `<button class="ghost small-btn" data-book="${d.id}">📖 Подробно</button>` : ''}</h3><div class="small">${esc(d.recipe.look)}</div>${variant}<ul class="steps">${steps}</ul></div>`;
       })
       .join('');
     const extra = s.day.finalServe ? `<div class="recipe-dish"><h3>🎄 Сервировка стола</h3><div class="small">Все 10 блюд — на праздничный стол (${Object.keys(s.table.placed).length}/10).</div></div>` : '';

@@ -406,3 +406,22 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 #phone .tmr.hot .ring { background: conic-gradient(var(--berry) calc(var(--k) * 360deg), #eee3d3 0); }
 #phone .trow { display: flex; gap: 6px; }
 #phone .device.light .ph-status { color: var(--ink); text-shadow: none; }
+
+/* заметка из кулинарной книги */
+#lesson-note { position: absolute; left: var(--sp-4); top: 150px; width: min(300px, calc(100vw - 32px)); z-index: 24; background: linear-gradient(180deg, #fffaf0, #f8ecd4); color: var(--ink); border-radius: var(--r-m); padding: 10px 14px 12px; box-shadow: var(--shadow-2); border-left: 4px solid var(--berry); transform: rotate(-0.6deg); }
+#lesson-note.pop { animation: slidein var(--t-med) ease-out; }
+#lesson-note.under-tip { display: none; }
+#lesson-note .ln-k { font-size: 11.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.6px; color: var(--berry-dark); }
+#lesson-note .ln-t { font-family: var(--font-hand); font-size: 21px; line-height: 1.15; margin-top: 2px; }
+.book-page { background: linear-gradient(180deg, #fffaf0, #f6e8cc); border-radius: var(--r-m); padding: 10px 14px; margin: 10px 0; box-shadow: inset 0 0 0 1px var(--paper-line); }
+.book-page .bp-k { font-size: 11.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.6px; color: var(--berry-dark); }
+.book-page .hand { margin: 4px 0; font-size: 22px; line-height: 1.15; }
+.book-page .bp-ingr { display: flex; flex-wrap: wrap; gap: 4px; }
+.book-page .bp-ingr span { font-size: 12px; font-weight: 700; background: #fff; border-radius: 8px; padding: 2px 7px; }
+.book-page .bp-fact { font-size: 13px; color: var(--pine); font-weight: 700; margin: 8px 0 0; }
+.bp-check { font-size: 13px; color: var(--pine); margin: 4px 0; }
+.small-btn { padding: 5px 12px !important; font-size: 13px !important; }
+/* рецепт дня — страница из книги */
+#recipe { background: linear-gradient(180deg, var(--paper), #f8ebd2); border-radius: var(--r-l); box-shadow: var(--shadow-2); top: 150px; }
+#recipe .recipe-head b { font-size: 17px; font-weight: 900; color: var(--pine); }
+#recipe .recipe-dish h3 { justify-content: space-between; }
