@@ -359,10 +359,12 @@ try {
   await boardProduct('pickle', 'Солёные огурцы × 2', { chop: true });
   check('морковь, колбаса, солёные огурцы нарезаны, пока варится', await sess("['carrot','sausage','pickle'].every(k => s.stepDone('olivier', k))"));
   // яйца: сварились → горячие → остудить у раковины → резать
-  await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.burners[1].readyAt - window.__sueta.session.t + 0.5)));
+  await S(() => { const s = window.__sueta.session; s.fastForward(200, () => s.burners[1].state === 'ready'); });
   check('плита (яйца готовы)', await goStation('Плита', 'stove'));
   for (let i = 0; i < 2 && (await sess('s.burners.some(b => b.overflow)')); i++) { await actBtn('reduceHeat'); await noAction(); }
-  await actBtn('takePot'); await noAction();
+  // достаём именно яйца (картошка за это время тоже могла свариться)
+  await actBtn('takePot', '[1]'); await noAction();
+  check('сняты яйца, огонь под ними выключен', (await sess('s.burners[1].state')) === 'empty' && (await sess('s.burners[1].heat')) === 0);
   await goStation('Доска', 'board');
   await actBtn('boardSelect', '"olivier:peelEgg"'); await wait(300);
   check('горячие яйца не чистятся', (await sess('s.boardCur()?.product')) !== 'egg', await sess('s.hint?.text'));
@@ -375,10 +377,10 @@ try {
   await boardProduct('egg', 'Яйца × 2');
   check('яйца нарезаны', await sess("['carrot','sausage','pickle','egg'].every(k => s.stepDone('olivier', k))"));
   // картофель
-  await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.stove.readyAt - window.__sueta.session.t + 0.5)));
+  await S(() => { const s = window.__sueta.session; s.fastForward(200, () => s.burners[0].state === 'ready'); });
   check('плита (картофель готов)', await goStation('Плита', 'stove'));
   for (let i = 0; i < 2 && (await sess('s.burners.some(b => b.overflow)')); i++) { await actBtn('reduceHeat'); await noAction(); }
-  await actBtn('takePot'); await noAction();
+  await actBtn('takePot', '[0]'); await noAction();
   await goStation('Раковина', 'sink'); await coolUnderTap('potato');
   check('доска (картофель)', await goStation('Доска', 'board'));
   await peelProduct('peelPotato', 'Картофель');
