@@ -42,7 +42,7 @@ export const CLAYOUT = {
 };
 
 // Станции, у которых есть крупный план от первого лица.
-export const CLOSEUP_STATIONS = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'table']);
+export const CLOSEUP_STATIONS = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'stove', 'radio']);
 
 // --- Рабочие места на подносе (локальные координаты: центр подноса) ---
 export const TRAY = { w: 0.56, d: 0.4, workPlate: { x: -0.33, z: 0.11, r: 0.065 } };

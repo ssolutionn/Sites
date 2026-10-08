@@ -785,6 +785,13 @@ export class CampaignUI {
     if (hint) {
       this.el.hint.textContent = hint;
       this.el.hint.classList.remove('hidden');
+      // подсказка всегда над доком станции: док плиты с крутилками выше обычного
+      const dock = this.el.panel && !this.el.panel.classList.contains('hidden') ? this.el.panel.getBoundingClientRect() : null;
+      const bottom = dock && dock.height ? Math.max(132, innerHeight - dock.top + 10) : 132;
+      if (this._hintBottom !== bottom) {
+        this._hintBottom = bottom;
+        this.el.hint.style.bottom = `${bottom}px`;
+      }
     } else this.el.hint.classList.add('hidden');
   }
 
@@ -844,7 +851,7 @@ export class CampaignUI {
   }
 
   _renderLabels(s) {
-    const closeup = ['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'radio'].includes(s.panel) || s.practice;
+    const closeup = ['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'radio', 'stove'].includes(s.panel) || s.practice;
     for (const [id, el] of Object.entries(this.labelEls)) {
       let show = !closeup && !s.heroine.away && s.phase !== 'finished';
       if (id === 'bag') show = show && !!s.delivery.bag;
