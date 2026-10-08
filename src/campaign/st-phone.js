@@ -1,5 +1,5 @@
 // Телефон: сообщения, список покупок, заказ доставки, получение за кадром.
-import { stepProducts, PRODUCTS, CATALOG } from './data.js';
+import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR } from './data.js';
 import { CLAYOUT } from './layout.js';
 
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
@@ -16,6 +16,79 @@ export const phoneMethods = {
     this._alert('phone', `${from}: ${text.length > 42 ? text.slice(0, 40) + '…' : text}`, { station: 'phone', until: this.t + 12, phone: true });
     this._emit('phoneMsg', { from });
     return m;
+  },
+
+  // ---------- банк: бонусы ----------
+  _earn(points, why) {
+    const n = Math.round(points);
+    if (n <= 0 || this.practice) return 0;
+    this.bonus.points += n;
+    this.bonus.history.unshift({ t: this.t, n, why });
+    this._emit('bonus', { n, why });
+    return n;
+  },
+
+  setUsePoints(on) {
+    this.delivery.usePoints = !!on;
+    return true;
+  },
+
+  // Сколько баллов уйдёт в оплату заказа на сумму total.
+  pointsFor(total) {
+    return this.delivery.usePoints ? Math.min(this.bonus.points, Math.floor(total * BONUS.payShare)) : 0;
+  },
+
+  buyDecor(id) {
+    const d = DECOR[id];
+    if (!d || this.decor.includes(id)) return false;
+    if (this.bonus.points < d.price) {
+      this.setHint(`Не хватает баллов: нужно ${d.price}, есть ${this.bonus.points}`, 2.5);
+      return false;
+    }
+    this.bonus.points -= d.price;
+    this.bonus.history.unshift({ t: this.t, n: -d.price, why: d.name });
+    this.decor.push(id);
+    this._emit('decorBought', { id });
+    return true;
+  },
+
+  // ---------- «Андрей»: фото готового блюда ----------
+  postPhoto(dishId) {
+    const d = this.dishes[dishId];
+    if (!d?.done || this.phone.posts.some((p) => p.dishId === dishId)) return false;
+    this.phone.posts.unshift({ id: this._id(), dishId, t: this.t, Q: d.Q });
+    this._earn(BONUS.perPhoto, `Фото: ${d.recipe.name}`);
+    this._emit('posted', { dishId });
+    return true;
+  },
+
+  // Лайки растут первую минуту после публикации — чем вкуснее, тем больше.
+  postLikes(p) {
+    const k = Math.min(1, (this.t - p.t) / 60);
+    return Math.round(k * (12 + (p.Q ?? 70) * 0.9));
+  },
+
+  // ---------- таймеры кухни ----------
+  setKitchenTimer(seconds) {
+    const sec = Math.max(10, Math.min(600, Math.round(seconds)));
+    this.kitchenTimers.push({ id: this._id(), end: this.t + sec, total: sec });
+    this._emit('timerSet', { sec });
+    return true;
+  },
+
+  cancelKitchenTimer(id) {
+    this.kitchenTimers = this.kitchenTimers.filter((x) => x.id !== id);
+    return true;
+  },
+
+  _updateKitchenTimers() {
+    for (const x of this.kitchenTimers) {
+      if (x.done || this.t < x.end) continue;
+      x.done = true;
+      this._alert('timer', `Таймер на ${Math.round(x.total / 60) || 1} мин сработал`, { until: this.t + 8 });
+      this._emit('timerDone', { id: x.id });
+    }
+    this.kitchenTimers = this.kitchenTimers.filter((x) => !x.done || this.t < x.end + 8);
   },
 
   markRead() {
@@ -73,12 +146,19 @@ export const phoneMethods = {
       return false;
     }
     const cost = this.orderCost(items, mode);
-    if (!this.practice && cost.total > this.wallet.budget - this.wallet.spent) {
-      this.setHint(`Не хватает денег: нужно ${cost.total} ₽, осталось ${this.wallet.budget - this.wallet.spent} ₽`, 3);
+    const toPay = cost.total - this.pointsFor(cost.total);
+    if (!this.practice && toPay > this.wallet.budget - this.wallet.spent) {
+      this.setHint(`Не хватает денег: нужно ${toPay} ₽, осталось ${this.wallet.budget - this.wallet.spent} ₽`, 3);
       this._emit('noMoney');
       return false;
     }
-    this.wallet.spent += cost.total;
+    const paidPoints = this.pointsFor(cost.total);
+    if (paidPoints) {
+      this.bonus.points -= paidPoints;
+      this.bonus.history.unshift({ t: this.t, n: -paidPoints, why: 'Оплата заказа баллами' });
+    }
+    this.wallet.spent += cost.total - paidPoints;
+    this._earn((cost.total - paidPoints) * BONUS.cashback, 'Кешбэк за заказ');
     this._emit('paid', { total: cost.total });
     if (mode === 'self') {
       this.delivery.order = { id: this._id(), items, t0: this.t, wait: 0, status: 'arrived', self: true, mode };

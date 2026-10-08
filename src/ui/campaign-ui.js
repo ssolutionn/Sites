@@ -1,5 +1,6 @@
 // Интерфейс кампании (DOM). Читает состояние и отправляет команды через act().
 import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER } from '../campaign/data.js';
+import { PhoneUI } from './phone.js';
 import { CLAYOUT, TABLE_SLOTS } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
@@ -502,7 +503,7 @@ export class CampaignUI {
     this.el.tip.innerHTML = `<div class="tip-text">💡 ${esc(TIPS[topic])}</div><button class="ghost" id="tip-ok">Понятно</button>`;
     this.el.tip.classList.remove('hidden');
     // в крупном плане совет уходит в левую колонку и не закрывает продукт
-    const CLOSE = ['board', 'bowl', 'tray', 'sink', 'puddle'];
+    const CLOSE = ['board', 'bowl', 'tray', 'sink', 'puddle', 'phone'];
     this.el.tip.classList.toggle('side', CLOSE.includes(this.app.session?.panel));
     $('#tip-ok').addEventListener('click', () => this.el.tip.classList.add('hidden'));
     this.tipT = 14;
@@ -526,7 +527,7 @@ export class CampaignUI {
         break;
       case 'open':
         if (['bowl', 'sink', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
-        if (e.station === 'phone' && this.phoneTab === 'order') this.tip('money');
+        if (e.station === 'phone') this.tip('money');
         if (e.station === 'phone') {
           this.openPhone();
         }
@@ -1205,27 +1206,12 @@ export class CampaignUI {
 
   // ---------- телефон ----------
   _bindPhone() {
-    this.el.phone.addEventListener('click', (e) => {
-      const tab = e.target.closest('[data-tab]');
-      if (tab) {
-        this.phoneTab = tab.dataset.tab;
-        this.phoneSig = null;
-        return;
-      }
-      const b = e.target.closest('button[data-act]');
-      if (b) {
-        this.sound.unlock();
-        const args = b.dataset.args ? JSON.parse(b.dataset.args) : [];
-        this.act(b.dataset.act, ...args);
-        this.phoneSig = null;
-      }
-    });
+    this.phoneUI = new PhoneUI({ root: this.el.phone, act: (...a) => this.act(...a), sound: this.sound });
   }
 
-  openPhone() {
-    this.el.phone.classList.remove('hidden');
-    this.phoneSig = null;
-    this.act('markRead');
+  openPhone(app) {
+    this.phoneUI.open(app ?? this.phoneNext ?? 'home');
+    this.phoneNext = null;
   }
 
   _renderPhoneLive(s) {
@@ -1233,66 +1219,9 @@ export class CampaignUI {
       this.el.phone.classList.add('hidden');
       return;
     }
-    if (s.phone.unread) this.act('markRead');
-    const o = s.delivery.order;
-    const sig = this.phoneTab + s.phone.messages.length + JSON.stringify(s.delivery.draft) + (o ? o.status : '-') + !!s.delivery.bag + s.alerts.filter((a) => a.urgent).map((a) => a.key).join() + s.wallet.spent;
-    if (sig === this.phoneSig) return;
-    this.phoneSig = sig;
-    const pushes = s.alerts.filter((a) => a.urgent).map((a) => `<div class="push">⚠️ ${esc(a.text)}</div>`).join('');
-    let body = '';
-    if (this.phoneTab === 'messages') {
-      body = s.phone.messages.length
-        ? s.phone.messages
-            .slice()
-            .reverse()
-            .map((m) => `<div class="msg-card ${m.from === 'Доставка' ? 'svc' : ''}"><div class="from">${m.from === 'Верка' ? '🌴' : m.from === 'Гости' ? '🎉' : '🛵'} ${esc(m.from)} <span class="small">${fmt(m.t)}</span></div><div>${esc(m.text)}</div>${m.photo ? '<div class="photo-card"><div class="sun"></div><div class="sea"></div><div class="palm">🌴</div><div class="cap">Вид с балкона (иллюстрация)</div></div>' : ''}</div>`)
-            .join('')
-        : '<div class="empty">Сообщений пока нет.</div>';
-    } else if (this.phoneTab === 'shopping') {
-      const list = s.shopping();
-      body = list.length
-        ? `<table class="shop">${list.map((x) => `<tr class="${x.lack ? 'lack' : ''}"><td>${PICON[x.id] ?? ''} ${esc(x.name)}</td><td>нужно ${x.need}</td><td>есть ${x.have}</td><td>${x.lack ? `<b>не хватает ${x.lack}</b>` : '✓'}</td></tr>`).join('')}</table><p class="small">Список считает только незавершённые шаги. Ничего не заказывается само.</p>`
-        : '<div class="empty">Всё необходимое есть.</div>';
-    } else {
-      if (o || s.delivery.bag) {
-        const st = o ? { accepted: 'Принят', assembling: 'Собирают', onTheWay: 'В пути', arrived: 'Прибыл', collecting: 'Забираем' }[o.status] : 'Получен — разбери пакет';
-        const steps = ['accepted', 'assembling', 'onTheWay', 'arrived'];
-        const idx = o ? steps.indexOf(o.status === 'collecting' ? 'arrived' : o.status) : 4;
-        const items = Object.entries(o?.items ?? Object.fromEntries((s.delivery.bag?.items ?? []).map((i) => [i.id, i.qty])))
-          .map(([id, q]) => `<li>${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)} × ${q}</li>`)
-          .join('');
-        body = `<div class="order-status"><b>Заказ: ${st}</b><div class="steps-line">${steps.map((x, i) => `<span class="${i <= idx ? 'on' : ''}"></span>`).join('')}</div><ul>${items}</ul>
-          ${o && o.status === 'arrived' ? this._btn('🚪 Забрать заказ', 'collectOrder', [], 'primary') : ''}
-          ${o && ['accepted', 'assembling', 'onTheWay'].includes(o.status) ? this._btn('⏩ Подождать (ускорить)', 'waitDelivery', [], 'ghost') : ''}</div>
-          <p class="small">Позиции подтверждённого заказа не меняются. Один заказ за раз.</p>`;
-      } else {
-        const lack = Object.fromEntries(s.shopping().filter((x) => x.lack).map((x) => [x.id, x.lack]));
-        const cat = s.catalog();
-        const rows = cat
-          .map((c) => {
-            const q = s.delivery.draft[c.id] ?? 0;
-            return `<tr class="${lack[c.id] ? 'lack' : ''}"><td>${PICON[c.id] ?? ''} ${esc(c.name)}${lack[c.id] ? ' <b>!</b>' : ''}</td><td class="price">${PRODUCTS[c.id].price ?? 0} ₽</td><td class="qty">${this._btn('−', 'draftSet', [c.id, q - 1], 'ghost mini', q <= 0)}<span>${q}</span>${this._btn('+', 'draftSet', [c.id, q + 1], 'ghost mini', q >= 6)}</td></tr>`;
-          })
-          .join('');
-        const total = Object.values(s.delivery.draft).reduce((a, b) => a + b, 0);
-        const m = s.money();
-        const modes = s.deliveryModes()
-          .map((md) => {
-            const c = s.orderCost(s.delivery.draft, md.id);
-            const when = md.id === 'self' ? `уйду на ${md.away} с` : `${md.wait[0]}–${md.wait[1]} с`;
-            const can = total && c.total <= m.left;
-            return this._btn(`${md.id === 'express' ? '⚡' : md.id === 'self' ? '🏃‍♀️' : '🛵'} ${esc(md.label)} · ${c.total} ₽ · ${when}`, 'confirmOrder', [md.id], can ? (md.id === 'standard' ? 'primary' : '') : 'soft-disabled', false, can ? '' : total ? 'Не хватает денег' : 'Пустой заказ');
-          })
-          .join('');
-        body = `<div class="wallet">💰 Бюджет дня: <b>${m.left} ₽</b> из ${m.budget} ₽</div><table class="shop">${rows}</table><div class="row modes">${modes}</div><p class="small">Игровые деньги, без реальных сервисов. «!» — не хватает для рецептов. «Сходить самой» — бесплатно, но плита и кот останутся без присмотра.</p>`;
-      }
-    }
-    this.el.phone.innerHTML = `<div class="phone"><div class="status"><span>${fmt(s.t)}</span><span>📶 🔋</span></div>${pushes}
-      <div class="ptabs"><button data-tab="messages" class="${this.phoneTab === 'messages' ? 'on' : ''}">Сообщения</button><button data-tab="shopping" class="${this.phoneTab === 'shopping' ? 'on' : ''}">Покупки</button><button data-tab="order" class="${this.phoneTab === 'order' ? 'on' : ''}">Заказ</button></div>
-      <div class="feed">${body}</div><div class="bottom">${this._btn('Закрыть телефон', 'closePanel', [], 'primary')}</div></div>`;
+    this.phoneUI.render(s);
   }
 
-  // ---------- режим разработчика ----------
   showDev(h) {
     const d = this.el.dev;
     d.classList.remove('hidden');

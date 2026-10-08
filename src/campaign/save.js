@@ -13,6 +13,8 @@ export function emptySave() {
     speed: { best: null }, // скоростная нарезка: лучшее время
     lastCompletedAt: null,
     finished: false,
+    bonus: 0, // баллы бонусной программы
+    decor: [], // купленный декор кухни
   };
 }
 
@@ -48,6 +50,8 @@ export function parseSave(raw) {
   });
   base.settings = { ...base.settings, ...(data.settings || {}) };
   base.lastCompletedAt = data.lastCompletedAt ?? null;
+  base.bonus = Number.isFinite(data.bonus) && data.bonus >= 0 ? Math.round(data.bonus) : 0;
+  base.decor = Array.isArray(data.decor) ? data.decor.filter((x) => typeof x === 'string') : [];
   base.finished = base.days.every((d) => d.completed);
   return { save: base, status: 'ok' };
 }

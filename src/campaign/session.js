@@ -2,7 +2,7 @@
 // Единый игровой clock: update(dt) двигает ходьбу, действия, плиту, духовку, доставку и помехи.
 // Представление читает состояние и отправляет команды; количество продуктов и оценку не меняет.
 
-import { CAMPAIGN, DAYS, RECIPES, PRODUCTS, stepProducts, stationOfStep } from './data.js';
+import { CAMPAIGN, DAYS, RECIPES, PRODUCTS, stepProducts, stationOfStep, BONUS } from './data.js';
 import { CLAYOUT, CLOSEUP_STATIONS } from './layout.js';
 import { Inventory } from './inventory.js';
 import { NavGrid } from './nav.js';
@@ -26,7 +26,7 @@ export function buildNav() {
 }
 
 export class KitchenSession {
-  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, tableDishes = [], mods = {} } = {}) {
+  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, tableDishes = [], mods = {}, bonus = 0, decor = [] } = {}) {
     this.cfg = cfg;
     this.mods = mods;
     this.seed = seed;
@@ -84,8 +84,11 @@ export class KitchenSession {
     this.glass = { present: !!this.day.events?.some((e) => e.type === 'spill'), spilled: false };
     this.puddles = [];
     this.sinkJob = null;
-    this.phone = { messages: [], unread: 0 };
-    this.delivery = { draft: {}, order: null, bag: null };
+    this.phone = { messages: [], unread: 0, posts: [] };
+    this.bonus = { points: Math.max(0, Math.round(bonus) || 0), history: [] }; // баллы бонусной программы (между днями — в сохранении)
+    this.decor = [...decor]; // купленный декор кухни
+    this.kitchenTimers = [];
+    this.delivery = { draft: {}, order: null, bag: null, usePoints: false };
     this.table = { placed: {}, available: new Set(tableDishes) };
 
     this.triggers = practice ? [] : (this.day.events ?? []).map((e, i) => ({ ...e, id: i, fired: false, since: null }));
@@ -315,6 +318,7 @@ export class KitchenSession {
     this._updateStove(h);
     this._updateOven(h);
     this._updateDelivery(h);
+    this._updateKitchenTimers();
     this._updateCat(h);
     this._updateCatNeeds(h);
     this._updateSchedule();
@@ -826,6 +830,7 @@ export class KitchenSession {
     dish.Q = dishScore(parts);
     dish.notes = notes.slice(0, 3);
     dish.done = true;
+    this._earn(dish.Q * BONUS.perDish, `Блюдо: ${dish.recipe.name}`);
     this.table.available.add(dishId);
     this._emit('dishDone', { dishId, Q: dish.Q, notes: dish.notes });
     return true;

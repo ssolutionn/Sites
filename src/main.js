@@ -91,11 +91,17 @@ function boot() {
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny',
     pinch: 'salt', taste: 'taste', dilute: 'pour', seasoned: 'ready', catFed: 'feed', catPlay: 'ball', catHungry: 'meow', catSleep: 'purr', cooled: 'fizz',
-    paid: 'cash', noMoney: 'deny', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
+    paid: 'cash', noMoney: 'deny', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
     unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', peel: 'select', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
   };
 
   function dispatch(e) {
+    // декор кухни и баллы сохраняются сразу — это покупка, а не результат дня
+    if (e.type === 'decorBought' && !session.practice) {
+      save.data.bonus = session.bonus.points;
+      save.data.decor = [...session.decor];
+      save.write();
+    }
     view.onEvent(e);
     ui.onEvent(e, session);
     if (e.type === 'speedDone') speedFinished(e.time);
@@ -115,7 +121,7 @@ function boot() {
     challenge = ch;
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
-    session = new KitchenSession({ dayIndex: i, seed, tableDishes: completedDishes(i), mods });
+    session = new KitchenSession({ dayIndex: i, seed, tableDishes: completedDishes(i), mods, bonus: save.data.bonus ?? 0, decor: save.data.decor ?? [] });
     view.reset();
     view.setActive(true);
     view.setTableDishes(completedDishes(i));
@@ -182,6 +188,8 @@ function boot() {
       return r;
     }
     recordDay(save.data, session.day.id, r);
+    save.data.bonus = session.bonus.points;
+    save.data.decor = [...session.decor];
     delete save.data.settings.inProgress;
     save.write();
     sound.play('success');

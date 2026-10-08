@@ -266,3 +266,143 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 .alert .acts { gap: 4px; }
 .alert .acts button { padding: 5px 10px; font-size: 12.5px; }
 #alerts { gap: 6px; }
+
+/* ---------- телефон: цельный смартфон ---------- */
+#phone { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: auto; padding: 0; background: none; box-shadow: none; border-radius: 0; z-index: 40; animation: phoneIn var(--t-med) ease-out; }
+@keyframes phoneIn { from { opacity: 0; transform: translate(-50%, -46%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%); } }
+#phone .device { position: relative; width: 340px; height: min(690px, calc(100vh - 40px)); border-radius: 46px; background: #121214; padding: 11px; box-shadow: 0 0 0 2px #3a3a40, 0 0 0 4px #1b1b1f, 0 30px 70px rgba(0, 0, 0, 0.55); display: flex; flex-direction: column; color: var(--ink); }
+#phone .island { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); width: 92px; height: 26px; border-radius: 14px; background: #000; z-index: 5; }
+#phone .ph-status { position: absolute; left: 11px; right: 11px; top: 11px; height: 42px; padding: 14px 26px 0; display: flex; justify-content: space-between; font-size: 13px; color: #fff; z-index: 4; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+#phone .ph-screen { flex: 1; border-radius: 36px; overflow: hidden; position: relative; background: #f5efe6; display: flex; flex-direction: column; }
+#phone .ph-screen.home { background: linear-gradient(170deg, #10324a 0%, #1b4d5f 45%, #1f5c46 100%); color: #fff; padding: 56px 18px 18px; }
+#phone .ph-home { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: 120px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.85); cursor: pointer; z-index: 6; box-shadow: 0 0 0 6px transparent; }
+#phone .ph-close { position: absolute; right: -54px; top: 4px; width: 42px; height: 42px; padding: 0; border-radius: 50%; background: var(--glass-strong); color: #fff; font-size: 16px; }
+#phone .ph-push { position: absolute; left: 22px; right: 22px; top: 54px; z-index: 7; background: rgba(255, 255, 255, 0.95); border-radius: 18px; padding: 10px 12px; font-size: 13px; font-weight: 800; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25); color: var(--berry-dark); }
+#phone .wall { position: absolute; inset: 0; pointer-events: none; }
+#phone .wall i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #fff; }
+#phone .garland { position: absolute; top: 46px; left: -10px; right: -10px; height: 40px; display: flex; justify-content: space-around; border-top: 2px solid rgba(255, 255, 255, 0.25); border-radius: 50% 50% 0 0 / 30px 30px 0 0; }
+#phone .garland span { width: 9px; height: 13px; border-radius: 50% 50% 45% 45%; background: var(--c); box-shadow: 0 0 10px var(--c); margin-top: 6px; animation: twinkle 1.6s ease-in-out infinite; }
+#phone .garland span:nth-child(2n) { animation-delay: 0.8s; margin-top: 12px; }
+@keyframes twinkle { 50% { opacity: 0.45; } }
+#phone .widget { position: relative; text-align: center; margin: 40px 0 26px; }
+#phone .w-time { font-size: 64px; font-weight: 300; letter-spacing: -2px; line-height: 1; }
+#phone .w-date { font-size: 13px; font-weight: 700; opacity: 0.85; margin-top: 4px; }
+#phone .apps { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 8px; }
+#phone .app { background: none !important; box-shadow: none !important; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; color: #fff; }
+#phone .app .ico { position: relative; width: 62px; height: 62px; border-radius: 17px; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.35); }
+#phone .app .ico img { width: 44px; height: 44px; }
+#phone .app .ico b { font-size: 32px; font-weight: 1000; }
+#phone .app .ico em { position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--berry); color: #fff; font-style: normal; font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #1b4d5f; }
+#phone .app .nm { font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); text-align: center; line-height: 1.15; }
+#phone .app-shop .ico { background: linear-gradient(160deg, #fff, #e9f6ec); }
+#phone .app-andrey .ico { background: linear-gradient(160deg, #7b6cff, #4c3fd8); color: #fff; }
+#phone .app-bank .ico { background: linear-gradient(160deg, #ffd06a, #e2a52c); color: #3b2a10; }
+#phone .app-book .ico { background: linear-gradient(160deg, #e2534f, #a32a2f); }
+#phone .app-timers .ico { background: linear-gradient(160deg, #ff9f43, #e86a1d); color: #fff; }
+#phone .hint-home { position: absolute; left: 0; right: 0; bottom: 44px; text-align: center; font-size: 13px; font-weight: 800; opacity: 0.85; }
+/* приложения */
+#phone .app-screen { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#phone .app-screen.enter { animation: appIn 0.2s ease-out; }
+@keyframes appIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+#phone .app-head { display: flex; align-items: center; gap: 8px; padding: 52px 14px 10px; background: #fff; border-bottom: 1px solid #eee3d3; }
+#phone .app-head b { font-size: 17px; font-weight: 900; display: block; }
+#phone .app-head small { font-size: 12px; color: var(--ink-2); font-weight: 700; }
+#phone .app-head .back { width: 34px; height: 34px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; background: #f3ece1; box-shadow: none; }
+#phone .app-body { flex: 1; overflow-y: auto; padding: 12px 14px 40px; font-size: 13.5px; }
+#phone .app-body h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-2); }
+#phone .fine { font-size: 11.5px; color: var(--ink-2); margin-top: 10px; }
+#phone .empty { text-align: center; color: var(--ink-2); padding: 40px 10px; }
+#phone button.mini { padding: 4px 10px !important; font-size: 13px !important; }
+#phone button.wide { width: 100%; margin-top: 8px; }
+#phone .seg { display: flex; gap: 4px; margin: 0 14px 0; padding: 4px; background: #ede4d6; border-radius: 12px; margin-top: 8px; }
+#phone .seg button { flex: 1; box-shadow: none; background: transparent; padding: 6px; font-size: 13px; }
+#phone .seg button.on { background: #fff; box-shadow: var(--shadow-1); }
+/* доставка */
+#phone .wallet-row { display: flex; justify-content: space-between; font-weight: 800; }
+#phone .need-box { background: #fff1ee; border-radius: 14px; padding: 8px 10px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+#phone .need-box div { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+#phone .ok-box { background: var(--pine-soft); color: var(--pine); border-radius: 14px; padding: 8px 10px; margin-top: 8px; font-weight: 800; }
+#phone .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#phone .pcard { position: relative; background: #fff; border-radius: 14px; padding: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); display: flex; flex-direction: column; gap: 2px; }
+#phone .pcard .pi { font-size: 30px; text-align: center; }
+#phone .pcard .pn { font-weight: 800; font-size: 12.5px; line-height: 1.2; min-height: 30px; }
+#phone .pcard .pp { font-weight: 900; color: var(--berry-dark); }
+#phone .pcard .pq { display: flex; align-items: center; justify-content: space-between; }
+#phone .pcard .pq span { font-weight: 900; }
+#phone .pcard .pq .muted { font-size: 11px; color: var(--ink-2); font-weight: 700; }
+#phone .pcard.need { box-shadow: 0 0 0 2px var(--berry); }
+#phone .pcard.na { opacity: 0.5; filter: grayscale(0.7); }
+#phone .pcard .tag { position: absolute; top: 6px; right: 6px; font-style: normal; font-size: 10px; font-weight: 900; color: #fff; background: var(--berry); border-radius: 8px; padding: 1px 6px; }
+#phone .cart { background: #fff; border-top: 1px solid #eee3d3; padding: 8px 12px 30px; }
+#phone .cart-sum { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+#phone .cart .pts { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+#phone .modes { display: flex; gap: 4px; margin-top: 6px; }
+#phone .modes .mode { flex: 1; padding: 6px 4px; font-size: 11.5px; display: flex; flex-direction: column; align-items: center; line-height: 1.2; border-radius: 12px; }
+#phone .modes .mode small { font-size: 10.5px; opacity: 0.85; }
+#phone .track { text-align: center; padding: 12px; background: #fff; border-radius: 16px; }
+#phone .track .t-big { font-size: 48px; }
+#phone .order-items li { padding: 3px 0; }
+/* Андрей */
+#phone .chat-row { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: #fff; box-shadow: none; border-radius: 14px; padding: 8px 10px; margin-bottom: 6px; }
+#phone .chat-row .ava, #phone .post .ava { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(160deg, #8f84ff, #5b4ee0); display: inline-flex; align-items: center; justify-content: center; font-size: 19px; flex: none; }
+#phone .chat-row .cr { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#phone .chat-row .cr small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); font-weight: 600; }
+#phone .chat-row .ct { font-size: 11px; color: var(--ink-2); }
+#phone .chat { background: linear-gradient(180deg, #e9e4ff, #f5efe6); }
+#phone .bubble { background: #fff; border-radius: 16px 16px 16px 4px; padding: 8px 10px; margin: 6px 30px 6px 0; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+#phone .bubble small { display: block; text-align: right; font-size: 10.5px; color: var(--ink-2); }
+#phone .typing { font-size: 12px; color: var(--ink-2); font-style: italic; margin-top: 8px; }
+#phone .post { background: #fff; border-radius: 16px; overflow: hidden; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+#phone .post-h { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+#phone .post-h small { margin-left: auto; color: var(--ink-2); }
+#phone .post-img { height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 70px; position: relative; }
+#phone .post-img.dish { background: radial-gradient(circle at 50% 45%, #fff8ec, #f0dcb4 60%, #c98f55); }
+#phone .post-img.dish span { font-size: 15px; font-weight: 900; color: var(--ink); background: rgba(255, 255, 255, 0.85); border-radius: 10px; padding: 2px 8px; }
+#phone .post-img.sea { background: linear-gradient(#8fd3fe, #4fa8e0 55%, #f7d79b 56%, #f0c27a); }
+#phone .post-img.sea .sun { position: absolute; width: 34px; height: 34px; border-radius: 50%; background: #ffe066; right: 30px; top: 20px; box-shadow: 0 0 20px #ffe066; }
+#phone .post-f { padding: 6px 10px; font-weight: 800; }
+#phone .com { padding: 0 10px 6px; font-size: 12.5px; }
+#phone .snap { text-align: center; margin-bottom: 10px; }
+#phone .snap small { color: var(--ink-2); font-weight: 700; }
+/* банк */
+#phone .bcard { border-radius: 20px; padding: 16px; color: #fff; background: linear-gradient(135deg, #1f5c46, #2c8a5f 50%, #d23c3c); box-shadow: 0 10px 24px rgba(31, 92, 70, 0.35); }
+#phone .bcard .bp { font-size: 42px; font-weight: 1000; line-height: 1.1; }
+#phone .bcard .bp span { font-size: 15px; font-weight: 800; margin-left: 6px; }
+#phone .bcard .bn { opacity: 0.8; font-weight: 700; letter-spacing: 2px; }
+#phone .earn { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+#phone .earn span { background: #fff; border-radius: 10px; padding: 3px 8px; font-size: 11.5px; font-weight: 800; }
+#phone .decor { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 14px; padding: 8px; margin-bottom: 6px; }
+#phone .decor .di { font-size: 26px; }
+#phone .decor .dn { flex: 1; display: flex; flex-direction: column; }
+#phone .decor .dn small { color: var(--ink-2); font-size: 11.5px; }
+#phone .decor .owned { font-size: 12px; font-weight: 800; color: var(--pine); }
+#phone .h-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee3d3; }
+#phone .h-row b { color: var(--pine); }
+#phone .h-row b.neg { color: var(--berry-dark); }
+/* книга */
+#phone .book-row { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: #fff; box-shadow: none; border-radius: 14px; padding: 9px 10px; margin-bottom: 6px; }
+#phone .book-row small { display: block; color: var(--ink-2); font-weight: 600; font-size: 12px; }
+#phone .book-row .bi { font-size: 28px; }
+#phone .book-row.today { box-shadow: 0 0 0 2px var(--gold); }
+#phone .book-row.locked { opacity: 0.55; }
+#phone .lesson { background: linear-gradient(180deg, #fff8ec, #fbefd9); }
+#phone .lesson .intro { font-family: var(--font-hand); font-size: 21px; line-height: 1.2; color: var(--berry-dark); }
+#phone .ingr { list-style: none; padding: 0; margin: 0; }
+#phone .ingr li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--paper-line); }
+#phone .ingr li b { text-align: right; font-weight: 800; }
+#phone .lsteps { padding-left: 0; list-style: none; }
+#phone .lsteps li { background: #fff; border-radius: 12px; padding: 8px 10px; margin-bottom: 6px; }
+#phone .lsteps li.done { opacity: 0.6; }
+#phone .lsteps p { margin: 4px 0 0; }
+#phone .lsteps .why { color: var(--pine); font-size: 12.5px; }
+#phone .lsteps .err { color: var(--berry-dark); font-size: 12.5px; }
+#phone .fact { background: #fff; border-radius: 12px; padding: 6px 10px; }
+/* таймеры */
+#phone .tmr { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 14px; padding: 8px; margin-bottom: 6px; }
+#phone .tmr small { display: block; font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
+#phone .tmr .ring { --k: 0; width: 46px; height: 46px; border-radius: 50%; background: conic-gradient(var(--pine-hi) calc(var(--k) * 360deg), #eee3d3 0); display: flex; align-items: center; justify-content: center; flex: none; }
+#phone .tmr .ring span { width: 36px; height: 36px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+#phone .tmr.done .ring { background: var(--pine-hi); animation: dotpulse 1s infinite; }
+#phone .tmr.hot .ring { background: conic-gradient(var(--berry) calc(var(--k) * 360deg), #eee3d3 0); }
+#phone .trow { display: flex; gap: 6px; }
+#phone .device.light .ph-status { color: var(--ink); text-shadow: none; }
