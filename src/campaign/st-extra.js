@@ -94,7 +94,7 @@ export const extraMethods = {
       if (ds <= -2) parts.push('соли мало');
       else if (ds === -1) parts.push('чуть не хватает соли');
       else if (ds === 1) parts.push('чуть пересолено');
-      else if (ds >= 2) parts.push('пересолено!');
+      else if (ds >= 2) parts.push('пересолено');
       if (dp < 0) parts.push(se.target.pepper === 0 ? '' : 'не хватает перца');
       else if (dp > 0) parts.push(se.target.pepper === 0 ? 'перец тут лишний' : 'перца многовато');
       const txt = parts.filter(Boolean);

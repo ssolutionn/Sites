@@ -381,8 +381,9 @@ export class CampaignView {
       case 'c-stove': {
         // плита крупно: кастрюли, огонь и крутилки на передней панели
         const a = S.stove.anchor;
-        look.set(a.x, 0.86, a.z + 0.12);
-        pos.set(a.x + 0.04, 0.86 + 0.62 * back, a.z + 0.95 * back);
+        // вся плита в кадре над доком: обе кастрюли и передняя панель с крутилками
+        look.set(a.x, 0.74, a.z + 0.08);
+        pos.set(a.x + 0.05, 0.74 + 1.0 * back, a.z + 1.45 * back);
         return true;
       }
       case 'c-sink': {
@@ -1402,11 +1403,12 @@ export class CampaignView {
           m.position.set(Math.cos(i * 1.3) * 0.045, 0.035 + (i % 2) * 0.02, Math.sin(i * 1.3) * 0.045);
           g.add(m);
         }
-        g.position.set(0, 0, 0.02);
+        g.scale.setScalar(0.85);
+        g.position.set(0, 0, 0.06);
         this.sinkItem.add(g);
         this.coolFood = g;
         if (!this.tapStream) {
-          this.tapStream = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.13, 10, 1, true), new THREE.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.55, roughness: 0.05, metalness: 0.1 }));
+          this.tapStream = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.012, 0.13, 12, 1, true), new THREE.MeshStandardMaterial({ color: 0xa8dcff, transparent: true, opacity: 0.75, roughness: 0.05, metalness: 0.1, emissive: 0x16384f }));
           this.tapStream.position.set(0, 0.075, -0.1);
           this.sinkItem.add(this.tapStream);
           this.coolSteam = [];
