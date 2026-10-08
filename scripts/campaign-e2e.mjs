@@ -1,19 +1,29 @@
 // Сквозная браузерная проверка кампании: реальные клики и движения мыши.
 // node scripts/campaign-e2e.mjs [url] [ширина] [высота] [часть]
+// Аргументы можно опускать: http… — адрес, числа — ширина и высота, остальное — часть
+// (all | d1 | late | d7). Пример: node scripts/campaign-e2e.mjs http://localhost:4174/ d1
+// Снимки: OUT (по умолчанию scripts/shots), имя <день>_<экран>_<ширина>.png.
+// День 1 идёт в обычном режиме (без ?dev): так же, как его увидит игрок.
 const { chromium } = await import(process.env.PW ?? 'playwright');
-const url = process.argv[2] || 'http://localhost:4173/';
-const W = Number(process.argv[3] || 1280), H = Number(process.argv[4] || 720);
-const part = process.argv[5] || 'all';
+const argv = process.argv.slice(2);
+const isUrl = (a) => /^https?:\/\//.test(a);
+const isNum = (a) => /^\d+$/.test(a);
+let url = argv.find(isUrl) || 'http://localhost:4173/';
+if (!url.endsWith('/')) url += '/';
+const nums = argv.filter(isNum).map(Number);
+const W = nums[0] || 1280, H = nums[1] || 720;
+const part = argv.find((a) => !isUrl(a) && !isNum(a)) || 'all';
 const out = process.env.OUT || 'scripts/shots';
-const tag = `${W}x${H}`;
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 const logs = [];
 page.on('console', (m) => m.type() === 'error' && logs.push(`[error] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 const checks = [];
+const viaApi = []; // где пришлось обойти интерфейс вызовом session (честно перечисляется в итоге)
+const overlaps = new Set(); // элементы, перехватившие нажатие поверх canvas
 const check = (name, ok, extra = '') => { checks.push(`${ok ? 'OK  ' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`); console.log(checks.at(-1)); };
-const shot = (n) => page.screenshot({ path: `${out}/${tag}_${n}.png` });
+const shot = (n) => page.screenshot({ path: `${out}/${n}_${W}.png` });
 const S = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
 async function waitFor(fn, timeout = 20000, arg) {
@@ -22,23 +32,49 @@ async function waitFor(fn, timeout = 20000, arg) {
   return false;
 }
 const sess = (expr) => S(new Function(`const s = window.__sueta.session; return (${expr});`));
+const inside = (b) => b && b.x > 0 && b.y > 0 && b.x + b.width < W && b.y + b.height < H;
 async function label(text) { await page.locator('.st-label', { hasText: text }).first().click({ force: true }); }
+// Кнопка по команде (data-act) — переживает переделку интерфейса; argPart — подстрока data-args.
+async function actBtn(name, argPart = null, timeout = 8000) {
+  const sel = `button[data-act="${name}"]${argPart ? `[data-args*='${argPart}']` : ''}:not([disabled])`;
+  const l = page.locator(sel).first();
+  await l.waitFor({ state: 'visible', timeout });
+  await l.click();
+}
+async function closePanel() {
+  const cur = await sess('s.panel');
+  if (!cur) return;
+  const b = page.locator(`${cur === 'phone' ? '#phone ' : ''}button[data-act="closePanel"]:visible`).first();
+  if (await b.count()) await b.click().catch(() => {});
+  else if (cur === 'phone') await page.keyboard.press('Escape');
+  if (!(await waitFor(() => !window.__sueta.session.panel, 4000))) { viaApi.push(`closePanel(${cur})`); await S(() => window.__sueta.session.closePanel()); }
+}
 async function goStation(text, id) {
   const cur = await sess('s.panel');
   if (cur === id) return true;
-  if (cur === 'phone') await page.locator('#phone button', { hasText: 'Закрыть' }).first().click();
-  else if (cur) await page.locator('#panel button', { hasText: 'Назад' }).first().click();
-  await waitFor(() => !window.__sueta.session.panel && window.__sueta.sv.camT >= 1 && document.getElementById('phone').classList.contains('hidden') && document.getElementById('panel').classList.contains('hidden'), 10000);
+  await closePanel();
+  await waitFor(() => !window.__sueta.session.panel && window.__sueta.sv.camT >= 1 && document.getElementById('phone').classList.contains('hidden'), 10000);
+  // 1) подпись станции; 2) клик мышью по самой станции в 3D; 3) только потом — вызов session
+  let clicked = false;
   const l = page.locator('.st-label', { hasText: text }).first();
-  await l.waitFor({ state: 'visible', timeout: 15000 });
-  for (let i = 0; i < 20; i++) {
-    await wait(150);
-    const b = await l.boundingBox();
-    if (b && b.x > 0 && b.y > 0 && b.x + b.width < W && b.y + b.height < H) { await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); break; }
+  if (await l.count()) {
+    for (let i = 0; i < 20 && !clicked; i++) {
+      await wait(150);
+      const b = await l.boundingBox().catch(() => null);
+      if (inside(b)) { await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); clicked = true; }
+    }
   }
-  return waitFor((id) => window.__sueta.session.panel === id && window.__sueta.sv.camT >= 1, 25000, id);
+  if (!clicked) {
+    const p = await S((id) => window.__sueta.view.stationScreen(id), id);
+    if (p?.visible) { await page.mouse.click((p.x * W) / 100, (p.y * H) / 100); clicked = true; }
+  }
+  const ready = (id) => window.__sueta.session.panel === id && window.__sueta.sv.camT >= 1;
+  let ok = await waitFor(ready, 25000, id);
+  if (!ok) { viaApi.push(`goTo(${id})`); await S((id) => window.__sueta.session.goTo(id), id); ok = await waitFor(ready, 25000, id); }
+  return ok;
 }
-async function btn(text) { await page.locator('#panel button:not([disabled]), #phone button:not([disabled]), #tip button, #recipe button', { hasText: text }).first().click(); }
+async function btn(text) { await page.locator('#panel button:not([disabled]), #phone button:not([disabled]), #tip button, #recipe button, .dock button:not([disabled])', { hasText: text }).first().click(); }
+async function finishBtn() { await page.locator('#btn-finish:visible, button[data-act="finishDay"]:visible, button:visible:has-text("Завершить день")').first().click(); }
 async function local(x, z) { return S(([x, z]) => { const v = window.__sueta.view; const s = window.__sueta.session; return s.panel ? v.localToScreen(s.panel, x, z) : null; }, [x, z]); }
 async function click(x, z) { const p = await local(x, z); await page.mouse.move(p.x, p.y); await wait(40); await page.mouse.down(); await page.mouse.up(); }
 async function drag(points, steps = 4) {
@@ -54,28 +90,84 @@ async function zig(cx, cz, w, d, rows = 7) {
   await drag(pts, 6);
 }
 async function noAction() { await waitFor(() => !window.__sueta.session.action, 15000); }
-const U = 0.042;
-// Нарезка кубиками мышью: полоски, R, поперёк.
-async function cutCubes() {
-  for (let pass = 0; pass < 4; pass++) {
-    for (let g = 0; g < 12; g++) {
-      const wide = await sess(`(() => { const it = s.boardCur(); const w = it.pieces.filter(p => p.w > 1.25).sort((a,b)=>a.x-b.x)[0]; return w ? { x: w.x, z: w.z + w.d/2, w: w.w } : null; })()`);
-      if (!wide) break;
-      await click((wide.x + 1) * U, wide.z * U); await wait(80); await noAction();
-      const n = await sess('s.boardCur().cuts');
-      if (g > 10) break;
+const U = 0.042; // метров на целевой кубик (BOARD_UNIT)
+// Что лежит поверх canvas в точке экрана: null — canvas, иначе id/класс перехватчика.
+async function blockerAt(x, y) {
+  return S(([x, y]) => {
+    if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return 'за кадром';
+    const el = document.elementFromPoint(x, y);
+    return !el || el.id === 'scene' ? null : el.id || String(el.className || el.tagName);
+  }, [x, y]);
+}
+// Росчерк ножа мышью: нажал — провёл — отпустил. Координаты в единицах доски (1 = кубик).
+async function knife(x0, z0, x1, z1, steps = 8) {
+  const a = await local(x0 * U, z0 * U), b = await local(x1 * U, z1 * U);
+  if (!a || !b) return false;
+  const blk = await blockerAt(a.x, a.y);
+  if (blk) overlaps.add(blk);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps });
+  await page.mouse.up();
+  await wait(50); await noAction();
+  return true;
+}
+async function boardBox() {
+  return sess('(() => { const it = s.boardCur(); if (!it?.pieces?.length) return null; let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const p of it.pieces) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x + p.w); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z + p.d); } return { x0, x1, z0, z1, cuts: it.cuts, n: it.pieces.length }; })()');
+}
+// Доля продукта на доске, закрытая интерфейсом (сетка 5×5 по контуру всех кусков).
+async function boardCover() {
+  return S((U) => {
+    const s = window.__sueta.session, v = window.__sueta.view, it = s.boardCur();
+    if (!it?.pieces?.length) return null;
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (const p of it.pieces) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x + p.w); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z + p.d); }
+    let hit = 0, n = 0; const by = new Set();
+    for (let i = 0; i < 5; i++) for (let k = 0; k < 5; k++) {
+      const p = v.localToScreen('board', (x0 + ((x1 - x0) * (i + 0.5)) / 5) * U, (z0 + ((z1 - z0) * (k + 0.5)) / 5) * U);
+      n++;
+      if (p.x < 0 || p.y < 0 || p.x > innerWidth || p.y > innerHeight) { hit++; by.add('за кадром'); continue; }
+      const el = document.elementFromPoint(p.x, p.y);
+      if (el && el.id !== 'scene') { hit++; by.add(el.id || String(el.className)); }
     }
-    if (pass >= 1 && !(await sess('s.boardCur().pieces.some(p => p.w > 1.25 || p.d > 1.25)'))) break;
-    await page.keyboard.press('KeyR'); await wait(150);
+    return { frac: hit / n, by: [...by].join(', ') };
+  }, U);
+}
+async function guardCat() {
+  if (await sess("s.cat.state === 'theft'")) { await shot('d1_cat'); await page.locator('[data-a="shoo"]').first().click().catch(() => {}); await wait(300); }
+  if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) { await actBtn('takeReplacement').catch(() => {}); await noAction(); }
+}
+// Кубики росчерками: сначала полоски сверху вниз, потом поперёк слева направо — как игрок.
+async function cutCubes(maxStrokes = 40) {
+  const tried = new Set();
+  for (let k = 0; k < maxStrokes; k++) {
+    await guardCat();
+    const ps = await sess('s.boardCur()?.pieces?.map((p) => ({ x: p.x, z: p.z, w: p.w, d: p.d })) ?? null');
+    if (!ps?.length) return;
+    const b = await boardBox();
+    let cand = null;
+    for (const p of ps.filter((p) => p.w > 1.25).sort((a, c) => c.w - a.w)) {
+      const pos = +(p.x + p.w / Math.max(2, Math.round(p.w))).toFixed(3);
+      if (!tried.has('x' + pos)) { cand = { axis: 'x', pos }; break; }
+    }
+    if (!cand) for (const p of ps.filter((p) => p.d > 1.25).sort((a, c) => c.d - a.d)) {
+      const pos = +(p.z + p.d / Math.max(2, Math.round(p.d))).toFixed(3);
+      if (!tried.has('z' + pos)) { cand = { axis: 'z', pos }; break; }
+    }
+    if (!cand) return;
+    tried.add(cand.axis + cand.pos);
+    if (cand.axis === 'x') await knife(cand.pos, b.z0 - 0.7, cand.pos, b.z1 + 0.7);
+    else await knife(b.x0 - 0.7, cand.pos, b.x1 + 0.7, cand.pos);
   }
 }
+// Кружочки: только поперёк, сверху вниз, шаг ~0,5 кубика.
 async function cutRounds() {
   const L = await sess('s.boardCur().log.length / 2');
-  for (let x = -L + 0.3; x < L - 0.2; x += 0.5) { await click(x * U, 0); await wait(60); await noAction(); }
+  const r = await sess('s.boardCur().radius ?? 1');
+  for (let x = -L + 0.5; x < L - 0.2; x += 0.5) await knife(x, -r - 0.8, x, r + 0.8);
 }
-async function stir() {
+async function stir(turns = 4.4) {
   const pts = [];
-  for (let i = 0; i <= 36 * 4.4; i++) { const a = (i / 36) * Math.PI * 2; pts.push([Math.cos(a) * 0.1, Math.sin(a) * 0.1]); }
+  for (let i = 0; i <= 36 * turns; i++) { const a = (i / 36) * Math.PI * 2; pts.push([Math.cos(a) * 0.1, Math.sin(a) * 0.1]); }
   await drag(pts, 1);
 }
 async function grate() {
@@ -83,13 +175,51 @@ async function grate() {
   for (let i = 0; i < 9; i++) pts.push([0, -0.05], [0, 0.05]);
   await drag(pts, 3);
 }
+// Выбрать продукт на доске вкладкой, проверить перекрытие, нарезать, перенести в миску.
+async function boardProduct(stepId, name) {
+  await actBtn('boardSelect', `"olivier:${stepId}"`); await wait(700);
+  const cov = await boardCover();
+  check(`${name}: интерфейс закрывает ≤ 10 % продукта`, cov && cov.frac <= 0.1, cov ? `${Math.round(cov.frac * 100)} %${cov.by ? ' — ' + cov.by : ''}` : 'нет кусков');
+  await shot(`d1_board_${stepId}`);
+  await cutCubes();
+  await guardCat();
+  await shot(`d1_board_${stepId}_cubes`);
+  await actBtn('boardTransfer'); await wait(400);
+}
+// Телефон: открыть кнопкой HUD (или подписью), пройти все вкладки/приложения, снять каждое.
+async function phoneTour(prefix) {
+  const hud = page.locator('#btn-phone:visible').first();
+  if (await hud.count()) await hud.click(); else await goStation('Телефон', 'phone');
+  let opened = await waitFor(() => window.__sueta.session.panel === 'phone' && !document.getElementById('phone').classList.contains('hidden'), 25000);
+  if (!opened) { viaApi.push('goTo(phone)'); await S(() => window.__sueta.session.goTo('phone')); opened = await waitFor(() => window.__sueta.session.panel === 'phone', 25000); }
+  check('телефон открывается кнопкой', opened);
+  if (!opened) return;
+  await wait(700);
+  await shot(`${prefix}_phone_home`);
+  const box = await page.locator('#phone').evaluate((el) => { const r = (el.firstElementChild || el).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+  check('телефон целиком в кадре', box.x >= 0 && box.y >= 0 && box.x + box.w <= W && box.y + box.h <= H, `${Math.round(box.w)}×${Math.round(box.h)} в ${Math.round(box.x)},${Math.round(box.y)}`);
+  const ids = [...new Set(await page.locator('#phone [data-tab], #phone [data-app]').evaluateAll((els) => els.map((e) => e.dataset.tab || e.dataset.app)))];
+  for (const t of ids) {
+    let el = page.locator(`#phone [data-tab="${t}"], #phone [data-app="${t}"]`).first();
+    if (!(await el.count())) { await page.locator('#phone [data-home], #phone [data-app="home"], #phone [data-tab="home"]').first().click().catch(() => {}); await wait(300); el = page.locator(`#phone [data-tab="${t}"], #phone [data-app="${t}"]`).first(); }
+    await el.click().catch(() => {});
+    await wait(600);
+    await shot(`${prefix}_phone_${t}`);
+  }
+  check('у телефона есть вкладки или приложения', ids.length >= 3, ids.join(', '));
+  await closePanel();
+  check('телефон закрывается', await waitFor(() => !window.__sueta.session.panel && document.getElementById('phone').classList.contains('hidden'), 5000));
+}
 
 try {
-  await page.goto(url + '?dev&seed=3');
+  // обычный режим: без ?dev — никаких технических панелей
+  await page.goto(url + '?seed=3');
   await page.evaluate(() => localStorage.clear());
-  await page.goto(url + '?dev&seed=3');
+  await page.goto(url + '?seed=3');
   await wait(2500);
-  await shot('01_menu');
+  await shot('d1_menu');
+  const devVisible = await S(() => { const d = document.getElementById('dev'); const vis = (el) => el && !el.classList.contains('hidden') && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none'; return vis(d) || !!document.getElementById('dev-stats') || /\bDEV\b|\bFPS\b/.test(document.body.innerText); });
+  check('без ?dev нет технических панелей', !devVisible);
   if (part === 'late' || part === 'd7') {
     const upto = part === 'd7' ? 6 : 5;
     // Поздние дни отдельно: дни 1–5 отмечены пройденными через сохранение (их проверяет полный прогон).
@@ -97,9 +227,21 @@ try {
     await page.reload(); await wait(2500);
   } else {
   await page.click('[data-ui=new]'); await wait(500);
-  await shot('02_intro');
+  await shot('d1_intro');
   await page.click('[data-ui=enter]'); await wait(1500);
-  await shot('03_kitchen');
+  await shot('d1_kitchen');
+
+  // пауза и книга рецептов с клавиатуры
+  await page.keyboard.press('Escape'); await wait(500);
+  check('Esc — пауза', (await S(() => window.__sueta.mode)) === 'paused');
+  await shot('d1_pause');
+  await page.keyboard.press('Escape'); await wait(500);
+  check('Esc — снова кухня', (await S(() => window.__sueta.mode)) === 'kitchen');
+  await page.keyboard.press('KeyQ'); await wait(500);
+  const recipeOpen = await S(() => { const r = document.getElementById('recipe'); return !!r && !r.classList.contains('hidden') && r.getClientRects().length > 0; });
+  check('Q — рецепты дня открываются', recipeOpen);
+  await shot('d1_recipe');
+  if (recipeOpen) { await page.keyboard.press('KeyQ'); await wait(300); }
 
   // свободное перемещение кликом по полу и обход препятствий
   const floor = await S(() => { const v = window.__sueta.view; const p = v.worldToScreen(0.3, 0, 1.6); return { x: p.x * innerWidth / 100, y: p.y * innerHeight / 100 }; });
@@ -109,96 +251,118 @@ try {
   const blocked = await S(() => { const v = window.__sueta.view; const p = v.worldToScreen(0, 0.9, 0.55); return { x: p.x * innerWidth / 100, y: p.y * innerHeight / 100 }; });
   await page.mouse.click(blocked.x, blocked.y + 2); await wait(200);
 
-  // день 1
+  // день 1: плита — обе кастрюли сразу
   check('плита', await goStation('Плита', 'stove'));
-  await btn('Картофель'); await noAction(); await wait(300);
-  await btn('Яйцо'); await noAction(); await wait(300);
-  await shot('03b_stove_two');
+  await actBtn('placePot', '"olivier:boil"'); await noAction(); await wait(300);
+  await actBtn('placePot', '"olivier:boilEgg"'); await noAction(); await wait(300);
+  await shot('d1_stove_two');
   check('две кастрюли на двух конфорках', (await sess("s.burners.map(b => b.state + ':' + b.product).join()")) === 'boiling:potato,boiling:egg');
+
+  // телефон, пока варится
+  await phoneTour('d1');
+
+  // доска: морковь × 2 — одним заходом
   check('доска', await goStation('Доска', 'board'));
-  await btn('Морковь'); await wait(300);
-  await shot('04_board');
-  const p0 = await sess('s.boardCur().pieces[0]');
-  // промах по пустому углу ограничивающего прямоугольника
-  const missR = await S(([x, z]) => { const s = window.__sueta.session; return s.pointer('down', x, z); }, [(p0.x + 0.02) * U, (p0.z + 0.02) * U]);
-  await S(() => window.__sueta.session.pointer('up', 0, 0));
-  check('клик по пустому углу — промах без операции', missR === 'miss' && (await sess('s.boardCur().cuts')) === 0);
-  await click(-1.37 * U, 0); await noAction();
+  await actBtn('boardSelect', '"olivier:carrot"'); await wait(900);
+  const tipOpen = await S(() => !document.getElementById('tip').classList.contains('hidden'));
+  const cov0 = await boardCover();
+  check('совет на доске не закрывает продукт (≤ 10 %)', cov0 && cov0.frac <= 0.1, cov0 ? `${Math.round(cov0.frac * 100)} %${cov0.by ? ' — ' + cov0.by : ''}${tipOpen ? ' (совет открыт)' : ''}` : '');
+  await shot('d1_board_tutorial');
+  await page.locator('#tip-ok').click().catch(() => {});
+  await wait(300);
+  check('морковь × 2 — один заход, две копии', (await sess('s.boardCur()?.qty')) === 2 && (await sess('s.boardCur().pieces.length')) === 2);
+  await shot('d1_board_carrot');
+  // ошибки игрока: мимо, наискосок, клик без движения, перенос до разреза — игра не зависает
+  const b0 = await boardBox();
+  await knife(b0.x1 + 1.3, b0.z0 - 0.5, b0.x1 + 1.3, b0.z1 + 0.5);
+  check('росчерк мимо продукта — без разреза, с подсказкой', (await sess('s.boardCur().cuts')) === 0 && /мимо/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
+  await knife(b0.x0, b0.z0, b0.x1, b0.z1);
+  check('росчерк наискосок — без разреза, с подсказкой', (await sess('s.boardCur().cuts')) === 0 && /наискосок/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
+  { const c = await local(0, 0); await page.mouse.move(c.x, c.y); await page.mouse.down(); await wait(120); await page.mouse.up(); await wait(100); }
+  check('клик без движения — не режет', (await sess('s.boardCur().cuts')) === 0, await sess('s.hint?.text'));
+  await actBtn('boardTransfer'); await wait(200);
+  check('«В миску» до разреза — отказ с подсказкой', !(await sess("s.stepDone('olivier','carrot')")) && /разрез/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
+  await knife(-1.37, b0.z0 - 0.7, -1.37, b0.z1 + 0.7, 10);
   const ws = await sess('s.boardCur().pieces.map(p => +(p.w).toFixed(3))');
-  check('разрез по координате мыши без привязки к сетке', ws.some((w) => Math.abs(w - 0.63) < 0.06), ws.join(' / '));
+  check('после ошибок нож режет: разрез по координате мыши, обе копии', ws.filter((w) => Math.abs(w - 0.63) < 0.06).length >= 2, ws.join(' / '));
   await cutCubes();
-  await shot('05_board_cubes');
+  await shot('d1_board_carrot_cubes');
   const q = await sess('s.boardQuality(s.boardCur()).score');
   check('морковь нарезана кубиками', q > 0.5, (q * 100).toFixed(0) + ' %');
   // смена продукта и возврат
-  await btn('Колбаса'); await wait(200);
-  await btn('Морковь'); await wait(200);
-  check('смена продукта сохраняет части', (await sess('s.boardCur().product')) === 'carrot' && (await sess('s.boardCur().pieces.length')) > 4);
-  await btn('В миску'); await wait(400);
+  await actBtn('boardSelect', '"olivier:sausage"'); await wait(300);
+  await actBtn('boardSelect', '"olivier:carrot"'); await wait(300);
+  check('смена продукта сохраняет части', (await sess('s.boardCur().product')) === 'carrot' && (await sess('s.boardCur().pieces.length')) > 8);
+  await actBtn('boardTransfer'); await wait(400);
   check('морковь в миске', await sess("s.stepDone('olivier','carrot')"));
-  for (const name of ['Морковь', 'Колбаса', 'Огурец', 'Огурец']) {
-    await btn(name); await wait(300); await cutCubes();
-    if (await sess("s.cat.state === 'theft'")) { await shot('06_cat'); await page.locator('.alert button', { hasText: 'Прогнать' }).click(); }
-    await btn('В миску'); await wait(300);
-  }
-  check('пять порций нарезаны, пока варится', await sess("['carrot','carrot2','sausage','cucumber','cucumber2'].every(k => s.stepDone('olivier', k))"));
+  await boardProduct('sausage', 'Колбаса');
+  await boardProduct('cucumber', 'Огурцы × 2');
+  check('морковь, колбаса, огурцы нарезаны, пока варится', await sess("['carrot','sausage','cucumber'].every(k => s.stepDone('olivier', k))"));
   // яйца: сварились → горячие → остудить у раковины → резать
   await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.burners[1].readyAt - window.__sueta.session.t + 0.5)));
-  for (const b of await sess('s.burners.filter(b => b.overflow).map(b => b.i)')) { await goStation('Плита', 'stove'); await btn('Убавить'); await noAction(); }
-  await goStation('Плита', 'stove'); await btn('Достать'); await noAction();
+  check('плита (яйца готовы)', await goStation('Плита', 'stove'));
+  for (let i = 0; i < 2 && (await sess('s.burners.some(b => b.overflow)')); i++) { await actBtn('reduceHeat'); await noAction(); }
+  await actBtn('takePot'); await noAction();
   await goStation('Доска', 'board');
-  await btn('Яйцо'); await wait(300);
+  await actBtn('boardSelect', '"olivier:egg"'); await wait(300);
   check('горячие яйца не режутся', (await sess('s.boardCur()?.product')) !== 'egg', await sess('s.hint?.text'));
-  await goStation('Раковина', 'sink'); await shot('06b_sink_cool'); await btn('Остудить'); await noAction();
+  await goStation('Раковина', 'sink'); await shot('d1_sink_cool');
+  await actBtn('coolProduct', '"egg"'); await noAction();
   check('яйца остужены у раковины', !(await sess('s.hot.egg > s.t')));
   await goStation('Доска', 'board');
-  for (const name of ['Яйцо', 'Яйцо']) { await btn(name); await wait(300); await cutCubes(); await btn('В миску'); await wait(300); }
-  check('семь порций нарезаны', await sess("['carrot','carrot2','sausage','cucumber','cucumber2','egg','egg2'].every(k => s.stepDone('olivier', k))"));
-  // кот: вызвать и прогнать
-  if ((await sess('s.cat.state')) === 'home') {
-    await btn('Колбаса').catch(() => {});
-  }
+  await boardProduct('egg', 'Яйца × 2');
+  check('яйца нарезаны', await sess("['carrot','sausage','cucumber','egg'].every(k => s.stepDone('olivier', k))"));
+  // картофель
   await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.stove.readyAt - window.__sueta.session.t + 0.5)));
-  if (await sess('!!s.stove.overflow')) { await goStation('Плита', 'stove'); await btn('Убавить'); await noAction(); }
-  check('плита (готово)', await goStation('Плита', 'stove'));
-  await btn('Достать'); await noAction();
-  await goStation('Раковина', 'sink'); await btn('Остудить'); await noAction();
+  check('плита (картофель готов)', await goStation('Плита', 'stove'));
+  for (let i = 0; i < 2 && (await sess('s.burners.some(b => b.overflow)')); i++) { await actBtn('reduceHeat'); await noAction(); }
+  await actBtn('takePot'); await noAction();
+  await goStation('Раковина', 'sink'); await actBtn('coolProduct', '"potato"'); await noAction();
   check('доска (картофель)', await goStation('Доска', 'board'));
-  for (let i = 0; i < 2; i++) { await btn('Картофель'); await wait(300); await cutCubes(); await btn('В миску'); await wait(300); }
+  await boardProduct('potato', 'Картофель × 2');
+  check('все пять продуктов нарезаны', await sess("['carrot','sausage','cucumber','egg','potato'].every(k => s.stepDone('olivier', k))"));
+  // миска
   check('миска', await goStation('Миска', 'bowl'));
-  await btn('горошек'); await noAction(); await btn('майонез'); await noAction();
-  await shot('07_bowl');
+  await actBtn('bowlAdd', '"peas"'); await noAction();
+  await actBtn('bowlAdd', '"mayo","full"'); await noAction();
+  await shot('d1_bowl');
   // вкус: щепотки по ответам пробы
   for (let k = 0; k < 8; k++) {
-    await btn('Попробовать'); await noAction(); await wait(200);
+    await actBtn('seasonTaste'); await noAction(); await wait(200);
     const v = await sess('s.dishes.olivier.season.last');
     if (v.ok) break;
-    if (v.salt > 0 || v.pepper > 0) { await btn('Разбавить'); await noAction(); }
-    if (v.salt < 0) { await btn('Соль'); await noAction(); }
-    if (v.pepper < 0) { await btn('Перец'); await noAction(); }
+    if (v.salt > 0 || v.pepper > 0) { await actBtn('seasonDilute'); await noAction(); }
+    if (v.salt < 0) { await actBtn('seasonAdd', '"salt"'); await noAction(); }
+    if (v.pepper < 0) { await actBtn('seasonAdd', '"pepper"'); await noAction(); }
   }
-  await shot('07b_season');
+  await shot('d1_bowl_season');
   check('вкус по пробам — в самый раз', await sess('s.dishes.olivier.season.last.ok'), await sess('s.dishes.olivier.season.last.verdict'));
-  await btn('Вкус готов'); await noAction();
-  // неподвижное удержание не перемешивает
+  await actBtn('seasonDone'); await noAction();
+  // неподвижное удержание не перемешивает; круги — меняют состояние блюда
   const c = await local(0.1, 0); await page.mouse.move(c.x, c.y); await page.mouse.down(); await wait(1500); await page.mouse.up();
   check('неподвижное удержание не перемешивает', (await sess('s.mixTurns()')) < 0.1);
-  await stir();
+  await stir(1.5);
+  const midTurns = await sess('s.mixTurns()');
+  await shot('d1_bowl_mixing');
+  check('перемешивание меняет состояние миски', midTurns > 0.5 && !(await sess('s.dishes.olivier.done')), `оборотов ${midTurns.toFixed(2)}`);
+  await stir(3.2);
   check('оливье готов круговыми движениями', await waitFor(() => window.__sueta.session.dishes.olivier.done, 5000), String(await sess('s.dishes.olivier.Q')));
-  await shot('08_olivier_done');
+  await shot('d1_olivier_done');
   if (await sess('s.radio.broken')) { await goStation('Радио', 'radio'); const b = await page.locator('[data-hold=radio]').boundingBox(); await page.mouse.move(b.x + 20, b.y + 10); await page.mouse.down(); await waitFor(() => !window.__sueta.session.radio.broken, 30000); await page.mouse.up(); check('радио починено удержанием', !(await sess('s.radio.broken'))); }
   for (let i = 0; i < 3 && (await sess('s.puddles.length')); i++) { await goStation('Лужа', 'puddle'); await zig(0, 0, 0.5, 0.36, 9); await wait(300); }
   check('лужа убрана', (await sess('s.puddles.length')) === 0);
-  await page.click('#btn-finish');
+  await closePanel();
+  await finishBtn();
   check('итог дня 1', await waitFor(() => window.__sueta.mode === 'dayResult', 5000));
-  await shot('09_day1_result');
+  await shot('d1_result');
   await page.reload(); await wait(2500);
   check('после перезагрузки день 1 сохранён', await S(() => window.__sueta.save.data.days[0].completed && window.__sueta.save.data.days[1].unlocked));
-  await shot('10_menu_after_reload');
+  await shot('d1_menu_after_reload');
   if (part === 'd1') throw new Error('__done_d1');
 
   }
   // ---------- общие помощники для дней 2–7 ----------
+  // Дни 2–7 ещё не переведены на новый интерфейс целиком: тексты кнопок могут устареть.
   async function startNext() {
     if (await page.locator('[data-ui=nextDay]').count()) await page.click('[data-ui=nextDay]');
     else await page.click('[data-ui=continue]');
@@ -210,7 +374,8 @@ try {
     if (await sess('s.radio.broken')) { await goStation('Радио', 'radio'); const b = await page.locator('[data-hold=radio]').boundingBox(); await page.mouse.move(b.x + 20, b.y + 10); await page.mouse.down(); await waitFor(() => !window.__sueta.session.radio.broken, 30000); await page.mouse.up(); }
     if (await sess('s.garland.broken')) { await goStation('Гирлянда', 'garland'); const b = await page.locator('[data-hold=garland]').boundingBox(); await page.mouse.move(b.x + 20, b.y + 10); await page.mouse.down(); await waitFor(() => !window.__sueta.session.garland.broken, 30000); await page.mouse.up(); }
     if (await sess('s.panel')) await goStation('Холодильник', 'fridge');
-    await page.click('#btn-finish');
+    await closePanel();
+    await finishBtn();
     const ok = await waitFor(() => window.__sueta.mode === 'dayResult', 8000);
     const r = await S(() => window.__sueta.session.result);
     check(`итог дня ${n}`, ok, r ? `D=${r.D} ${JSON.stringify(r.dishes)} порядок ${r.order} время ${r.time} с` : '');
@@ -221,7 +386,7 @@ try {
     await goStation('Доска', 'board');
     await btn(name); await wait(300);
     if (kind === 'grate') await grate(); else if (kind === 'round') await cutRounds(); else await cutCubes();
-    if (await sess("s.cat.state === 'theft'")) await page.locator('.alert button', { hasText: 'Прогнать' }).click();
+    if (await sess("s.cat.state === 'theft'")) await page.locator('[data-a="shoo"]').first().click();
     if (await sess('s.boardCur() && !s.boardCur().grater')) { await btn('В миску').catch(() => {}); await btn('На поднос').catch(() => {}); await btn('Готово').catch(() => {}); }
     await wait(300);
   }
@@ -257,7 +422,6 @@ try {
     const items = await sess('s.delivery.bag.items.map(i => i.id)');
     for (const id of items) {
       const right = await S((id) => window.__sueta.session.productName(id), id);
-      const storage = await S(async (id) => (await import('/src/campaign/data.js').catch(() => null)) ? null : null, id);
       // сначала пробуем неверное место, затем верное
       await page.locator('#panel .bag-row', { hasText: right }).locator('button', { hasText: 'В кладовую' }).click(); await noAction(); await wait(150);
       if (await sess(`s.delivery.bag && !s.delivery.bag.items.find(i => i.id === '${id}').placed`)) { await page.locator('#panel .bag-row', { hasText: right }).locator('button', { hasText: 'В холодильник' }).click(); await noAction(); }
@@ -290,7 +454,7 @@ try {
   await shot('d2_after_wash');
   await goStation('Телефон', 'phone'); await wait(500); await shot('d2_phone_messages');
   check('сообщения Верки с картинкой', (await page.locator('#phone .photo-card').count()) >= 0);
-  for (const n of ['Крабовые палочки', 'Крабовые палочки', 'Яйцо', 'Яйцо', 'Огурец']) await boardDo(n);
+  for (const n of ['Крабовые палочки', 'Яйцо', 'Огурец']) await boardDo(n);
   await collectAndUnpack();
   await bowlAdds(); await shot('d2_bowl'); await stir();
   check('крабовый салат готов', await waitFor(() => window.__sueta.session.dishes.crab.done, 5000));
@@ -344,8 +508,7 @@ try {
   await phoneOrder('Зелень', 2);
   await boardDo('Сыр', 'grate');
   await shot('d4_grater');
-  await boardDo('Сыр', 'grate');
-  await boardDo('Яйцо'); await boardDo('Яйцо');
+  await boardDo('Яйцо');
   await collectAndUnpack();
   await bowlAdds(); await stir();
   await trayItem('tartlets'); await tool('Ложка');
@@ -385,11 +548,11 @@ try {
   await startNext();
   await goStation('Плита', 'stove'); await btn('Поставить вариться'); await noAction();
   await phoneOrder('Майонез', 2);
-  await boardDo('Сельдь'); await boardDo('Сельдь'); await boardDo('Лук'); await boardDo('Морковь', 'grate'); await boardDo('Свёкла', 'grate'); await boardDo('Свёкла', 'grate');
+  await boardDo('Сельдь'); await boardDo('Лук'); await boardDo('Морковь', 'grate'); await boardDo('Свёкла', 'grate');
   await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.stove.readyAt - window.__sueta.session.t + 0.5)));
   if (await sess('!!s.stove.overflow')) { await goStation('Плита', 'stove'); await btn('Убавить'); await noAction(); }
-  await goStation('Плита', 'stove'); await btn('Достать картофель'); await noAction();
-  await boardDo('Картофель', 'grate'); await boardDo('Картофель', 'grate');
+  await goStation('Плита', 'stove'); await btn('Достать'); await noAction();
+  await boardDo('Картофель', 'grate');
   await collectAndUnpack();
   await trayItem('shuba');
   const dish = await sess('s.dishes.shuba.work.dish');
@@ -419,7 +582,7 @@ try {
   await phoneOrder('Виноград', 1);
   await boardDo('Хлеб'); await boardDo('Сыр');
   await goStation('Доска', 'board'); await btn('Колбаса'); await wait(300); await cutRounds(); await shot('d6_rounds');
-  if (await sess("s.cat.state === 'theft'")) { await shot('d6_cat'); await page.locator('.alert button', { hasText: 'Прогнать' }).click(); }
+  if (await sess("s.cat.state === 'theft'")) { await shot('d6_cat'); await page.locator('[data-a="shoo"]').first().click(); }
   await btn('На поднос'); await wait(300);
   await boardDo('Огурец', 'round');
   await trayItem('canape');
@@ -464,7 +627,6 @@ try {
   await btn('Поставить форму'); await noAction();
   check('курица в духовке', (await sess('s.oven.state')) === 'baking');
   await goStation('Праздничный стол', 'table'); await wait(400);
-  const cards = await page.locator('#panel .dish-card[data-dish]').count();
   for (let i = 0; i < 9; i++) {
     const card = page.locator('#panel .dish-card[data-dish]:not(.placed)').first();
     await card.waitFor({ state: 'visible', timeout: 10000 });
@@ -500,6 +662,10 @@ try {
     check('сценарий прерван', false, err.message.split('\n')[0]);
   }
 }
-console.log('--- итог ---\n' + checks.join('\n'));
+check('нажатия ножа не перехватывает интерфейс', overlaps.size === 0, [...overlaps].join(', '));
+check('консоль без ошибок', logs.length === 0, logs.length ? `${logs.length} шт.` : '');
+const fails = checks.filter((c) => c.startsWith('FAIL')).length;
+console.log(`--- итог: ${checks.length - fails} OK, ${fails} FAIL (${W}×${H}, часть ${part}) ---\n` + checks.join('\n'));
+if (viaApi.length) console.log('--- обход интерфейса через session ---\n' + viaApi.join('\n'));
 if (logs.length) console.log('--- console ---\n' + logs.slice(0, 20).join('\n'));
 await browser.close();
