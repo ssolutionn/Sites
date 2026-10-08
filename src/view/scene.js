@@ -1,6 +1,7 @@
 // Сцена Three.js: свет, камеры, кухня, персонажи. Читает состояние игры и
 // получает события из outbox для чисто визуальных реакций.
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { LAYOUT } from '../game/layout.js';
 import { buildTextures } from './textures.js';
 import { buildKitchen } from './kitchen.js';
@@ -20,16 +21,26 @@ export class SceneView {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 0.92;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xf6dfb8);
+    this.scene.background = new THREE.Color(0xd9b88c);
     buildTextures();
 
-    // свет: тёплый, как в референсе
-    this.hemi = new THREE.HemisphereLight(0xfff3df, 0x9a7650, 1.35);
+    // окружение: мягкий заполняющий свет и отражения для стали, стекла, глазури (art-bible §4)
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+    this.scene.environment = this.envMap;
+    this.scene.environmentIntensity = 0.22;
+
+    // свет: тёплый, как в референсе — солнце из окна, полусфера, лампа над островом
+    this.hemi = new THREE.HemisphereLight(0xfff1dc, 0x7a5a3a, 0.55);
     this.scene.add(this.hemi);
-    this.sun = new THREE.DirectionalLight(0xffe2b3, 1.9);
+    this.lamp = new THREE.PointLight(0xffc98a, 1.6, 4.5, 1.6);
+    this.lamp.position.set(-0.2, 2.35, 0.1);
+    this.scene.add(this.lamp);
+    this.sun = new THREE.DirectionalLight(0xffdcaa, 2.7);
     this.sun.position.set(-3, 6, 3.5);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -42,9 +53,13 @@ export class SceneView {
     sc.far = 16;
     this.sun.shadow.bias = -0.0005;
     this.scene.add(this.sun);
-    const fill = new THREE.DirectionalLight(0xffd7a8, 0.45);
+    const fill = new THREE.DirectionalLight(0xffd7a8, 0.35);
     fill.position.set(4, 3, 5);
     this.scene.add(fill);
+    // холодный контровой свет от окна — отделяет героиню и кота от фона
+    const rim = new THREE.DirectionalLight(0xc9d8ff, 0.55);
+    rim.position.set(0.5, 3, -4);
+    this.scene.add(rim);
 
     this.k = buildKitchen(this.scene);
     this.heroine = buildHeroine();
@@ -360,7 +375,7 @@ export class SceneView {
       b.material.emissiveIntensity = on;
     });
     g.light.intensity = broken && !fixing ? 0 : 2.2;
-    this.hemi.intensity = broken ? 1.15 : 1.35;
+    this.hemi.intensity = broken ? 0.42 : 0.55;
 
     // экран телефона мигает при уведомлении
     const radioBroken = !!game?.radio.broken;

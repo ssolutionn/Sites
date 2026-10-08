@@ -108,35 +108,105 @@ function tree(ctx, x, y, s, color) {
 
 export const tex = {};
 
+// Мелкая зернистость поверх заливки: детерминированная, чтобы картинка не менялась от запуска к запуску.
+function grain(ctx, w, h, n, colors, size = [1, 2], seed = 7) {
+  let x = seed;
+  const rnd = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = colors[Math.floor(rnd() * colors.length)];
+    const s = size[0] + rnd() * (size[1] - size[0]);
+    ctx.fillRect(rnd() * w, rnd() * h, s, s);
+  }
+}
+
 export function buildTextures() {
-  // Плитка пола — тёплая бежевая
+  // Плитка пола — тёплая терракота с затиркой и лёгкой неровностью
   tex.floor = canvasTexture(
-    256,
-    256,
+    512,
+    512,
     (ctx, w, h) => {
-      ctx.fillStyle = '#e9cfa6';
+      ctx.fillStyle = '#b98a62';
       ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 2; i++)
-        for (let j = 0; j < 2; j++) {
-          ctx.fillStyle = (i + j) % 2 ? '#f0dab5' : '#e5c79a';
-          ctx.fillRect(i * 128 + 3, j * 128 + 3, 122, 122);
+      const t = w / 4;
+      for (let i = 0; i < 4; i++)
+        for (let j = 0; j < 4; j++) {
+          const k = (i * 7 + j * 3) % 5;
+          ctx.fillStyle = ['#e2b98a', '#dcb083', '#e6c094', '#d8aa7c', '#e0b689'][k];
+          ctx.fillRect(i * t + 3, j * t + 3, t - 6, t - 6);
+          // блик на глазури
+          const g = ctx.createLinearGradient(i * t, j * t, i * t + t, j * t + t);
+          g.addColorStop(0, 'rgba(255,255,255,0.10)');
+          g.addColorStop(1, 'rgba(120,70,30,0.08)');
+          ctx.fillStyle = g;
+          ctx.fillRect(i * t + 3, j * t + 3, t - 6, t - 6);
         }
+      grain(ctx, w, h, 2600, ['rgba(120,70,40,0.10)', 'rgba(255,240,220,0.12)'], [1, 3]);
     },
-    { repeat: [6, 6] },
+    { repeat: [5, 5] },
   );
 
-  // Стена — тёплая штукатурка с еле заметным узором
+  // Стена — тёплые обои с полоской и снежинками
   tex.wall = canvasTexture(
     256,
     256,
     (ctx, w, h) => {
-      ctx.fillStyle = '#f3dcb4';
+      ctx.fillStyle = '#ecc996';
       ctx.fillRect(0, 0, w, h);
-      ctx.globalAlpha = 0.25;
-      for (let i = 0; i < 9; i++) snowflake(ctx, (i * 71) % w, (i * 113) % h, 9, '#ffffff', 2);
+      for (let i = 0; i < 8; i++) {
+        ctx.fillStyle = i % 2 ? 'rgba(255,240,210,0.35)' : 'rgba(200,140,80,0.10)';
+        ctx.fillRect(i * 32, 0, 32, h);
+      }
+      ctx.globalAlpha = 0.45;
+      for (let i = 0; i < 8; i++) snowflake(ctx, 16 + (i % 4) * 64 + (Math.floor(i / 4) % 2) * 32, 40 + Math.floor(i / 4) * 128, 8, '#fff6e6', 2);
       ctx.globalAlpha = 1;
+      grain(ctx, w, h, 900, ['rgba(140,90,40,0.07)', 'rgba(255,255,255,0.08)']);
     },
-    { repeat: [3, 1.5] },
+    { repeat: [4, 2] },
+  );
+
+  // Разделочная доска: светлый бук, продольные волокна, следы ножа
+  tex.board = canvasTexture(
+    512,
+    512,
+    (ctx, w, h) => {
+      ctx.fillStyle = '#e2b47c';
+      ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 7; i++) {
+        ctx.fillStyle = ['#e6ba84', '#dcac72', '#e9c08b', '#d9a86e', '#e3b57e', '#ddb077', '#e8bd87'][i];
+        ctx.fillRect(0, (i * h) / 7, w, h / 7);
+      }
+      ctx.strokeStyle = 'rgba(150,95,45,0.22)';
+      for (let i = 0; i < 70; i++) {
+        ctx.lineWidth = 0.6 + (i % 3) * 0.5;
+        const y = (i * 53) % h;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(w * 0.33, y + ((i % 5) - 2) * 3, w * 0.66, y - ((i % 4) - 1.5) * 3, w, y + 2);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(120,80,40,0.10)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 40; i++) {
+        const x = (i * 97) % w, y = (i * 61) % h;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 6 + (i % 5) * 4, y + 30 + (i % 7) * 6);
+        ctx.stroke();
+      }
+      grain(ctx, w, h, 1800, ['rgba(130,80,35,0.08)', 'rgba(255,240,215,0.10)']);
+    },
+  );
+
+  // Столешница: зелёный камень с крошкой (как зелёные столешницы референса)
+  tex.counter = canvasTexture(
+    256,
+    256,
+    (ctx, w, h) => {
+      ctx.fillStyle = '#3f9a4f';
+      ctx.fillRect(0, 0, w, h);
+      grain(ctx, w, h, 1600, ['rgba(255,255,255,0.10)', 'rgba(20,70,30,0.18)', 'rgba(200,240,190,0.12)'], [1, 3], 11);
+    },
+    { repeat: [6, 2] },
   );
 
   // Фартук кухни — кафель
@@ -344,6 +414,10 @@ export function toonGradientMap() {
   return toonGradient;
 }
 
+// Исторически «toon»: теперь физический материал (art-bible: мультяшность — в формах и цвете,
+// а не в ступенчатом свете). Матовый по умолчанию, отражения даёт окружение сцены.
 export function toon(color, opts = {}) {
-  return new THREE.MeshToonMaterial({ color, gradientMap: toonGradientMap(), ...opts });
+  const { gradientMap, ...rest } = opts;
+  void gradientMap;
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0, ...rest });
 }

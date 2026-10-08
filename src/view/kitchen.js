@@ -22,7 +22,8 @@ function tag(obj, station) {
 export function buildKitchen(scene) {
   const k = { stations: {}, rings: {}, clickables: [] };
   const woodMat = toon(0xffffff, { map: tex.wood });
-  const topMat = toon(GREEN_TOP);
+  const topMat = toon(0xffffff, { map: tex.counter, roughness: 0.42 });
+  void GREEN_TOP;
   const metal = new THREE.MeshStandardMaterial({ color: 0xcfd6dd, metalness: 0.7, roughness: 0.3 });
 
   // пол
@@ -307,7 +308,7 @@ export function buildKitchen(scene) {
   // доска
   const bs = LAYOUT.stations.board.anchor;
   const board = new THREE.Group();
-  const boardMesh = box(0.6, 0.03, 0.4, toon(0xd9a066));
+  const boardMesh = box(0.6, 0.03, 0.4, toon(0xffffff, { map: tex.board, roughness: 0.62 }));
   boardMesh.position.y = 0.015;
   board.add(boardMesh);
   const boardEdge = box(0.6, 0.012, 0.4, toon(0xb67b45));

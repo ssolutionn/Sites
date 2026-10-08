@@ -11,6 +11,7 @@ import { tex } from './textures.js';
 import * as F from './food.js';
 import { CutBoardView } from './cutboard.js';
 import { BowlView } from './bowl3d.js';
+import { DecorView } from './decor.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 const UNIT = BOARD_UNIT;
@@ -170,6 +171,7 @@ export class CampaignView {
     this.bowlContent = new THREE.Group();
     k.bowl.content.add(this.bowlContent);
     this.bowlView = new BowlView(k);
+    this.decorView = new DecorView(this.root);
     this.bowlSpoon = new THREE.Group();
     const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.26, 8), F.m(0xd9a066, 0.6));
     stick.position.y = 0.13;
@@ -747,6 +749,7 @@ export class CampaignView {
     this._updateBoard(s, dt, camMode === 'board');
     this._updateTray(s, dt, t);
     this._updateBowl(s, dt, t);
+    this.decorView.sync(s.decor, t);
     this._updateSink(s, t);
     this._updatePuddles(s, t);
     this._updateTable(s, mode);
