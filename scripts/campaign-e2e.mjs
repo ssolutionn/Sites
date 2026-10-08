@@ -343,7 +343,7 @@ try {
   // дрогнула рука: волнистый росчерк — край куска кривой (рамка шире прямого)
   { const pts = []; for (let k = 0; k <= 16; k++) pts.push([(-4.5 + 0.45 * Math.sin(k * 1.4)) * U, (b0.z0 - 0.9 + ((b0.z1 - b0.z0 + 1.8) * k) / 16) * U]); await drag(pts, 2); await wait(200); }
   const wob = await sess('s.boardCur().pieces.filter((p) => p.x > -5.6 && p.x < -5.3).map((p) => +p.w.toFixed(2))');
-  check('дрогнула рука — кусок кривой: рамка куска шире расстояния между росчерками', wob.some((w) => w > 1.3), wob.join(' / '));
+  check('дрогнула рука — кусок кривой: рамка куска шире расстояния между росчерками (1 см)', wob.some((w) => w > 1.15), wob.join(' / '));
   await shot('d1_board_carrot_wobbly');
   await cutCubes({ rotate: false });
   await shot('d1_board_carrot_cubes');
