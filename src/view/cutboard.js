@@ -363,17 +363,22 @@ function buildKnife() {
   const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0055, 0.018, 4, 8), skin);
   thumb.rotation.set(Math.PI / 2 - 0.3, 0, -0.4);
   thumb.position.set(-0.009, 0.036, 0.1);
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.1, 14), new THREE.MeshStandardMaterial({ color: 0xc62f35, roughness: 0.9 }));
+  // короткий рукав свитера: длинный цилиндр у камеры перекрывал продукт
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.021, 0.035, 14), new THREE.MeshStandardMaterial({ color: 0xc62f35, roughness: 0.9 }));
   sleeve.rotation.x = Math.PI / 2 - 0.75;
-  sleeve.position.set(0.006, 0.08, 0.18);
+  sleeve.position.set(0.005, 0.062, 0.162);
   const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.021, 0.006, 8, 18), new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 0.95 }));
   cuff.rotation.x = -0.5 + Math.PI / 2;
   cuff.position.set(0.005, 0.05, 0.143);
-  grip.add(fist, thumb, sleeve, cuff);
+  // только кисть: рукав у камеры закрывал продукт
+  grip.add(fist, thumb);
+  sleeve.geometry.dispose();
+  cuff.geometry.dispose();
   // лёгкий крен: плоскость лезвия видна сверху, как у ножа в руке
   const roll = new THREE.Group();
   roll.rotation.z = -0.32;
   roll.add(blade, edge, grip);
+  roll.scale.setScalar(0.82);
   knife.add(roll);
   knife.traverse((o) => {
     if (o.isMesh) o.castShadow = true;
@@ -393,11 +398,11 @@ function buildLeftHand() {
     f.position.set(0.02, -0.004 - i * 0.0005, -0.012 + i * 0.0085);
     g.add(f);
   }
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.019, 0.06, 14), new THREE.MeshStandardMaterial({ color: 0xc62f35, roughness: 0.9 }));
-  sleeve.position.set(-0.036, 0.022, 0.01);
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.017, 0.028, 14), new THREE.MeshStandardMaterial({ color: 0xc62f35, roughness: 0.9 }));
+  sleeve.position.set(-0.026, 0.014, 0.004);
   sleeve.rotation.set(0, 0, 1.1);
   g.add(sleeve);
-  g.scale.setScalar(0.85);
+  g.scale.setScalar(0.75);
   g.traverse((o) => {
     if (o.isMesh) o.castShadow = true;
   });
@@ -637,8 +642,9 @@ export class CutBoardView {
     this.knifeYaw += (yaw - this.knifeYaw) * (1 - Math.exp(-dt * 14));
     this.knife.rotation.y = this.knifeYaw;
     const kk = 1 - Math.exp(-dt * 30);
-    this.knifePos.x += (THREE.MathUtils.clamp(kx, -6.8, 6.8) * UNIT - this.knifePos.x) * kk;
-    this.knifePos.z += (THREE.MathUtils.clamp(kz, -4.6, 4.6) * UNIT - this.knifePos.z) * kk;
+    const area = pieces.length ? bounds(pieces) : it.log ? { minX: -it.log.length / 2, maxX: it.log.length / 2, minZ: -it.radius, maxZ: it.radius } : { minX: -3, maxX: 3, minZ: -3, maxZ: 3 };
+    this.knifePos.x += (THREE.MathUtils.clamp(kx, area.minX - 1.5, area.maxX + 1.5) * UNIT - this.knifePos.x) * kk;
+    this.knifePos.z += (THREE.MathUtils.clamp(kz, area.minZ - 1.2, area.maxZ + 1.2) * UNIT - this.knifePos.z) * kk;
     this.knifePos.y = ky;
     this.knife.position.copy(this.knifePos);
 

@@ -87,7 +87,7 @@ export class CampaignUI {
   _label(id, text) {
     const d = document.createElement('div');
     d.className = 'st-label';
-    d.innerHTML = `${STATION_ICON[id] ?? ''} ${esc(text)}`;
+    d.innerHTML = `<span class="ic">${STATION_ICON[id] ?? ''}</span><span class="nm">${esc(text)}</span>`;
     d.style.display = 'none';
     d.addEventListener('click', () => {
       this.sound.unlock();
@@ -122,34 +122,35 @@ export class CampaignUI {
     const has = save.hasProgress;
     const done = save.data.days.filter((d) => d.completed).length;
     const contLabel = save.data.finished ? 'Финальный стол' : `Продолжить · день ${(cur < 0 ? 7 : cur + 1)}`;
+    const dev = new URLSearchParams(location.search).has('dev');
+    const flakes = Array.from({ length: 36 }, (_, i) => `<i style="left:${(i * 37) % 100}%;animation-duration:${7 + (i % 7)}s;animation-delay:${-(i * 1.3) % 9}s;opacity:${0.35 + (i % 5) * 0.12};transform:scale(${0.5 + (i % 4) * 0.25})"></i>`).join('');
     this._overlay(`
-      <div class="menu">
-        <div class="title-card">
-          <span class="snow">❄</span>
-          <h1>Симулятор<br/>новогодней<br/>суеты</h1>
-          ${NEUTRAL ? '' : `<div class="by"><img src="${LOGO_URL}" alt="" /> от «Пятёрочки»</div>`}
+      <div class="snowfall">${flakes}</div>
+      <div class="menu2">
+        <div class="brand">
+          <div class="kicker">семь дней до праздника</div>
+          <h1>Симулятор<br/><span>новогодней</span><br/>суеты</h1>
+          <p>${has ? `Пройдено дней: ${done} из 7 · итог кампании ${campaignScore(save.data)}` : 'Режь, мешай, пробуй и успевай — а кот пусть не трогает колбасу.'}</p>
+          ${NEUTRAL ? '' : `<div class="by"><img src="${LOGO_URL}" alt="" /> вместе с «Пятёрочкой»</div>`}
+          ${save.status === 'reset' ? '<p class="small warn">Старое сохранение повреждено или устарело — начата новая кампания.</p>' : ''}
         </div>
-        <div class="card controls" style="padding:14px 18px">
-          <b>Семь дней подготовки. Десять блюд. Один праздничный стол.</b>
-          <div class="small" style="margin-top:4px">${has ? `Пройдено дней: ${done} из 7 · итог кампании ${campaignScore(save.data)}` : 'Режь на глаз, мажь, наполняй, собирай слои — и не дай коту утащить колбасу.'}</div>
-          ${save.status === 'reset' ? '<div class="small warn">Старое сохранение повреждено или устарело — начата новая кампания.</div>' : ''}
+        <div class="glass side">
+          ${has ? `<button class="primary big" data-ui="continue">▶ ${contLabel}</button>` : `<button class="primary big" data-ui="new">▶ Начать готовить</button>`}
+          ${has ? '<button class="big" data-ui="new">✚ Новая кампания</button>' : ''}
+          <button class="big" data-ui="journal">📖 Дни и рецепты</button>
+          <div class="row2">
+            <button data-ui="practice">🔪 Практика</button>
+            <button data-ui="challenges">🏆 Испытания</button>
+          </div>
+          <div class="settings">
+            <button class="icon" data-ui="controls" title="Управление">⌨</button>
+            <button class="icon" data-ui="mute" title="Звук (M)">${this.app.isMuted() ? '🔇' : '🔊'}</button>
+            <button data-ui="quality" title="Качество графики">${save.data.settings.quality === 'low' ? '🖥 Экономно' : '🖥 Красиво'}</button>
+          </div>
+          ${dev ? '<div class="row2"><a class="btn-link" href="./classic.html">Оливье за 5 минут</a><a class="btn-link" href="./gallery.html">3D-галерея</a></div>' : ''}
+          <div class="card controls hidden" id="controls-card">${this._controls()}</div>
         </div>
-        <div class="actions">
-          ${has ? `<button class="primary big" data-ui="continue">▶ ${contLabel}</button>` : `<button class="primary big" data-ui="new">▶ Новая кампания</button>`}
-          ${has ? '<button class="ghost big" data-ui="new">Новая кампания</button>' : ''}
-          <button class="ghost big" data-ui="journal">📖 Журнал дней</button>
-        </div>
-        <div class="actions compact">
-          <button class="ghost" data-ui="practice">🔪 Свободная практика</button>
-          <button class="ghost" data-ui="challenges">🏆 Испытания</button>
-          <a class="ghost btn-link" href="./classic.html">⏱ Оливье за 5 минут</a>
-          <a class="ghost btn-link" href="./gallery.html">Девушка и кот · 3D</a>
-          <button class="ghost" data-ui="controls">Управление</button>
-          <button class="ghost" data-ui="mute" title="Звук (M)">${this.app.isMuted() ? '🔇' : '🔊'}</button>
-          <button class="ghost" data-ui="quality" title="Качество графики">${save.data.settings.quality === 'low' ? '🖥 Графика: экономная' : '🖥 Графика: полная'}</button>
-        </div>
-        <div class="card controls hidden" id="controls-card">${this._controls()}</div>
-      </div>`);
+      </div>`, 'center');
   }
 
   _controls() {
@@ -422,23 +423,26 @@ export class CampaignUI {
   showKitchen(session) {
     this.el.hud.classList.remove('hidden');
     this.el.hud.innerHTML = `
-      <div class="hud-left"><div class="card hud-day">
-        <div class="hud-day-title" id="hud-day"></div>
-        <div class="hud-step" id="hud-step"></div>
-        <div class="hud-actions">
-          <button id="btn-recipe" title="Рецепт (Q)">📋 Рецепт</button>
-          <button id="btn-help" title="Повторить подсказку">?</button>
-          <button id="btn-finish" class="primary hidden">✅ Завершить день</button>
-        </div>
+      <div class="glass hud2-task">
+        <div class="dish-ico" id="hud-ico">🥗</div>
+        <div class="t-title" id="hud-day"></div>
+        <div class="t-tools"><button id="btn-recipe" title="Книга рецептов (Q)">📖</button><button id="btn-help" title="Повторить подсказку">?</button></div>
+        <div class="t-step" id="hud-step"></div>
+        <div class="t-dishes" id="hud-dishes"></div>
+        <div class="t-dots" id="hud-dots"></div>
+        <div class="t-wish" id="hud-wish"></div>
+        <button id="btn-finish" class="primary t-finish hidden">✅ Завершить день</button>
       </div>
-      <div class="card hud-meta" id="hud-meta"></div>
-      <div class="tickets" id="tickets"></div></div>
-      <div class="card hud-clock"><div id="hud-clock">00:00</div><div class="small" id="hud-sub">на кухне</div></div>
-      <div class="hud-buttons">
-        <button id="btn-phone" title="Телефон">📱<span class="badge hidden" id="phone-badge"></span></button>
-        <button id="btn-mute" title="Звук (M)"></button>
-        <button id="btn-pause" title="Пауза (Esc)"><span class="pause-ico"></span></button>
+      <div class="glass hud2-clock"><div class="time" id="hud-clock">00:00</div><div class="timers" id="hud-timers"></div></div>
+      <div class="hud2-right">
+        <div class="hud2-btns">
+          <button id="btn-phone" class="glass" title="Телефон">📱<span class="badge hidden" id="phone-badge"></span></button>
+          <button id="btn-mute" class="glass" title="Звук (M)"></button>
+          <button id="btn-pause" class="glass" title="Пауза (Esc)"><span class="pause-ico"></span></button>
+        </div>
+        <div class="glass hud2-status" id="hud-meta"></div>
       </div>`;
+    this.hudCache = {};
     $('#btn-recipe').addEventListener('click', () => this.toggleRecipe());
     $('#btn-help').addEventListener('click', () => this.repeatTip());
     $('#btn-finish').addEventListener('click', () => this.act('finishDay'));
@@ -685,60 +689,59 @@ export class CampaignUI {
     } else this.el.hint.classList.add('hidden');
   }
 
+  // Обновить кусок HUD, только если содержимое изменилось.
+  _set(id, html) {
+    if (this.hudCache[id] === html) return;
+    this.hudCache[id] = html;
+    const el = $('#' + id);
+    if (el) el.innerHTML = html;
+  }
+
+  // Иерархия HUD: задача (слева) → время и активные таймеры (центр) → кот и деньги (справа).
   _renderHud(s) {
     const d = s.day;
-    $('#hud-day').innerHTML = s.practice ? `🔪 ${esc(s.recipes.practice.name)}` : `День ${d.id} · ${esc(d.title)}`;
-    let step = '';
-    if (s.phase === 'ready') step = '✅ Всё готово — можно завершать день';
-    else {
-      const id = s.activeDish();
-      if (id) {
-        const onFire = new Set(s.burners.filter((b) => b.state !== 'empty').map((b) => b.owner + ':' + b.step));
-        const next = s.nextSteps(id).find((st) => !(st.type === 'boil' && onFire.has(id + ':' + st.id)));
-        const dishes = Object.values(s.dishes).map((x) => `${ICON[x.id]}${x.done ? '✓' : ''}`).join(' ');
-        step = `${dishes} · ${esc(s.recipes[id].name)}${next ? ': ' + esc(next.label.toLowerCase()) : ''}`;
-      } else if (s.day.finalServe) step = '🎄 Расставь все 10 блюд на праздничном столе';
-    }
-    $('#hud-step').innerHTML = step;
+    this._set('hud-day', s.practice ? 'Свободная практика' : `День ${d.id} из 7 · ${esc(d.title.toLowerCase())}`);
+    const id = s.activeDish();
+    this._set('hud-ico', s.practice ? '🔪' : s.phase === 'ready' ? '🎉' : ICON[id] ?? (s.day.finalServe ? '🎄' : '🍽'));
+    let step = '', dots = '';
+    if (s.phase === 'ready') step = 'Всё готово — можно завершать день';
+    else if (id) {
+      const onFire = new Set(s.burners.filter((b) => b.state !== 'empty').map((b) => b.owner + ':' + b.step));
+      const next = s.nextSteps(id).find((st) => !(st.type === 'boil' && onFire.has(id + ':' + st.id)));
+      step = next ? esc(next.label) : esc(s.recipes[id].name);
+      const steps = s.recipes[id].steps.filter((st) => s.stepState(id, st.id) !== 'skipped');
+      dots = steps.map((st) => `<i class="${s.stepState(id, st.id) === 'done' ? 'on' : next && st.id === next.id ? 'next' : ''}"></i>`).join('');
+    } else if (s.day.finalServe) step = 'Расставь все 10 блюд на праздничном столе';
+    this._set('hud-step', step);
+    this._set('hud-dots', dots);
+    const dishes = Object.values(s.dishes);
+    this._set('hud-dishes', !s.practice && dishes.length > 1 ? dishes.map((x) => `<span class="${x.done ? 'done' : x.id === id ? 'cur' : ''}">${ICON[x.id]} ${esc(x.recipe.short)}</span>`).join('') : '');
+    this._set('hud-wish', s.requests.filter((r) => r.known && (!id || r.recipe === id)).map((r) => `🙏 ${esc(s.wishLabel(r))}`).join(' · '));
     $('#hud-clock').textContent = fmt(s.t);
-    const boiling = s.burners.filter((b) => b.state === 'boiling');
-    $('#hud-sub').textContent = boiling.length ? boiling.map((b) => `${PICON[b.product]} ${fmt(b.readyAt - s.t)}`).join(' · ') : s.oven.state === 'baking' ? `🍗 духовка ${fmt(s.oven.readyAt - s.t)}` : s.delivery.order ? `🛵 ${({ accepted: 'заказ принят', assembling: 'собирают', onTheWay: 'курьер в пути', arrived: 'курьер приехал', collecting: 'забираем' })[s.delivery.order.status]}` : 'на кухне';
+    // активные таймеры: кастрюли, горячее, духовка, курьер
+    const timers = [];
+    for (const b of s.burners) {
+      if (b.state === 'boiling') timers.push(`<span class="timer">${PICON[b.product]} ${fmt(b.readyAt - s.t)}</span>`);
+      else if (b.state === 'ready') timers.push(`<span class="timer done">${PICON[b.product]} готово</span>`);
+    }
+    for (const x of s.hotList()) timers.push(`<span class="timer hot">${PICON[x.product]} горячо ${Math.ceil(x.left)} с</span>`);
+    if (s.oven.state === 'baking') timers.push(`<span class="timer">🍗 ${fmt(s.oven.readyAt - s.t)}</span>`);
+    if (s.delivery.order) timers.push(`<span class="timer">🛵 ${({ accepted: 'принят', assembling: 'собирают', onTheWay: 'в пути', arrived: 'у двери', collecting: 'забираем' })[s.delivery.order.status]}</span>`);
+    this._set('hud-timers', timers.join(''));
     $('#btn-finish').classList.toggle('hidden', s.phase !== 'ready' || !!s.practice);
     const badge = $('#phone-badge');
     badge.classList.toggle('hidden', !s.phone.unread);
     badge.textContent = s.phone.unread;
     $('#btn-mute').textContent = this.app.isMuted() ? '🔇' : '🔊';
     $('#btn-phone').classList.toggle('hidden', !!s.practice);
-    this._renderTickets(s);
     const meta = $('#hud-meta');
-    if (s.practice) meta.classList.add('hidden');
-    else {
-      meta.classList.remove('hidden');
+    meta.classList.toggle('hidden', !!s.practice);
+    if (!s.practice) {
       const h = Math.round(s.catNeeds.hunger);
-      const catTxt = s.cat.state === 'eat' ? 'ест' : s.cat.state === 'play' ? 'играет' : s.catCalm() ? 'спит' : h >= CAMPAIGN.cat.theftAt ? 'ищет еду!' : h >= CAMPAIGN.cat.warnAt ? 'голоден' : 'бродит';
-      const hot = s.hotList().map((x) => `${PICON[x.product]}🔥${Math.ceil(x.left)}с`).join(' ');
-      meta.innerHTML = `<div class="meter" title="Голод кота"><span>🐱 ${catTxt}</span><i class="${h >= CAMPAIGN.cat.theftAt ? 'bad' : h >= CAMPAIGN.cat.warnAt ? 'warn' : ''}" style="width:${h}%"></i></div><div class="small">💰 ${s.wallet.budget - s.wallet.spent} ₽${hot ? ' · ' + hot : ''}</div>`;
+      const catTxt = s.cat.state === 'eat' ? 'ест' : s.cat.state === 'play' ? 'играет' : s.catCalm() ? 'спит' : h >= CAMPAIGN.cat.theftAt ? 'ищет еду' : h >= CAMPAIGN.cat.warnAt ? 'голоден' : 'бродит';
+      const cls = h >= CAMPAIGN.cat.theftAt ? 'bad' : h >= CAMPAIGN.cat.warnAt ? 'warn' : '';
+      this._set('hud-meta', `<span class="chip2" title="Голод кота">🐱 ${catTxt} <span class="cat-bar"><i class="${cls}" style="width:${h}%"></i></span></span><span class="chip2" title="Бюджет дня">💰 ${s.wallet.budget - s.wallet.spent} ₽</span>`);
     }
-  }
-
-  // Карточки заказов дня: блюдо, прогресс шагов, пожелания гостей.
-  _renderTickets(s) {
-    const el = $('#tickets');
-    if (s.practice) {
-      el.innerHTML = '';
-      return;
-    }
-    const sig = Object.values(s.dishes).map((d) => d.id + d.done + d.recipe.steps.filter((st) => s.stepDone(d.id, st.id)).length).join() + s.requests.map((r) => r.known + r.recipe).join() + s.tray.owner + s.bowl.owner;
-    if (sig === this.ticketSig) return;
-    this.ticketSig = sig;
-    el.innerHTML = Object.values(s.dishes)
-      .map((d) => {
-        const total = d.recipe.steps.filter((st) => s.stepState(d.id, st.id) !== 'skipped').length;
-        const done = d.recipe.steps.filter((st) => s.stepState(d.id, st.id) === 'done').length;
-        const wishes = s.requests.filter((r) => r.known && r.recipe === d.id).map((r) => `<span class="wish" title="${esc(s.wishLabel(r))}">🙏 ${esc(s.wishLabel(r))}</span>`).join('');
-        return `<div class="ticket ${d.done ? 'done' : ''}"><div class="t-head">${ICON[d.id]} ${esc(d.recipe.short)}${d.done ? ` <b>${d.Q}</b>` : ''}</div><div class="t-bar"><i style="width:${(done / total) * 100}%"></i></div>${wishes}</div>`;
-      })
-      .join('');
   }
 
   _renderLabels(s) {
@@ -936,9 +939,10 @@ export class CampaignUI {
       case 'board': {
         const it = s.boardCur();
         if (!it) return '';
-        if (it.grater) return `Тёрка: ${it.grater.done} из ${it.grater.cycles} полных движений`;
+        if (it.grater) return `<span class="qbar"><i style="width:${(it.grater.done / it.grater.cycles) * 100}%"></i></span><span>Натёрто ${it.grater.done} из ${it.grater.cycles}</span>`;
         const q = s.boardQuality(it);
-        return `Кусочков: ${it.pieces?.length ?? it.log.segments.length} · аккуратно ≈ ${Math.round(q.score * 100)} %`;
+        const block = s.transferBlock(it);
+        return `<span class="qbar" title="Аккуратность"><i style="width:${Math.round(q.score * 100)}%"></i></span><span class="q">${it.cuts ? `Ровно на ${Math.round(q.score * 100)} %` : 'Ещё ни одного разреза'}</span><span>кусочков: ${it.pieces?.length ?? it.log.segments.length}</span>${block && it.cuts ? `<span>· ${esc(block)}</span>` : ''}`;
       }
       case 'bowl': {
         const mt = s.mixTarget();
@@ -984,27 +988,26 @@ export class CampaignUI {
       case 'board': {
         const tasks = s.boardTasks();
         const it = s.boardCur();
-        const tabs = tasks
+        const chips = tasks
           .map((t) => {
-            const cls = [t.key === s.board.current ? 'active' : '', t.state === 'done' ? 'done' : '', t.state === 'locked' ? 'soft-disabled' : ''].join(' ');
-            const lbl = `${PICON[t.product] ?? ''} ${PRODUCTS[t.product].name}${t.qty > 1 ? ' × ' + t.qty : ''}${t.type === 'grate' ? ' (тёрка)' : t.shape === 'round' ? ' (кружки)' : ''}${t.state === 'done' ? ' ✓' : ''}`;
+            const cls = ['prod-chip', t.key === s.board.current ? 'active' : '', t.state === 'done' ? 'done' : '', t.state === 'locked' ? 'locked' : ''].join(' ');
+            const lbl = `<span class="pi">${PICON[t.product] ?? '🍽'}</span><span class="pn">${esc(PRODUCTS[t.product].name)}${t.qty > 1 ? ' ×' + t.qty : ''}${t.type === 'grate' ? ' · тёрка' : t.shape === 'round' ? ' · кружки' : ''}</span>`;
             return this._btn(lbl, 'boardSelect', [t.key], cls, busy || t.state === 'done', t.block ?? '');
           })
           .join('');
-        if (!it) return `<h2>🔪 Доска</h2><div class="row tabs">${tabs || '<span class="small">Сегодня на доске больше нечего делать.</span>'}</div><div class="row">${back}</div><p class="note">Выбери продукт. Продукт резервируется со склада при начале работы.</p>`;
+        const backBtn = this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)');
+        if (!it) return `<h2>🔪 Доска · выбери продукт</h2><div class="dock">${backBtn}<div class="dock-items">${chips || '<span class="small">Сегодня на доске больше нечего делать.</span>'}</div></div>`;
         const block = s.transferBlock();
         const step = s.stepDef(it.dishId, it.stepId);
         const destLabel = s.practice ? 'Оценить' : step.dest === 'bowl' ? '🥣 В миску' : step.dest === 'pieces' ? '🍽 На поднос' : '✓ Готово';
-        return `<h2>${it.grater ? '🧀 Тёрка' : '🔪 Доска'} · ${PICON[it.product] ?? ''} ${PRODUCTS[it.product].name}${it.qty > 1 ? ' × ' + it.qty : ''}<span class="sub">${esc(s.recipes[it.dishId].name)}</span></h2>
-          <div class="row tabs">${tabs}</div>
-          <div class="row">
-
-            ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
-            ${it.grater && !s.practice ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary ' + (block ? 'soft-disabled' : ''), busy, block ?? '')}
-            ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], 'ghost') : ''}
-            ${back}
-          </div>${it.missing.length ? bar : ''}${live}
-          <p class="note">${it.grater ? 'Зажми кнопку и води мышью вверх-вниз по тёрке.' : it.log ? 'Зажми кнопку и проведи ножом сверху вниз — кружок. Толщина — на глаз по образцу.' : 'Зажми кнопку и проведи ножом через продукт: сверху вниз — полоски, слева направо — кубики.'}${block && !it.grater ? ' · ' + esc(block) : ''}</p>`;
+        return `<h2>${it.grater ? '🧀 Тёрка' : '🔪 Доска'} · ${esc(PRODUCTS[it.product].name)}${it.qty > 1 ? ' ×' + it.qty : ''}<span class="sub">${esc(s.recipes[it.dishId].name)}</span></h2>
+          <div class="dock">${backBtn}<div class="dock-items">${chips}</div>
+            <div class="dock-main">
+              ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
+              ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
+              ${it.grater && !s.practice ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : ''), busy, block ?? '')}
+            </div>
+          </div>${it.missing.length ? bar : ''}<div class="dock-live" data-live></div>`;
       }
       case 'bowl': {
         const tasks = s.bowlTasks();
@@ -1053,7 +1056,7 @@ export class CampaignUI {
             return `<div class="burner ${b.state}"><b>${name}</b> ${act}</div>`;
           })
           .join('');
-        return `<h2>♨️ Плита</h2>${burners}<div class="row">${back}</div><div class="row">${bar}</div>${live}<p class="note">${tasks.length || s.burners.some((b) => b.state !== 'empty') ? 'Ставь сразу на обе конфорки. Следи, чтобы вода не убежала. Сваренное горячее — остуди у раковины.' : 'Сегодня плита не нужна.'}</p>`;
+        return `<h2>♨️ Плита · две конфорки</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="burners2">${burners}</div></div><div class="row">${bar}</div>${tasks.length || s.burners.some((b) => b.state !== 'empty') ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
       }
       case 'catbowl': {
         const h = Math.round(s.catNeeds.hunger);
@@ -1072,7 +1075,7 @@ export class CampaignUI {
         const dirty = s.dirtyItems();
         const btns = dirty.map((d) => this._btn(`🧽 ${esc(d.label)}`, 'sinkSelect', [d.id], s.sinkJob?.item === d.id ? 'primary active' : 'ghost', busy)).join('');
         const cool = s.hotList().map((x) => this._btn(`❄️ Остудить: ${PICON[x.product]} ${esc(PRODUCTS[x.product].name.toLowerCase())}`, 'coolProduct', [x.product], 'primary', busy)).join('');
-        return `<h2>🚰 Раковина</h2>${cool ? `<div class="row">${cool}</div>` : ''}<div class="row">${btns || '<span class="small">Вся посуда чистая.</span>'}${back}</div><div class="row">${bar}</div>${live}<p class="note">${s.sinkJob ? 'Зажми кнопку и три губкой по посуде.' : dirty.length ? 'Выбери, что мыть.' : cool ? 'Холодная вода остужает сваренное за пару секунд.' : 'Мыть нечего.'}</p>`;
+        return `<h2>🚰 Раковина</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${cool}${btns || (cool ? '' : '<span class="small">Вся посуда чистая, остужать нечего.</span>')}</div></div><div class="row">${bar}</div>${live}`;
       }
       case 'puddle':
         return `<h2>🧽 Лужа</h2><div class="row">${back}</div>${live}<p class="note">Зажми кнопку и води тряпкой по луже.</p>`;
