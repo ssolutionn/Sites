@@ -1,5 +1,6 @@
 // Доска кампании: продукты как объёмные тела, нож в руке идёт за мышью.
 // Только читает состояние KitchenSession (board.items, board.stroke, action), ничего не начисляет.
+// Нарезка кубиком — сетка raster-cut.js: куски из контуров собираются в одну геометрию, доска вращается (A/D).
 //
 // Кусок продукта — вертикальная призма по его контуру (логика cutting.js) с куполом сверху:
 // высота купола повторяет исходный продукт, поэтому кубик из середины морковки
@@ -14,24 +15,25 @@ import { classifyCut, CUT_RULES } from '../campaign/gestures.js';
 import { bounds } from '../game/cutting.js';
 
 const UNIT = BOARD_UNIT;
-const INSET = 0.03; // визуальный зазор между соседними кусками, кубиков
-const SPREAD = 0.055; // куски чуть расходятся от центра продукта после разрезов — видно срез
-const STEP = 0.22; // шаг дробления контура, кубиков
+const INSET = 0.05; // визуальный зазор между соседними кусками, u (см)
+const SPREAD = 0.05; // куски чуть расходятся от центра своей штуки после разрезов — видно срез
+const STEP = 0.32; // шаг дробления контура, u
+const CUBE_H = 1.1; // мелкий кусок не выше 1.1·√площади — кубик, а не столбик
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 
 /** Внешний вид продуктов на доске: kind — рисунок в шейдере, h — высота купола (кубиков). */
 export const LOOK = {
-  carrot: { kind: 0, h: 0.95, base: 0.24, k: 1, rough: 0.55, lean: 0.1 },
-  pickle: { kind: 1, h: 0.95, base: 0.24, k: 0.3, rough: 0.42, lean: 0.12 },
-  cucumber: { kind: 10, h: 0.95, base: 0.24, k: 0.3, rough: 0.32, lean: 0.12 },
-  potato: { kind: 2, h: 1.2, base: 0.3, k: 1, rough: 0.78, bumps: 0.08, lean: 0.12 },
-  egg: { kind: 3, h: 1.2, base: 0.3, k: 1, rough: 0.28, lean: 0.2 },
-  sausage: { kind: 4, h: 1.15, base: 0.3, k: 0, rough: 0.5, lean: 0.08 },
-  crab: { kind: 5, h: 0.9, base: 0.3, k: 0, rough: 0.5 },
-  cheese: { kind: 6, h: 1, flat: true, rough: 0.6 },
-  bread: { kind: 7, h: 1, flat: true, rough: 0.85 },
-  herring: { kind: 8, h: 0.6, base: 0.25, k: 0.2, rough: 0.35 },
-  onion: { kind: 9, h: 1.05, base: 0.28, k: 1, rough: 0.4 },
+  carrot: { kind: 0, h: 1.9, base: 0.48, k: 1, rough: 0.55, lean: 0.1 },
+  pickle: { kind: 1, h: 1.9, base: 0.48, k: 0.3, rough: 0.42, lean: 0.12 },
+  cucumber: { kind: 10, h: 1.9, base: 0.48, k: 0.3, rough: 0.32, lean: 0.12 },
+  potato: { kind: 2, h: 2.4, base: 0.6, k: 1, rough: 0.78, bumps: 0.08, lean: 0.12 },
+  egg: { kind: 3, h: 2.4, base: 0.6, k: 1, rough: 0.28, lean: 0.2 },
+  sausage: { kind: 4, h: 2.3, base: 0.6, k: 0, rough: 0.5, lean: 0.08 },
+  crab: { kind: 5, h: 1.8, base: 0.6, k: 0, rough: 0.5 },
+  cheese: { kind: 6, h: 2.0, flat: true, rough: 0.6 },
+  bread: { kind: 7, h: 2.0, flat: true, rough: 0.85 },
+  herring: { kind: 8, h: 1.2, base: 0.5, k: 0.2, rough: 0.35 },
+  onion: { kind: 9, h: 2.1, base: 0.56, k: 1, rough: 0.4 },
 };
 
 const TAPER = {
@@ -252,7 +254,15 @@ export function pieceGeometry(piece, product) {
     p.vx = p.x - (dx / l) * s;
     p.vz = p.z - (dz / l) * s;
   }
-  const Hat = (x, z) => sh.H(x - m.cx, z - m.cz);
+  const Hat = (x, z) => Math.min(sh.H(x - m.cx, z - m.cz), piece.hmax ?? Infinity);
+  // направление обхода контура: от него зависит, куда смотрят грани (иначе стенки смотрят внутрь и кусок «пустой»)
+  let area2 = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    area2 += a.x * b.z - b.x * a.z;
+  }
+  const ccw = area2 > 0;
+  const tri = (arr, a, b, c) => (ccw ? arr.push(a, b, c) : arr.push(a, c, b));
 
   // крышка: кольца от центра к краю
   const T = [0, 0.4, 0.7, 0.9, 1];
@@ -266,12 +276,13 @@ export function pieceGeometry(piece, product) {
   };
   addTop(cx, cz);
   for (let r = 1; r < T.length; r++) for (const p of ring) addTop(cx + (p.vx - cx) * T[r], cz + (p.vz - cz) * T[r]);
-  for (let i = 0; i < N; i++) top.idx.push(0, 1 + ((i + 1) % N), 1 + i);
+  for (let i = 0; i < N; i++) tri(top.idx, 0, 1 + ((i + 1) % N), 1 + i);
   for (let r = 1; r < T.length - 1; r++) {
     const a0 = 1 + (r - 1) * N, b0 = 1 + r * N;
     for (let i = 0; i < N; i++) {
       const j = (i + 1) % N;
-      top.idx.push(a0 + i, a0 + j, b0 + i, a0 + j, b0 + j, b0 + i);
+      tri(top.idx, a0 + i, a0 + j, b0 + i);
+      tri(top.idx, a0 + j, b0 + j, b0 + i);
     }
   }
   const gTop = new THREE.BufferGeometry();
@@ -314,7 +325,9 @@ export function pieceGeometry(piece, product) {
         wall.nrm.push(...n);
       }
     }
-    wall.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
+    // наружу: (низ p, верх p, низ q) при обходе против часовой стрелки
+    tri(wall.idx, base, base + 1, base + 2);
+    tri(wall.idx, base + 2, base + 1, base + 3);
   }
   const gWall = new THREE.BufferGeometry();
   gWall.setAttribute('position', new THREE.Float32BufferAttribute(wall.pos, 3));
@@ -334,7 +347,7 @@ export function pieceGeometry(piece, product) {
     bot.skin.push(0);
     bot.nrm.push(0, -1, 0);
   }
-  for (let i = 0; i < N; i++) bot.idx.push(0, 1 + i, 1 + ((i + 1) % N));
+  for (let i = 0; i < N; i++) tri(bot.idx, 0, 1 + i, 1 + ((i + 1) % N));
   const gBot = new THREE.BufferGeometry();
   gBot.setAttribute('position', new THREE.Float32BufferAttribute(bot.pos, 3));
   gBot.setAttribute('normal', new THREE.Float32BufferAttribute(bot.nrm, 3));
@@ -347,6 +360,24 @@ export function pieceGeometry(piece, product) {
   gBot.dispose();
   g.userData.center = { x: cx, z: cz };
   return g;
+}
+
+/**
+ * Ориентация лезвия по последнему участку следа (≥ 0.6 u): лезвие вдоль движения,
+ * рукоять всегда к себе или вправо — на зигзаге «рубки» нож не переворачивается.
+ */
+function strokeYaw(stroke) {
+  const pts = stroke?.pts;
+  if (!pts || pts.length < 2) return null;
+  const b = pts[pts.length - 1];
+  for (let i = pts.length - 2; i >= 0; i--) {
+    const dx = b.x - pts[i].x, dz = b.z - pts[i].z, l = Math.hypot(dx, dz);
+    if (l < 0.6) continue;
+    const ux = dx / l, uz = dz / l;
+    const flip = uz < -0.3 || (Math.abs(uz) <= 0.3 && ux < 0);
+    return Math.atan2(flip ? -ux : ux, flip ? -uz : uz);
+  }
+  return null;
 }
 
 /** Высота продукта (кубиков) в точке доски или null, если там пусто. */
@@ -466,8 +497,12 @@ export class CutBoardView {
     this.group = new THREE.Group();
     this.group.position.copy(center);
     parent.add(this.group);
-    this.meshes = new Map(); // id -> mesh
-    this.prev = []; // куски прошлого кадра (для разъезда после разреза)
+    // продукт на доске (поворачивается A/D); куски — одна геометрия bodyMesh
+    this.prod = new THREE.Group();
+    this.group.add(this.prod);
+    this.bodyMesh = null;
+    this.bodyVersion = -1;
+    this.rebuildT = 0;
     this.itemKey = null;
     this.lastCuts = 0;
     this.knife = buildKnife();
@@ -493,11 +528,11 @@ export class CutBoardView {
     this.guide.rotation.x = -Math.PI / 2;
     this.guide.renderOrder = 6;
     this.guide.visible = false;
-    this.group.add(this.guide);
+    this.prod.add(this.guide);
     this.arrow = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.02, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false }));
     this.arrow.renderOrder = 7;
     this.arrow.visible = false;
-    this.group.add(this.arrow);
+    this.prod.add(this.arrow);
 
     // крошки после разреза
     this.crumbs = [];
@@ -538,17 +573,10 @@ export class CutBoardView {
   }
 
   reset() {
-    for (const m of this.meshes.values()) this._drop(m);
-    this.meshes.clear();
-    this.prev = [];
+    this._clearBody();
     this.itemKey = null;
     this.crumbs = [];
     this.crumbMesh.count = 0;
-  }
-
-  _drop(m) {
-    this.group.remove(m);
-    m.geometry.dispose();
   }
 
   _setSample(product, round) {
@@ -564,7 +592,7 @@ export class CutBoardView {
     const sh = shapeOf(product);
     // кусочек из середины продукта: те же купол, мякоть и кожура, что получатся при нарезке
     const w = round ? 0.5 : 1;
-    const piece = { id: -1, x: sh.W * 0.25, z: -0.5, w, d: 1, m: { cx: 0, cz: 0 } };
+    const piece = { id: -1, x: sh.W * 0.25, z: -0.5, w, d: 1, m: { cx: 0, cz: 0 }, hmax: round ? undefined : CUBE_H };
     const g = pieceGeometry(piece, product);
     g.translate(-(piece.x + w / 2) * UNIT, 0.005, 0);
     this.sampleCube = new THREE.Mesh(g, productMaterial(product));
@@ -578,65 +606,37 @@ export class CutBoardView {
    */
   sync(s, dt, closeup, pointer) {
     const it = s?.boardCur?.() ?? null;
-    const cube = it && it.pieces && !it.grater ? it : null;
+    const body = it?.body ?? null;
     const key = it?.key ?? null;
     if (key !== this.itemKey) {
-      for (const m of this.meshes.values()) this._drop(m);
-      this.meshes.clear();
-      this.prev = [];
+      this._clearBody();
       this.itemKey = key;
       this.lastCuts = it?.cuts ?? 0;
     }
-    const pieces = cube ? cube.pieces : [];
-    // куски: новые наследуют смещение «родителя», затем плавно расходятся
-    const alive = new Set();
-    let cxAll = 0, czAll = 0;
-    for (const p of pieces) {
-      alive.add(p.id);
-      let m = this.meshes.get(p.id);
-      const ctr = { x: p.x + p.w / 2, z: p.z + p.d / 2 };
-      const mc = p.m ?? ctr;
-      const target = { x: (ctr.x - (mc.cx ?? ctr.x)) * SPREAD, z: (ctr.z - (mc.cz ?? ctr.z)) * SPREAD };
-      if (!m) {
-        m = new THREE.Mesh(pieceGeometry(p, cube.product), cube.peel ? productMaterial(cube.product, this._peelState(cube.peel)) : productMaterial(cube.product));
-        m.castShadow = true;
-        m.receiveShadow = true;
-        const parent = this.prev.find((q) => ctr.x >= q.x - 1e-6 && ctr.x <= q.x + q.w + 1e-6 && ctr.z >= q.z - 1e-6 && ctr.z <= q.z + q.d + 1e-6 && !alive.has(q.id));
-        m.userData.off = parent ? { ...parent.off } : { ...target };
-        this.group.add(m);
-        this.meshes.set(p.id, m);
-      }
-      const off = m.userData.off;
-      const k = 1 - Math.exp(-dt * 9);
-      off.x += (target.x - off.x) * k;
-      off.z += (target.z - off.z) * k;
-      // разрезанное «раскрывается»: кусок клонится наружу и показывает срез
-      const look = LOOK[cube.product] ?? {};
-      const dx = ctr.x - (mc.cx ?? ctr.x), dz = ctr.z - (mc.cz ?? ctr.z), dl = Math.hypot(dx, dz);
-      const leanT = dl > 0.05 ? (look.lean ?? 0.2) * Math.min(1, dl / 1.2) : 0;
-      m.userData.lean = (m.userData.lean ?? leanT) + (leanT - (m.userData.lean ?? leanT)) * k;
-      this._placePiece(m, p, off, dl > 0.05 ? { x: dx / dl, z: dz / dl } : null, m.userData.lean);
-      cxAll += ctr.x;
-      czAll += ctr.z;
+    // продукт на доске — одна геометрия из контуров кусков; доска поворачивается вместе с ним (A/D)
+    const ang = body ? it.angle ?? 0 : 0;
+    this.prod.rotation.y = ang;
+    if (body) {
+      this.rebuildT -= dt;
+      if (body.version !== this.bodyVersion && (this.rebuildT <= 0 || !s.pointerDown)) this._buildBody(it);
     }
-    for (const [id, m] of this.meshes) {
-      if (!alive.has(id)) {
-        this._drop(m);
-        this.meshes.delete(id);
-      }
-    }
-    this.prev = pieces.map((p) => ({ id: p.id, x: p.x, z: p.z, w: p.w, d: p.d, off: this.meshes.get(p.id)?.userData.off ?? { x: 0, z: 0 } }));
+    const pieces = body ? it.pieces : [];
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const toBody = (x, z) => ({ x: x * ca - z * sa, z: x * sa + z * ca });
 
     // крошки на свежий разрез
-    if (it && it.cuts > this.lastCuts && this.lastLine) this._spawnCrumbs(it, this.lastLine);
+    if (it && it.cuts > this.lastCuts) {
+      if (body && pointer) this._spawnCrumbsAt(it, pointer.x / UNIT, pointer.z / UNIT, it.cuts - this.lastCuts);
+      else if (it.log && this.lastLine) this._spawnCrumbs(it, this.lastLine);
+    }
     this.lastCuts = it?.cuts ?? 0;
     this._updateCrumbs(dt);
 
     this._setSample(it && !it.grater && !it.peel ? it.product : null, !!it?.log);
     this.sample.visible = !!it && !it.grater && !it.peel;
-    if (cube?.peel) this._syncPeel(cube, pointer);
+    if (body && it.peel) this._syncPeel(it, pointer);
 
-    // нож, рука, полоса будущего разреза, подсказка
+    // нож, рука, подсказка
     const showTools = closeup && !!it && !it.grater && s.panel === 'board';
     this.knife.visible = showTools;
     this.leftHand.visible = showTools && (pieces.length > 0 || !!it?.log);
@@ -645,80 +645,83 @@ export class CutBoardView {
     this.arrow.visible = false;
     if (!showTools) return;
 
-    const act = s.action?.type === 'cut' ? s.action : null;
-    const stroke = s.board.stroke;
     const topH = (x, z) => {
       if (it.log) return Math.abs(z) <= it.radius && x >= -it.log.length / 2 && x <= it.log.length / 2 ? it.radius * 2 : null;
-      return heightAt(pieces, it.product, x, z);
+      const p = toBody(x, z);
+      return this._bodyHeight(it, p.x, p.z);
     };
     let kx, kz, ky, yaw = this.knifeYaw;
-    if (act) {
-      // нажим: лезвие проходит до доски по линии разреза
+    const act = it.log && s.action?.type === 'cut' ? s.action : null;
+    const stroke = s.board.stroke;
+    if (body) {
+      // нож идёт за мышью; зажата кнопка — лезвие в продукте и режет по следу
+      kx = pointer ? pointer.x / UNIT : 0;
+      kz = pointer ? pointer.z / UNIT : 0;
+      const pressed = s.pointerDown && (!!s.board.knife || (it.peel && s.board.peelLast));
+      const dir = strokeYaw(stroke);
+      if (dir != null) yaw = dir;
+      const h = topH(kx, kz) ?? 0;
+      ky = pressed ? (it.peel ? h * UNIT + 0.002 : 0.0015) : (h + 0.7) * UNIT + 0.006;
+      this.idleT = pressed ? 0 : this.idleT + dt;
+    } else if (act) {
+      // кружочки: нажим — лезвие проходит до доски по линии разреза
       const d = act.data;
       this.lastLine = d;
       const along = THREE.MathUtils.clamp(this.knifeAlong ?? (d.from + d.to) / 2, Math.min(d.from, d.to), Math.max(d.from, d.to));
-      kx = d.axis === 'x' ? d.pos : along;
-      kz = d.axis === 'x' ? along : d.pos;
-      yaw = d.axis === 'x' ? 0 : Math.PI / 2;
+      kx = d.pos;
+      kz = along;
+      yaw = 0;
       const p = Math.min(1, act.elapsed / act.duration);
       const h0 = (topH(kx, kz) ?? 0.3) * UNIT;
       ky = p < 0.55 ? h0 * (1 - p / 0.55) : 0.012 * ((p - 0.55) / 0.45);
-      this._showLine(this.preview, d.axis, d.pos, d.from, d.to, 0x34c759, (1 - p) * 0.85, it);
+      this._showLine(this.preview, 'x', d.pos, d.from, d.to, 0x34c759, (1 - p) * 0.85, it);
       this.idleT = 0;
     } else if (stroke && stroke.pts.length && pointer) {
       const ux = pointer.x / UNIT, uz = pointer.z / UNIT;
-      const line = stroke.pts.length > 1 ? classifyCut(stroke, { allow: it.log ? 'x' : 'both', rules: { ...CUT_RULES, ...(s.cfg.cutRules ?? {}) } }) : null;
-      const ax = stroke.axis();
+      const line = stroke.pts.length > 1 ? classifyCut(stroke, { allow: 'x', rules: { ...CUT_RULES, ...(s.cfg.cutRules ?? {}) } }) : null;
       if (line?.ok) {
-        yaw = line.axis === 'x' ? 0 : Math.PI / 2;
-        // нож «встаёт на рельс» распознанной линии
-        kx = line.axis === 'x' ? line.pos : ux;
-        kz = line.axis === 'x' ? uz : line.pos;
-        this._showLine(this.preview, line.axis, line.pos, line.from, line.to, 0x34c759, 0.8, it);
+        yaw = 0;
+        kx = line.pos;
+        kz = uz;
+        this._showLine(this.preview, 'x', line.pos, line.from, line.to, 0x34c759, 0.8, it);
       } else {
-        if (ax && stroke.length > 0.3) {
-          // рукоять всегда к себе или вправо — лезвие не «переворачивается» между кадрами
-          const flip = ax.uz < -0.3 || (Math.abs(ax.uz) <= 0.3 && ax.ux < 0);
-          yaw = Math.atan2(flip ? -ax.ux : ax.ux, flip ? -ax.uz : ax.uz);
-        }
+        const dir = strokeYaw(stroke);
+        if (dir != null) yaw = dir;
         kx = ux;
         kz = uz;
         if (line && !line.ok && line.reason !== 'short') this._showRaw(stroke, 0xff9f0a, it);
       }
-      this.knifeAlong = line?.ok ? (line.axis === 'x' ? uz : ux) : null;
+      this.knifeAlong = line?.ok ? uz : null;
       ky = (topH(kx, kz) ?? 0) * UNIT * 0.55 + 0.002;
       this.idleT = 0;
     } else {
       kx = pointer ? pointer.x / UNIT : 0;
       kz = pointer ? pointer.z / UNIT : 0;
-      // при чистке нож скользит по поверхности продукта, лезвие плашмя к кожуре
-      ky = it.peel && s.pointerDown ? (topH(kx, kz) ?? 0) * UNIT + 0.002 : ((topH(kx, kz) ?? 0) + 0.35) * UNIT + 0.006;
+      ky = ((topH(kx, kz) ?? 0) + 0.7) * UNIT + 0.006;
       this.idleT += dt;
       this.knifeAlong = null;
     }
-    if (it.cuts > this.successCuts) this.successCuts = it.cuts;
-    // ровная ориентация лезвия: прямой угол к ближайшей оси, если нет росчерка
     this.knifeYaw += (yaw - this.knifeYaw) * (1 - Math.exp(-dt * 14));
     this.knife.rotation.y = this.knifeYaw;
     const kk = 1 - Math.exp(-dt * 30);
-    const area = pieces.length ? bounds(pieces) : it.log ? { minX: -it.log.length / 2, maxX: it.log.length / 2, minZ: -it.radius, maxZ: it.radius } : { minX: -3, maxX: 3, minZ: -3, maxZ: 3 };
-    this.knifePos.x += (THREE.MathUtils.clamp(kx, area.minX - 1.5, area.maxX + 1.5) * UNIT - this.knifePos.x) * kk;
-    this.knifePos.z += (THREE.MathUtils.clamp(kz, area.minZ - 1.2, area.maxZ + 1.2) * UNIT - this.knifePos.z) * kk;
-    this.knifePos.y = ky;
+    const area = body ? this._boardBounds(it) : it.log ? { minX: -it.log.length / 2, maxX: it.log.length / 2, minZ: -it.radius, maxZ: it.radius } : { minX: -6, maxX: 6, minZ: -6, maxZ: 6 };
+    this.knifePos.x += (THREE.MathUtils.clamp(kx, area.minX - 3, area.maxX + 3) * UNIT - this.knifePos.x) * kk;
+    this.knifePos.z += (THREE.MathUtils.clamp(kz, area.minZ - 2.4, area.maxZ + 2.4) * UNIT - this.knifePos.z) * kk;
+    this.knifePos.y += (ky - this.knifePos.y) * (1 - Math.exp(-dt * 40));
     this.knife.position.copy(this.knifePos);
 
     // левая рука придерживает продукт слева от ножа
     if (pieces.length || it.log) {
-      const b = it.log ? { minX: -it.log.length / 2, maxX: it.log.length / 2, minZ: -it.radius, maxZ: it.radius } : bounds(pieces);
-      const hx = Math.max(b.minX + 0.35, Math.min(b.minX + 0.9, kx - 1.6));
-      const hz = (b.minZ + b.maxZ) / 2;
-      const hh = topH(hx + 0.3, hz) ?? topH(hx, hz) ?? 0.4;
-      this.leftHand.position.set((hx - 0.55) * UNIT, (hh + 0.12) * UNIT, hz * UNIT);
+      const b = area;
+      const hx = Math.max(b.minX + 0.7, Math.min(b.minX + 1.8, kx - 3.2));
+      const hz = THREE.MathUtils.clamp(kz, b.minZ + 0.8, b.maxZ - 0.8);
+      const hh = topH(hx + 0.6, hz) ?? topH(hx, hz) ?? 0.8;
+      this.leftHand.position.set((hx - 1.1) * UNIT, (hh + 0.24) * UNIT, hz * UNIT);
     }
 
-    // подсказка: куда вести нож дальше (первый день или если замешкалась)
-    const wantGuide = !act && !stroke && !it.peel && (s.dayIndex === 0 || this.idleT > 4) && (this.idleT > 0.6);
-    if (wantGuide && cube) {
+    // подсказка: куда вести нож дальше (первый день или если замешкалась) — в системе продукта
+    const wantGuide = body && !it.peel && !s.pointerDown && (s.dayIndex === 0 || this.idleT > 4) && this.idleT > 0.6;
+    if (wantGuide) {
       const g = suggestCut(pieces);
       if (g) {
         this._showLine(this.guide, g.axis, g.pos, g.from, g.to, 0xffffff, 0.45 + Math.sin(this.idleT * 4) * 0.2, it);
@@ -726,33 +729,71 @@ export class CutBoardView {
         const along = g.from + (g.to - g.from) * u;
         const ax = g.axis === 'x' ? g.pos : along, az = g.axis === 'x' ? along : g.pos;
         this.arrow.visible = true;
-        this.arrow.position.set(ax * UNIT, ((topH(ax, az) ?? 0) + 0.15) * UNIT + 0.004, az * UNIT);
+        this.arrow.position.set(ax * UNIT, ((this._bodyHeight(it, ax, az) ?? 0) + 0.3) * UNIT + 0.004, az * UNIT);
         this.arrow.rotation.set(g.axis === 'x' ? Math.PI / 2 : 0, 0, g.axis === 'x' ? 0 : -Math.PI / 2);
       }
     }
   }
 
-  // Поворот куска вокруг его внешнего нижнего ребра (u — направление наклона).
-  _placePiece(m, p, off, u, lean) {
-    if (!u || lean < 1e-3) {
-      m.quaternion.identity();
-      m.position.set(off.x * UNIT, 0, off.z * UNIT);
-      return;
+  // Высота продукта (u) в точке системы продукта или null.
+  _bodyHeight(it, px, pz) {
+    const b = it.body;
+    const i = b.cellAt(px, pz);
+    if (i == null || !b.mask[i]) return null;
+    const cp = b.copies[b.owner[i]];
+    return shapeOf(it.product).H(px - cp.cx, pz - cp.cz);
+  }
+
+  // Рамка продукта в координатах доски (с учётом поворота).
+  _boardBounds(it) {
+    const b = bounds(it.pieces);
+    const a = it.angle ?? 0, ca = Math.cos(a), sa = Math.sin(a);
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const [x, z] of [[b.minX, b.minZ], [b.maxX, b.minZ], [b.maxX, b.maxZ], [b.minX, b.maxZ]]) {
+      const X = x * ca + z * sa, Z = -x * sa + z * ca;
+      minX = Math.min(minX, X);
+      maxX = Math.max(maxX, X);
+      minZ = Math.min(minZ, Z);
+      maxZ = Math.max(maxZ, Z);
     }
-    let best = -Infinity, px = 0, pz = 0;
-    for (const q of p.polygon ?? outlineOf(p)) {
-      const d = q.x * u.x + q.z * u.z;
-      if (d > best) best = d;
+    return { minX, maxX, minZ, maxZ };
+  }
+
+  // Куски с сетки → одна геометрия. Кусок чуть отходит от центра своей штуки — видны срезы.
+  _buildBody(it) {
+    this.bodyVersion = it.body.version;
+    this.rebuildT = 0.07;
+    const geos = [];
+    for (const p of it.pieces) {
+      const poly = it.body.contour(p);
+      if (poly.length < 3) continue;
+      const g = pieceGeometry({ polygon: poly, x: p.x, z: p.z, w: p.w, d: p.d, m: p.m, hmax: CUBE_H * Math.sqrt(p.area) }, it.product);
+      g.translate((p.cx - p.m.cx) * SPREAD * UNIT, 0, (p.cz - p.m.cz) * SPREAD * UNIT);
+      geos.push(g);
     }
-    const cx = p.x + p.w / 2, cz = p.z + p.d / 2;
-    const along = best - (cx * u.x + cz * u.z);
-    px = cx + u.x * along;
-    pz = cz + u.z * along;
-    const P = _v1.set(px * UNIT, 0, pz * UNIT);
-    m.quaternion.setFromAxisAngle(_v2.set(u.z, 0, -u.x), lean);
-    // позиция = P − R·P + смещение
-    const RP = _v3.copy(P).applyQuaternion(m.quaternion);
-    m.position.set(P.x - RP.x + off.x * UNIT, P.y - RP.y, P.z - RP.z + off.z * UNIT);
+    const merged = geos.length ? mergeGeometries(geos) : new THREE.BufferGeometry();
+    for (const g of geos) g.dispose();
+    const mat = it.peel ? productMaterial(it.product, this._peelState(it.peel)) : productMaterial(it.product);
+    if (!this.bodyMesh) {
+      this.bodyMesh = new THREE.Mesh(merged, mat);
+      this.bodyMesh.castShadow = true;
+      this.bodyMesh.receiveShadow = true;
+      this.prod.add(this.bodyMesh);
+    } else {
+      this.bodyMesh.geometry.dispose();
+      this.bodyMesh.geometry = merged;
+      this.bodyMesh.material = mat;
+    }
+  }
+
+  _clearBody() {
+    if (this.bodyMesh) {
+      this.prod.remove(this.bodyMesh);
+      this.bodyMesh.geometry.dispose();
+      this.bodyMesh = null;
+    }
+    this.bodyVersion = -1;
+    this.rebuildT = 0;
   }
 
   // Маска чистки → текстура для шейдера кожуры (одна на доску, материал общий по продукту).
@@ -829,6 +870,22 @@ export class CutBoardView {
     m.scale.set(len * UNIT, 0.0032, 1);
     m.rotation.set(-Math.PI / 2, 0, -Math.atan2(b.z - a.z, b.x - a.x));
     m.position.set(((a.x + b.x) / 2) * UNIT, top * UNIT, ((a.z + b.z) / 2) * UNIT);
+  }
+
+  // Крошки из-под ножа там, где кусок только что отделился (координаты доски, u).
+  _spawnCrumbsAt(it, x, z, n) {
+    const col = new THREE.Color(PRODUCTS[it.product].color).lerp(new THREE.Color(0xffffff), 0.25);
+    for (let i = 0; i < Math.min(6, 2 + n * 2); i++) {
+      this.crumbs.push({
+        p: new THREE.Vector3(x * UNIT, 0.8 * UNIT, z * UNIT),
+        v: new THREE.Vector3((Math.random() - 0.5) * 0.14, 0.1 + Math.random() * 0.1, (Math.random() - 0.5) * 0.14),
+        s: (0.08 + Math.random() * 0.1) * UNIT,
+        r: Math.random() * 6,
+        life: 3 + Math.random(),
+        col,
+      });
+    }
+    if (this.crumbs.length > 96) this.crumbs.splice(0, this.crumbs.length - 96);
   }
 
   _spawnCrumbs(it, line) {

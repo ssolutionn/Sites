@@ -89,35 +89,40 @@ export const extraMethods = {
       se.tastes++;
       const ds = se.salt - se.target.salt;
       const dp = se.pepper - se.target.pepper;
+      // простыми словами: «мало соли» вместо «пресно» — и что сделать дальше
       const parts = [];
-      if (ds <= -2) parts.push('совсем пресно');
-      else if (ds === -1) parts.push('чуть пресновато');
+      if (ds <= -2) parts.push('соли мало');
+      else if (ds === -1) parts.push('чуть не хватает соли');
       else if (ds === 1) parts.push('чуть пересолено');
       else if (ds >= 2) parts.push('пересолено!');
-      if (dp < 0) parts.push(se.target.pepper === 0 ? '' : 'не хватает перчинки');
-      else if (dp > 0) parts.push(se.target.pepper === 0 ? 'перец тут лишний' : 'остро!');
+      if (dp < 0) parts.push(se.target.pepper === 0 ? '' : 'не хватает перца');
+      else if (dp > 0) parts.push(se.target.pepper === 0 ? 'перец тут лишний' : 'перца многовато');
       const txt = parts.filter(Boolean);
       const verdict = txt.length ? txt.join(', ') : 'в самый раз!';
-      se.last = { verdict, ok: !txt.length, salt: Math.sign(ds), pepper: Math.sign(dp) };
-      this.setHint(`Пробую… ${verdict}`, 3);
+      se.last = { verdict, ok: !txt.length, salt: Math.sign(ds), pepper: Math.sign(dp), ds, dp };
+      const advice = ds > 0 || dp > 0 ? ' — спаси: досыпь картошки' : ds < 0 || dp < 0 ? ` — тряхни ${ds < 0 ? 'солонкой' : 'перечницей'} и перемешай` : '';
+      this.setHint(`Пробую… ${verdict}${advice}`, 3.5);
       this._emit('taste', { dishId, verdict, ok: !txt.length, face: ds > 0 || dp > 0 ? 'bad' : txt.length ? 'meh' : 'good' });
     });
   },
 
-  // Пересолила — разбавить: добавить ещё немного основы. Дорого по времени.
+  // Пересолила — спасти: досыпать отварной картошки (воду в салат не льют). Соль расходится
+  // по большему объёму; перемешивает сама. Дорого по времени.
   seasonDilute(dishId) {
     if (!this._tasteReady(dishId)) return false;
     const se = this.dishes[dishId].season;
     if (se.salt === 0 && se.pepper === 0) {
-      this.setHint('Разбавлять нечего', 1.5);
+      this.setHint('Спасать нечего — соли и перца нет', 1.5);
       return false;
     }
     return this._startAction('dilute', this.cfg.durations.dilute, () => {
       se.salt = Math.max(0, se.salt - 1);
       se.pepper = Math.max(0, se.pepper - 1);
       se.diluted = (se.diluted ?? 0) + 1;
-      this._emit('dilute', { dishId });
-      this.setHint('Добавила основы и перемешала — вкус мягче. Попробуй снова', 2.5);
+      // видно, как в миску досыпали картошки
+      if (this.bowl.owner === dishId) this.bowl.contents.push({ product: 'potato', kind: 'pieces', rescue: true, pieces: Array.from({ length: 12 }, () => ({ w: 1, d: 1, area: 1 })) });
+      this._emit('dilute', { dishId, product: 'potato' });
+      this.setHint('Досыпала отварной картошки и перемешала — соли меньше. Попробуй снова', 3);
     });
   },
 
@@ -161,6 +166,32 @@ export const extraMethods = {
 
   hotList() {
     return Object.keys(this.hot).filter((p) => this.hot[p] > this.t).map((p) => ({ product: p, left: this.hot[p] - this.t }));
+  },
+
+  /** Положить горячее в раковину под кран (руками: зажать — кран открыт, держать, пока не уйдёт пар). */
+  coolPick(product) {
+    if (!this._isIdleAt('sink') || this.action) return false;
+    if (!(this.hot[product] > this.t)) return false;
+    this.sinkJob = null;
+    this.sinkCool = { product, run: 0, open: false };
+    this._emit('coolStart', { product });
+    this.setHint('Зажми кнопку мыши над раковиной — откроется холодная вода. Держи, пока не уйдёт пар', 3.5);
+    return true;
+  },
+
+  // Кран открыт, пока зажата кнопка над раковиной: вода льётся, горячее остывает.
+  _updateSinkCool(h) {
+    const c = this.sinkCool;
+    if (!c) return;
+    c.open = this.panel === 'sink' && this.pointerDown && !!c.pressed;
+    if (!c.open) return;
+    c.run += h;
+    if (c.run >= this.cfg.cool.underTap) {
+      delete this.hot[c.product];
+      this.sinkCool = null;
+      this._emit('cooled', { product: c.product });
+      this.setHint(`${BOILED[c.product]?.cooled ?? 'Остыло'} — можно чистить и резать`, 2.5);
+    }
   },
 
   coolProduct(product) {

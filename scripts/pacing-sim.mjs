@@ -10,7 +10,7 @@ import { DAYS, PRODUCTS } from '../src/campaign/data.js';
 // --- допущения о темпе (секунды игрового времени) ---
 const PROFILES = {
   уверенный: null,
-  'первое прохождение': { aimClick: 1.8, uiClick: 1.3, stationChoice: 1.8, mouseSpeed: 0.13, stirSpeed: 0.7, gratePerCycle: 1.2, readTip: 12, readMessage: 6, inspect: 4, recipeCheck: 12 },
+  'первое прохождение': { aimClick: 1.8, uiClick: 1.3, stationChoice: 1.8, mouseSpeed: 0.13, stirSpeed: 0.7, gratePerCycle: 1.2, readTip: 12, readMessage: 6, inspect: 4, recipeCheck: 12, strokeAim: 0.9, chop: false },
 };
 const PACE = {
   aimClick: 1.1, // навести и кликнуть по точке продукта / предмету
@@ -23,6 +23,8 @@ const PACE = {
   readMessage: 4, // сообщение в телефоне
   inspect: 2.5, // посмотреть на результат перед подтверждением
   recipeCheck: 5, // заглянуть в рецепт в начале блюда
+  strokeAim: 0.5, // следующий росчерк той же серии (нож уже над продуктом, шаг 1 см)
+  chop: true, // уверенный игрок режет полоски рубкой (зигзаг), новичок — по одному росчерку
 };
 
 const R = { cook: 0, walk: 0, read: 0, wait: 0 };
@@ -83,7 +85,33 @@ function rounds(it) {
     slash('x', seg.b - seg.a > 0.9 ? seg.a + 0.5 : (seg.a + seg.b) / 2, -it.radius - 0.3, it.radius + 0.3);
   }
 }
+// Кубик 1 см на сетке: полоски сверху вниз (рубкой или по одной), тап D — доска на четверть оборота, снова сверху вниз.
 function cubes(it) {
+  if (it.body) {
+    const { w, d } = it.body.shape;
+    const zs = it.body.copies.map((c) => c.cz);
+    const z0 = Math.min(...zs) - d / 2 - 0.8, z1 = Math.max(...zs) + d / 2 + 0.8;
+    const U = BOARD_UNIT;
+    if (PACE.chop) {
+      think(PACE.aimClick);
+      const pts = [[(-w / 2 + 0.4) * U, z0 * U]];
+      for (let x = -w / 2 + 1; x < w / 2 - 0.3; x += 1) pts.push([x * U, z1 * U], [(x + 0.5) * U, z0 * U]);
+      dragPath(pts, PACE.mouseSpeed * 2.5);
+    } else
+      for (let x = -w / 2 + 1; x < w / 2 - 0.3; x += 1) {
+        think(PACE.strokeAim);
+        dragPath([[x * U, z0 * U], [x * U, z1 * U]], PACE.mouseSpeed * 2);
+      }
+    ui(() => s.boardTurn(-1));
+    tick(0.3);
+    for (const cz of zs)
+      for (let z = cz - d / 2 + 1; z < cz + d / 2 - 0.3; z += 1) {
+        think(PACE.strokeAim);
+        dragPath([[-z * U, (-w / 2 - 0.8) * U], [-z * U, (w / 2 + 0.8) * U]], PACE.mouseSpeed * 2);
+      }
+    freshCubes(it);
+    return;
+  }
   for (let g = 0; g < 40; g++) {
     const wide = it.pieces.filter((p) => p.w > 1.25).sort((a, b) => a.x - b.x)[0];
     if (!wide) break;
@@ -95,6 +123,22 @@ function cubes(it) {
     if (!wide) break;
     const b = bounds(it.pieces);
     slash('z', wide.z + 1, b.minX - 0.4, b.maxX + 0.4);
+  }
+}
+// Росчерк в системе продукта (u) с учётом текущего поворота доски.
+function bodyStroke(x0, z0, x1, z1, it) {
+  const a = it.angle ?? 0, c = Math.cos(a), sn = Math.sin(a), U = BOARD_UNIT;
+  const P = (x, z) => [(x * c + z * sn) * U, (-x * sn + z * c) * U];
+  think(PACE.strokeAim);
+  dragPath([P(x0, z0), P(x1, z1)], PACE.mouseSpeed * 2);
+}
+// Замена от кота: дорезать её кубиками по её рамке.
+function freshCubes(it) {
+  for (let g = 0; g < 3; g++) {
+    const p = it.pieces.find((q) => q.fresh);
+    if (!p) return;
+    for (let x = p.x + 1; x < p.x + p.w - 0.3; x += 1) bodyStroke(x, p.z - 0.6, x, p.z + p.d + 0.6, it);
+    for (let z = p.z + 1; z < p.z + p.d - 0.3; z += 1) bodyStroke(p.x - 0.6, z, p.x + p.w + 0.6, z, it);
   }
 }
 function dragPath(pts, speed = PACE.mouseSpeed) {
@@ -161,7 +205,8 @@ function work(it) {
   if (s.cat.state === 'theft') shoo();
   if (it.missing?.length) {
     ui(() => s.takeReplacement());
-    if (it.pieces) cubes(it);
+    if (it.body) freshCubes(it);
+    else if (it.pieces) cubes(it);
     else if (it.log) rounds(it);
   }
   think(PACE.inspect);
@@ -213,7 +258,12 @@ function taste(dish) {
 function placeAll() {
   go('stove');
   tip('stove');
-  while (s.stoveTasks().length && s.usableBurners().some((b) => b.state === 'empty')) ui(() => s.placePot());
+  // поставить и повернуть крутилку на 6
+  while (s.stoveTasks().length && s.usableBurners().some((b) => b.state === 'empty')) {
+    const i = s.usableBurners().find((b) => b.state === 'empty').i;
+    ui(() => s.placePot(i, null, 0));
+    ui(() => s.setHeat(i, 6));
+  }
 }
 function catCheck() {
   if (s.catNeeds.hunger >= 50 && s.cat.state === 'home') {
@@ -235,7 +285,11 @@ function boiled(product) {
   ui(() => s.takePot(s.burners.find((x) => x.product === product && x.state === 'ready').i));
   tip('hot');
   go('sink');
-  ui(() => s.coolProduct(product));
+  // под кран: положить и держать кнопку, пока не уйдёт пар
+  ui(() => s.coolPick(product));
+  s.pointer('down', 0, 0);
+  tick(s.cfg.cool.underTap + 0.2);
+  s.pointer('up', 0, 0);
 }
 function stir(turns = 4.2) {
   tip('bowl');

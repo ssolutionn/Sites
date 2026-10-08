@@ -130,28 +130,42 @@ test('сессия: росчерк вдоль и поперёк даёт акк�
   assert.ok(q.score >= 0.9, `аккуратность ${q.score}`);
 });
 
-test('сессия: кривой росчерк не режет и объясняет почему', () => {
+test('сессия: нож режет по следу — наискосок выходят косые куски, а не кубики', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
-  const before = s.boardCur().pieces.length;
+  const it = s.boardCur();
   s.pointer('down', -0.08, -0.08);
   for (let k = 1; k <= 8; k++) s.pointer('move', -0.08 + k * 0.02, -0.08 + k * 0.02);
-  assert.equal(s.pointer('up', 0.08, 0.08), 'diagonal');
-  assert.match(s.hint.text, /наискосок/);
-  assert.equal(s.boardCur().pieces.length, before);
-  assert.equal(knife(s, 'x', 0, -2, 2), 'cut');
-  assert.equal(s.boardCur().pieces.length, before + 1);
+  s.pointer('up', 0.08, 0.08);
+  assert.equal(it.pieces.length, 2, 'косой разрез');
+  assert.ok(it.pieces.every((p) => p.w > 5 && p.d > 5), 'оба куска треугольные — на всю рамку');
+  assert.equal(knife(s, 'x', 0, -4, 4), 'cut');
+  assert.equal(it.pieces.length, 4);
 });
 
-test('сессия: потеря фокуса посреди росчерка не режет', () => {
+test('сессия: росчерк мимо продукта — подсказка, клик без движения — не режет', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  arrive(s, 'board');
+  s.boardSelect('olivier:sausage');
+  assert.equal(knife(s, 'x', 9, -4, 4), 'outside');
+  assert.match(s.hint.text, /мимо/i);
+  s.pointer('down', 0, 0);
+  s.pointer('up', 0, 0);
+  assert.equal(s.boardCur().cuts, 0);
+});
+
+test('сессия: потеря фокуса посреди росчерка — нож останавливается, дальше не режет', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
   s.pointer('down', 0, -0.08);
-  s.pointer('move', 0, 0.08);
+  s.pointer('move', 0, 0);
   s.pointerUp();
+  s.pointer('move', 0, 0.08);
   assert.equal(s.board.stroke, null);
+  assert.equal(s.board.knife, null);
+  assert.equal(s.boardCur().pieces.length, 1, 'надрез до середины кусок не отделяет');
   assert.equal(s.boardCur().cuts, 0);
 });
 

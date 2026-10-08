@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { KitchenSession, run, arrive, waitAction, peel, stir, seasonTo } from './helpers-campaign.js';
 import { RECIPES, DAYS, PRODUCTS, CAMPAIGN } from '../src/campaign/data.js';
 import { LESSONS } from '../src/campaign/lessons.js';
+import { BOARD_UNIT } from '../src/campaign/st-board.js';
 
 function boiledAndCooled(s, product) {
   const key = product === 'egg' ? 'olivier:boilEgg' : 'olivier:boil';
@@ -65,7 +66,7 @@ test('чистка не зависит от скорости мыши: один 
     s.boardSelect('olivier:peelEgg');
     const it = s.boardCur();
     const p = it.pieces[0];
-    const z = (p.z + p.d / 2) * 0.042;
+    const z = (p.z + p.d / 2) * BOARD_UNIT;
     s.pointer('down', -0.12, z);
     for (let i = 1; i <= moves; i++) s.pointer('move', -0.12 + (0.24 * i) / moves, z);
     s.pointer('up', 0, 0);

@@ -84,6 +84,7 @@ export class KitchenSession {
     this.glass = { present: !!this.day.events?.some((e) => e.type === 'spill'), spilled: false };
     this.puddles = [];
     this.sinkJob = null;
+    this.sinkCool = null; // остужаем под краном: { product, run, open }
     this.phone = { messages: [], unread: 0, posts: [] };
     this.bonus = { points: Math.max(0, Math.round(bonus) || 0), history: [] }; // баллы бонусной программы (между днями — в сохранении)
     this.decor = [...decor]; // купленный декор кухни
@@ -314,7 +315,9 @@ export class KitchenSession {
     this._accountTime(h);
     this._updateMovement(h);
     this._updateAction(h);
+    this._updateBoard(h);
     this._updateHolds(h);
+    this._updateSinkCool(h);
     this._updateStove(h);
     this._updateOven(h);
     this._updateDelivery(h);
@@ -599,6 +602,7 @@ export class KitchenSession {
     if (this.board) {
       this.board.stroke = null;
       this.board.peelLast = null;
+      this.board.knife = null;
     }
     this.bowl.stirrer?.release();
     this.bowl.pouring?.tracker.release();
@@ -606,6 +610,7 @@ export class KitchenSession {
     it?.grater?.release();
     this.tray.lastStroke = null;
     this._sinkLast = null;
+    if (this.sinkCool) this.sinkCool.pressed = false;
     this._wipeLast = null;
     if (this.tray.drag) this._dropDrag(null);
   }
@@ -644,6 +649,10 @@ export class KitchenSession {
           }
           if (b.readyAt - t < 3) {
             e.fired = true; // не успеет до готовности — событие отменяется
+            break;
+          }
+          if ((b.heat ?? 9) < this.cfg.stove.eventHeat) {
+            e.fired = true; // на тихом огне не убегает: убавила вовремя — события нет
             break;
           }
           if (this._canStartUrgent()) {
@@ -856,7 +865,7 @@ export class KitchenSession {
 Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods);
 
 export function emptyBurner(i) {
-  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null };
+  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold' };
 }
 
 // ---------- практика ----------

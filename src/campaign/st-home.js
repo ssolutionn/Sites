@@ -34,7 +34,10 @@ export const homeMethods = {
     return this.cfg.boilTimes?.[product] ?? this.cfg.potatoReadyAfter;
   },
 
-  placePot(burner = null, stepKey = null) {
+  /**
+   * Поставить кастрюлю на свободную конфорку. heat — где стоит крутилка (0 — огонь выключен, его включают крутилкой).
+   */
+  placePot(burner = null, stepKey = null, heat = this.cfg.stove.placeHeat) {
     if (!this._isIdleAt('stove') || this.action) return false;
     const tasks = this.stoveTasks();
     const task = stepKey ? tasks.find((t) => `${t.dishId}:${t.stepId}` === stepKey) : tasks[0];
@@ -52,20 +55,80 @@ export const homeMethods = {
     }
     if (!this._reserveStep(task.dishId, task.stepId)) return false;
     return this._startAction('placePot', this.cfg.durations.placePot, () => {
-      const time = this.boilTime(task.product);
-      this.burners[b.i] = { i: b.i, state: 'boiling', owner: task.dishId, step: task.stepId, product: task.product, startT: this.t, readyAt: this.t + time, overflow: null };
+      // state 'boiling' — кастрюля на плите (вода греется или кипит); water — cold | heating | boil
+      const nb = { i: b.i, state: 'boiling', owner: task.dishId, step: task.stepId, product: task.product, startT: this.t, readyAt: 0, overflow: null, heat: Math.max(0, Math.min(this.cfg.stove.maxHeat, heat | 0)), temp: 20, cooked: 0, foamT: 0, water: 'cold' };
+      this.burners[b.i] = nb;
+      nb.readyAt = this._potEta(nb);
       this._emit('potPlaced', { dishId: task.dishId, burner: b.i, product: task.product });
-      const m = Math.floor(time / 60), sec = String(Math.round(time % 60)).padStart(2, '0');
-      this.setHint(`${BOILED[task.product]?.boils ?? this.productName(task.product) + ' варится — готово'} через ${m}:${sec}. Пока займись остальным`, 4);
+      if (nb.heat === 0) this.setHint('Кастрюля на плите. Включи огонь — поверни крутилку: 7–9 быстро закипит, потом убавь до 4–5', 4.5);
+      else {
+        const time = nb.readyAt - this.t;
+        const m = Math.floor(time / 60), sec = String(Math.round(time % 60)).padStart(2, '0');
+        this.setHint(`${BOILED[task.product]?.boils ?? this.productName(task.product) + ' варится — готово'} примерно через ${m}:${sec}. Пока займись остальным`, 4);
+      }
     });
+  },
+
+  /** Повернуть крутилку конфорки i: огонь 0–9. Сильный огонь убавила до 5 и ниже — пена осела. */
+  setHeat(i, heat) {
+    const b = this.burners[i];
+    if (!b || !this._isIdleAt('stove')) return false;
+    const c = this.cfg.stove;
+    const v = Math.max(0, Math.min(c.maxHeat, Math.round(heat)));
+    if (b.heat === v) return true;
+    const was = b.heat ?? 0;
+    b.heat = v;
+    if (b.state === 'boiling') b.readyAt = this._potEta(b);
+    if (b.overflow && v < c.foamHeat - 1) this._saveOverflow(b);
+    this._emit('heat', { burner: i, heat: v, from: was });
+    return true;
+  },
+
+  // Сколько ещё варить: догреть воду до кипения при текущем огне + оставшееся время варки.
+  _potEta(b) {
+    const c = this.cfg.stove;
+    const gain = c.heatRate * (b.heat ?? 0);
+    if (gain <= c.loss * (c.boilAt - 20)) return this.t + 9999; // на таком огне не закипит
+    let heatUp = 0;
+    if (b.temp < c.boilAt) heatUp = -Math.log((gain - c.loss * (c.boilAt - 20)) / (gain - c.loss * (b.temp - 20))) / c.loss;
+    return this.t + heatUp + Math.max(0, this.boilTime(b.product) - (b.cooked ?? 0));
+  },
+
+  _saveOverflow(b) {
+    b.overflow = null;
+    b.foamT = 0;
+    this._removeAlert(this._potKey(b.i));
+    this._emit('potSaved', { burner: b.i });
   },
 
   _potKey(i) {
     return i === 0 ? 'pot' : 'pot' + (i + 1);
   },
 
-  _updateStove() {
+  _updateStove(h = 0) {
+    const c = this.cfg.stove;
     for (const s of this.burners) {
+      if (s.state === 'boiling' && s.temp != null) {
+        // вода: греется от огня, остывает к комнатной; кипит — варится
+        s.temp = Math.min(100, s.temp + (c.heatRate * s.heat - c.loss * (s.temp - 20)) * h);
+        const boil = s.temp >= c.boilAt;
+        const was = s.water;
+        s.water = boil ? 'boil' : s.heat > 0 ? 'heating' : 'cold';
+        if (boil) {
+          s.cooked += h;
+          if (was !== 'boil') {
+            this._emit('potBoils', { burner: s.i, product: s.product });
+            if (s.heat >= c.foamHeat) this.setHint('Закипело! Убавь огонь до 4–5, иначе убежит', 3);
+          }
+          // сильный огонь на кипении — поднимается пена
+          if (s.heat >= c.foamHeat) {
+            s.foamT += h;
+            if (s.foamT >= c.foamAfter && !s.overflow && this.t + 3 < s.readyAt) this._startOverflow(s.i);
+          } else s.foamT = 0;
+        } else s.foamT = 0;
+        s.readyAt = this._potEta(s);
+        if (s.cooked >= this.boilTime(s.product)) s.readyAt = this.t;
+      }
       if (s.state === 'boiling' && this.t >= s.readyAt) {
         s.state = 'ready';
         if (s.overflow) {
@@ -103,15 +166,19 @@ export const homeMethods = {
     this._emit('potBoil', { burner: b.i });
   },
 
+  /** Убавить огонь до тихого кипения (крутилка на simmer) — пена оседает. */
   reduceHeat(i = null) {
     if (!this._isIdleAt('stove')) return false;
     const b = i != null ? this.burners[i] : this.burners.find((x) => x.overflow);
     if (!b?.overflow) return false;
     return this._startAction('reduceHeat', this.cfg.durations.reduceHeat, () => {
       if (!b.overflow) return;
-      b.overflow = null;
-      this._removeAlert(this._potKey(b.i));
-      this._emit('potSaved', { burner: b.i });
+      if (b.heat != null) {
+        b.heat = Math.min(b.heat, this.cfg.stove.simmer);
+        b.readyAt = this._potEta(b);
+        this._emit('heat', { burner: b.i, heat: b.heat });
+      }
+      this._saveOverflow(b);
     });
   },
 
@@ -120,14 +187,14 @@ export const homeMethods = {
     const b = i != null ? this.burners[i] : this.burners.find((x) => x.state === 'ready') ?? this.burners.find((x) => x.state === 'boiling');
     if (!b) return false;
     if (b.state === 'boiling') {
-      this.setHint(`Ещё варится (${this.productName(b.product).toLowerCase()}) — осталось ${Math.ceil(b.readyAt - this.t)} с`);
+      this.setHint(b.water === 'boil' ? `Ещё варится (${this.productName(b.product).toLowerCase()}) — осталось ${Math.ceil(b.readyAt - this.t)} с` : (b.heat ?? 0) < 3 ? 'Вода не закипит — прибавь огонь крутилкой' : 'Вода ещё не закипела — подожди');
       return false;
     }
     if (b.state !== 'ready') return false;
     return this._startAction('takePot', this.cfg.durations.takePot, () => {
       if (b.state !== 'ready') return;
       const { owner, step, product } = b;
-      this.burners[b.i] = { ...b, state: 'empty', owner: null, step: null, readyAt: 0, overflow: null, startT: b.startT };
+      this.burners[b.i] = { ...b, state: 'empty', owner: null, step: null, readyAt: 0, overflow: null, startT: b.startT, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold' };
       this._removeAlert('potReady' + (b.i || ''));
       this._completeStep(owner, step, 1);
       if (!this.practice) this.hot[product] = this.t + this.cfg.cool.time;
@@ -242,6 +309,7 @@ export const homeMethods = {
     if (!this._isIdleAt('sink') || this.action) return false;
     const e = this.equipment[item];
     if (!e || e.clean) return false;
+    this.sinkCool = null;
     if (this.sinkJob?.item === item) return true;
     this.sinkJob = { item, mask: new CoverageMask({ ...this.cfg.wash, width: SINK.w, depth: SINK.d }) };
     this._emit('sinkStart', { item });
@@ -249,6 +317,13 @@ export const homeMethods = {
   },
 
   _sinkPointer(type, x, z) {
+    if (this.sinkCool) {
+      // остужаем: зажала над раковиной — кран открыт
+      const inside = Math.abs(x) <= SINK.w / 2 + 0.05 && Math.abs(z) <= SINK.d / 2 + 0.1;
+      if (type === 'down') this.sinkCool.pressed = inside;
+      if (type === 'up') this.sinkCool.pressed = false;
+      return this.sinkCool.pressed ? 'tap' : 'hover';
+    }
     const job = this.sinkJob;
     if (!job) {
       if (type === 'down') this.setHint('Выбери, что мыть, в панели', 2);

@@ -137,11 +137,28 @@ export const bowlMethods = {
     return 'pour';
   },
 
+  // Солонка: трясти вниз-вверх над миской (щепотка за взмах) или просто кликнуть над миской — одна щепотка.
   _bowlShake(type, x, z) {
     const sh = this.bowl.shaker;
+    const inside = Math.hypot(x, z) <= BOWL.r * 1.1;
+    if (type === 'down') {
+      sh.press = inside ? { t: this.clock, pinched: false } : null;
+      sh.tracker.reset();
+      return inside ? 'shake' : 'outside';
+    }
+    if (type === 'up') {
+      const p = sh.press;
+      sh.press = null;
+      if (p && !p.pinched && inside && this.clock - p.t <= this.cfg.shake.tapTime && !this.action) {
+        this._pinch(sh.dishId, sh.kind, { x, z });
+        return 'pinch';
+      }
+      return 'up';
+    }
     if (type !== 'move' || !this.pointerDown) return 'idle';
-    if (Math.hypot(x, z) > BOWL.r * 1.1) return 'outside';
+    if (!inside) return 'outside';
     if (sh.tracker.move(z, this.clock)) {
+      if (sh.press) sh.press.pinched = true;
       this._pinch(sh.dishId, sh.kind, { x, z });
       return 'pinch';
     }

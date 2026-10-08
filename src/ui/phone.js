@@ -292,7 +292,7 @@ export class PhoneUI {
     };
     const rows = [];
     for (const b of s.burners) {
-      if (b.state === 'boiling') rows.push(ring(b.readyAt - s.t, s.boilTime(b.product), `Конфорка ${b.i + 1}: ${PRODUCTS[b.product].name}`, PICON[b.product]));
+      if (b.state === 'boiling') rows.push(ring(Math.min(b.readyAt - s.t, s.boilTime(b.product) + 60), s.boilTime(b.product) + 30, `Конфорка ${b.i + 1}: ${PRODUCTS[b.product].name}${b.readyAt - s.t > 5000 ? ' · включи огонь' : ''}`, PICON[b.product]));
       else if (b.state === 'ready') rows.push(ring(0, 1, `Конфорка ${b.i + 1}: ${PRODUCTS[b.product].name}`, PICON[b.product], 'done'));
     }
     for (const x of s.hotList()) rows.push(ring(x.left, s.cfg.cool.time, `${PRODUCTS[x.product].name} остывает`, '🔥', 'hot'));

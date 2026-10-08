@@ -66,16 +66,16 @@ test('геометрия: краевые обрезки до 10 % не штра�
 });
 
 test('геометрия: кружочки — толщина от координаты, тонкий разрез отклоняется, торцы допустимы', () => {
-  let log = makeRoundLog(5);
+  let log = makeRoundLog(10);
   const rt = CAMPAIGN.roundTarget;
-  assert.equal(cutRound(log, -2.45, rt.minCut).ok, false);
-  for (let x = -2.2; x < 2.4; x += 0.5) {
+  assert.equal(cutRound(log, -4.9, rt.minCut).ok, false);
+  for (let x = -4.4; x < 4.8; x += rt.thickness) {
     const r = cutRound(log, x, rt.minCut);
     if (r.ok) log = r.log;
   }
   const slices = roundSlices(log);
-  close(slices.reduce((s, q) => s + q.t, 0), 5);
-  assert.ok(slices.filter((q) => !q.end).every((q) => Math.abs(q.t - 0.5) < 1e-9));
+  close(slices.reduce((s, q) => s + q.t, 0), 10);
+  assert.ok(slices.filter((q) => !q.end).every((q) => Math.abs(q.t - rt.thickness) < 1e-9));
   assert.ok(roundQuality(log, rt, 0.1).score > 0.85);
 });
 
@@ -115,7 +115,7 @@ test('учёт: кража конкретного фрагмента сохра�
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
   const it = s.boardCur();
-  assert.equal(knife(s, 'x', -0.5, -2, 2), 'cut');
+  assert.equal(knife(s, 'x', -0.5, -4, 4), 'cut');
   const vol = totalVolume(it.pieces);
   const others = it.pieces.length - 1;
   s._startCatTheft();
@@ -311,10 +311,11 @@ test('время: картофель кампании готов через 2:00
   s.placePot();
   waitAction(s);
   const t0 = s.stove.startT;
-  close(s.stove.readyAt - t0, 120);
-  while (s.t < t0 + 119.9) s.update(0.25);
+  // огонь 6: вода закипает ~24 с, потом 96 с варки — около 2:00
+  assert.ok(Math.abs(s.stove.readyAt - t0 - 120) < 1, `${s.stove.readyAt - t0}`);
+  while (s.t < t0 + 118.5) s.update(0.25);
   assert.equal(s.stove.state, 'boiling');
-  s.update(0.25);
+  while (s.t < t0 + 121) s.update(0.25);
   assert.equal(s.stove.state, 'ready');
 });
 

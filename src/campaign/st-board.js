@@ -3,10 +3,11 @@ import { PRODUCTS } from './data.js';
 import { initialBatch, cutLine, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
 import { Stroke, classifyCut, CUT_HINTS, CUT_RULES } from './gestures.js';
 import { CoverageMask } from './coverage.js';
+import { CutBody, rasterQuality } from '../game/raster-cut.js';
 import { TEMPTING } from './st-extra.js';
 import { makeRoundLog, cutRound, roundSlices, roundQuality, cutQuality, Grater } from './mechanics.js';
 
-export const BOARD_UNIT = 0.042; // метров на целевой кубик
+export const BOARD_UNIT = 0.021; // метров сцены на 1 см продукта (u); целевой кубик оливье — 1 см
 
 export const boardMethods = {
   boardTasks() {
@@ -56,18 +57,18 @@ export const boardMethods = {
     const it = { key, dishId, stepId, product: step.product, qty, type: step.type, shape: step.shape, cuts: 0, missing: [], freshIds: new Set() };
     if (step.type === 'grate') {
       it.grater = new Grater(this.cfg.grate, this.cfg.grate.cyclesPerPortion * qty);
-    } else if (step.type === 'peel') {
-      // целые сваренные продукты рядом; кожура снимается там, где прошёл нож
-      it.pieces = initialBatch(prod.cut.w, prod.cut.d, () => this._id(), prod.cut.profile === 'rectangle' ? null : prod.cut.profile, qty, this.cfg.batchGap);
-      it.initVolume = totalVolume(it.pieces);
-      it.peel = this._peelMask(it.pieces);
-    } else if (step.shape === 'round') {
+    } else if (step.shape === 'round' && step.type !== 'peel') {
       it.log = makeRoundLog(prod.round.length * qty);
       it.radius = prod.round.radius;
       it.initVolume = prod.round.length * qty;
     } else {
-      it.pieces = initialBatch(prod.cut.w, prod.cut.d, () => this._id(), prod.cut.profile === 'rectangle' ? null : prod.cut.profile, qty, this.cfg.batchGap);
-      it.initVolume = totalVolume(it.pieces);
+      // продукт — сетка клеток: нож режет там, где прошёл (raster-cut.js); при чистке — целые штуки рядом
+      it.body = new CutBody({ w: prod.cut.w, d: prod.cut.d, profile: prod.cut.profile, qty, gap: this.cfg.batchGap });
+      it.pieces = it.body.pieces();
+      it.initVolume = it.body.area();
+      it.angle = 0;
+      it.angleTarget = 0;
+      if (step.type === 'peel') it.peel = this._peelMask(it.pieces);
     }
     this.board.items[key] = it;
     this.board.current = key;
@@ -92,6 +93,13 @@ export const boardMethods = {
     const it = this.boardCur();
     if (!it) return 'ignored';
     const ux = x / BOARD_UNIT, uz = z / BOARD_UNIT;
+    if (it.body) {
+      // доска повёрнута: точку мыши — в систему продукта
+      const a = it.angle ?? 0, c = Math.cos(a), sn = Math.sin(a);
+      const px = ux * c - uz * sn, pz = ux * sn + uz * c;
+      if (it.peel) return this._peelPointer(it, type, px * BOARD_UNIT, pz * BOARD_UNIT);
+      return this._knifePointer(it, type, px, pz, ux, uz);
+    }
     if (it.grater) {
       if (type === 'down' || (type === 'move' && this.pointerDown)) {
         if (this.action) return 'ignored';
@@ -104,7 +112,6 @@ export const boardMethods = {
       }
       return 'idle';
     }
-    if (it.peel) return this._peelPointer(it, type, x, z);
     if (type === 'down') {
       if (this.action) return 'ignored';
       this.board.stroke = new Stroke();
@@ -124,6 +131,88 @@ export const boardMethods = {
       return this._strokeCut(it, stroke);
     }
     return 'hover';
+  },
+
+  // Нож по сетке: зажала — лезвие на доске, ведёшь — режет там, где прошло, по ходу движения.
+  // Прямо — ровно, наискосок — косо, дрогнула рука — кривой кусок; зигзаг «рубка» режет каждым взмахом.
+  // (px, pz) — в системе продукта, (bx, bz) — в координатах доски (для вида ножа).
+  _knifePointer(it, type, px, pz, bx, bz) {
+    const b = this.board;
+    if (type === 'down') {
+      if (this.action) return 'ignored';
+      b.stroke = new Stroke();
+      b.stroke.add(bx, bz, this.clock);
+      b.knife = { x: px, z: pz, hit: it.body.solidAt(px, pz), moved: 0 };
+      return 'stroke';
+    }
+    if (type === 'move') {
+      if (!this.pointerDown || !b.knife || this.action) return 'hover';
+      b.stroke?.add(bx, bz, this.clock);
+      const last = b.knife;
+      const seg = Math.hypot(px - last.x, pz - last.z);
+      if (seg < 1e-4) return 'stroke';
+      const n = it.body.cutSegment(last, { x: px, z: pz });
+      b.knife = { x: px, z: pz, hit: last.hit || n > 0 || it.body.solidAt(px, pz), moved: last.moved + seg };
+      if (n) this._afterKnife(it, px, pz, bx, bz);
+      return n ? 'cutting' : 'stroke';
+    }
+    if (type === 'up') {
+      const k = b.knife;
+      b.knife = null;
+      b.stroke = null;
+      if (k && !k.hit && k.moved > 1.5) return this._cutDenied('outside');
+      return 'up';
+    }
+    return 'hover';
+  },
+
+  _afterKnife(it, px, pz, bx, bz) {
+    const before = it.pieces.length;
+    const crumbs = it.body.sweep(this.cfg.crumbs.area, this.cfg.crumbs.thick);
+    it.pieces = it.body.pieces();
+    if (crumbs.length) this._emit('crumbs', { key: it.key, list: crumbs });
+    if (it.pieces.length > before) {
+      it.cuts++;
+      this._emit('cut', { key: it.key, x: bx, z: bz, px, pz, count: it.pieces.length - before });
+    }
+  },
+
+  /** Повернуть доску на четверть оборота: dir = 1 — против часовой (A), −1 — по часовой (D). */
+  boardTurn(dir) {
+    const it = this.boardCur();
+    if (!it || !this._isIdleAt('board')) return false;
+    if (!it.body) {
+      this.setHint(it.log ? 'Кружочки режутся только поперёк — веди нож сверху вниз' : 'Тёрку не поворачивают', 2);
+      return false;
+    }
+    const q = Math.PI / 2;
+    const base = it.angleTarget ?? it.angle ?? 0;
+    const k = dir > 0 ? Math.floor(base / q + 1e-6) + 1 : Math.ceil(base / q - 1e-6) - 1;
+    it.angleTarget = k * q;
+    this._emit('rotate', { key: it.key, dir });
+    return true;
+  },
+
+  /** Свободный поворот доски, пока держат A/D: угол меняется плавно, без щелчков. */
+  boardSpin(dir, dt) {
+    const it = this.boardCur();
+    if (!it?.body || !this._isIdleAt('board')) return false;
+    it.angle = (it.angle ?? 0) + dir * this.cfg.board.spin * dt;
+    it.angleTarget = it.angle;
+    return true;
+  },
+
+  // Плавный доворот до целевого угла (тап по A/D).
+  _updateBoard(h) {
+    const it = this.boardCur();
+    if (!it?.body || it.angleTarget == null) return;
+    const d = it.angleTarget - it.angle;
+    if (Math.abs(d) < 1e-4) {
+      it.angle = it.angleTarget;
+      return;
+    }
+    const step = this.cfg.board.turn * h;
+    it.angle += Math.abs(d) <= step ? d : Math.sign(d) * step;
   },
 
   // Маска чистки: по эллипсу на каждый продукт, в метрах от центра доски.
@@ -228,17 +317,14 @@ export const boardMethods = {
     return 'cut';
   },
 
-  // Поворот больше не нужен: нож ведут и вдоль, и поперёк. Клавиша R только подсказывает.
+  // R — то же, что D: четверть оборота по часовой.
   rotate() {
-    if (!this._isIdleAt('board') || this.action) return false;
-    const it = this.boardCur();
-    if (!it || it.grater) return false;
-    this.setHint(it.log ? 'Кружочки режутся только поперёк — веди нож сверху вниз' : 'Поворачивать не нужно — веди нож слева направо, и полоски станут кубиками', 2.5);
-    return false;
+    return this.boardTurn(-1);
   },
 
   boardQuality(it) {
     if (it.log) return roundQuality(it.log, this.cfg.roundTarget, this.cfg.edgeTrimAllowance);
+    if (it.body) return rasterQuality(it.pieces, it.initVolume, this.cfg.tolerance, PRODUCTS[it.product].cut?.trim ?? this.cfg.edgeTrimAllowance);
     return cutQuality(it.pieces, it.initVolume, this.cfg.tolerance, PRODUCTS[it.product].cut?.trim ?? this.cfg.edgeTrimAllowance);
   },
 
@@ -249,7 +335,7 @@ export const boardMethods = {
     if (it.missing.length) return 'Кот утащил кусок — возьми замену';
     if (it.cuts < 1) return 'Сначала сделай хотя бы один разрез';
     if (it.log && roundSlices(it.log).length < 3) return 'Нарежь хотя бы несколько кружочков';
-    if (it.pieces?.some((p) => it.freshIds.has(p.id))) return 'Замену нужно дорезать';
+    if (it.body ? it.pieces.some((p) => p.fresh) : it.pieces?.some((p) => it.freshIds.has(p.id))) return 'Замену нужно дорезать';
     return this._destBlock(it);
   },
 
@@ -357,6 +443,9 @@ export const boardMethods = {
       for (const m of it.missing) {
         if (it.log) {
           it.log = { ...it.log, segments: [...it.log.segments, { a: m.a, b: m.b }].sort((p, q) => p.a - q.a) };
+        } else if (it.body) {
+          it.body.addPattern(m);
+          it.pieces = it.body.pieces();
         } else {
           const piece = placeBeside(it.pieces, m.w, m.d, this._id(), m);
           it.pieces = recenter([...it.pieces, piece]);
@@ -378,6 +467,11 @@ export const boardMethods = {
       for (const s of it.log.segments) if (!best || s.b - s.a > best.b - best.a) best = s;
       it.log = { ...it.log, segments: it.log.segments.filter((s) => s !== best) };
       it.missing.push({ a: best.a, b: best.b });
+    } else if (it.body) {
+      const victim = largestPiece(it.pieces);
+      it.missing.push(it.body.removePiece(victim.id));
+      it.pieces = it.body.pieces();
+      this.stats.stolenVolume = (this.stats.stolenVolume ?? 0) + victim.area;
     } else {
       const victim = largestPiece(it.pieces);
       it.pieces = it.pieces.filter((p) => p !== victim);

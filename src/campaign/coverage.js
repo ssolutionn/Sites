@@ -28,7 +28,7 @@ export class CoverageMask {
   }
 
   // Мазок кистью в локальных координатах поверхности (центр = 0,0). Возвращает новое покрытие.
-  stroke(x, z, amount = 0.5) {
+  stroke(x, z, amount = 0.5, flat = false) {
     let gained = 0;
     const b2 = this.brush * this.brush;
     for (let r = 0; r < this.rows; r++)
@@ -39,7 +39,8 @@ export class CoverageMask {
         const d2 = (p.x - x) ** 2 + (p.z - z) ** 2;
         if (d2 > b2) continue;
         const before = this.level[i];
-        const add = amount * (1 - Math.sqrt(d2) / this.brush * 0.5);
+        // flat — инструмент с ровной кромкой (нож): вся ширина снимает одинаково
+        const add = flat ? amount : amount * (1 - (Math.sqrt(d2) / this.brush) * 0.5);
         this.level[i] = Math.min(this.maxLevel, before + add);
         gained += Math.min(1, this.level[i]) - Math.min(1, before);
       }
@@ -55,7 +56,7 @@ export class CoverageMask {
     const n = Math.max(1, Math.ceil(d / (this.brush * 0.5)));
     const per = spread ? amount / Math.max(1, n / 2) : amount;
     let g = 0;
-    for (let i = 1; i <= n; i++) g += this.stroke(a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n, per);
+    for (let i = 1; i <= n; i++) g += this.stroke(a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n, per, !spread);
     return g;
   }
 

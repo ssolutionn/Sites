@@ -90,7 +90,7 @@ async function zig(cx, cz, w, d, rows = 7) {
   await drag(pts, 6);
 }
 async function noAction() { await waitFor(() => !window.__sueta.session.action, 15000); }
-const U = 0.042; // метров на целевой кубик (BOARD_UNIT)
+const U = 0.021; // метров сцены на 1 см продукта (BOARD_UNIT)
 // Что лежит поверх canvas в точке экрана: null — canvas, иначе id/класс перехватчика.
 async function blockerAt(x, y) {
   return S(([x, y]) => {
@@ -136,27 +136,29 @@ async function guardCat() {
   if (await sess("s.cat.state === 'theft'")) { await shot('d1_cat'); await page.locator('[data-a="shoo"]').first().click().catch(() => {}); await wait(300); }
   if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) { await actBtn('takeReplacement').catch(() => {}); await noAction(); }
 }
-// Кубики росчерками: сначала полоски сверху вниз, потом поперёк слева направо — как игрок.
-async function cutCubes(maxStrokes = 40) {
-  const tried = new Set();
-  for (let k = 0; k < maxStrokes; k++) {
-    await guardCat();
-    const ps = await sess('s.boardCur()?.pieces?.map((p) => ({ x: p.x, z: p.z, w: p.w, d: p.d })) ?? null');
-    if (!ps?.length) return;
-    const b = await boardBox();
-    let cand = null;
-    for (const p of ps.filter((p) => p.w > 1.25).sort((a, c) => c.w - a.w)) {
-      const pos = +(p.x + p.w / Math.max(2, Math.round(p.w))).toFixed(3);
-      if (!tried.has('x' + pos)) { cand = { axis: 'x', pos }; break; }
-    }
-    if (!cand) for (const p of ps.filter((p) => p.d > 1.25).sort((a, c) => c.d - a.d)) {
-      const pos = +(p.z + p.d / Math.max(2, Math.round(p.d))).toFixed(3);
-      if (!tried.has('z' + pos)) { cand = { axis: 'z', pos }; break; }
-    }
-    if (!cand) return;
-    tried.add(cand.axis + cand.pos);
-    if (cand.axis === 'x') await knife(cand.pos, b.z0 - 0.7, cand.pos, b.z1 + 0.7);
-    else await knife(b.x0 - 0.7, cand.pos, b.x1 + 0.7, cand.pos);
+// Кубики как в жизни: полоски сверху вниз через 1 см, тап D — доска на четверть оборота,
+// снова сверху вниз. Нож режет там, где прошла мышь (сетка raster-cut.js).
+async function turnBoard(key = 'KeyD') {
+  const a0 = await sess('s.boardCur()?.angle ?? 0');
+  await page.keyboard.down(key); await wait(60); await page.keyboard.up(key);
+  await waitFor((a0) => Math.abs((window.__sueta.session.boardCur()?.angle ?? 0) - a0) > 1.5, 8000, a0);
+  await wait(200);
+}
+async function cutCubes({ rotate = true, chop = false } = {}) {
+  const sh = await sess('(() => { const b = s.boardCur().body; return { w: b.shape.w, d: b.shape.d, cz: b.copies.map((c) => c.cz) }; })()');
+  const zs = sh.cz, z0 = Math.min(...zs) - sh.d / 2 - 0.9, z1 = Math.max(...zs) + sh.d / 2 + 0.9;
+  if (chop) {
+    // рубка: зажала и качаешь нож вверх-вниз, сдвигая вправо на ~1 см за взмах
+    const pts = [[-sh.w / 2 + 0.4, z0]];
+    for (let x = -sh.w / 2 + 1; x < sh.w / 2 - 0.3; x += 1) pts.push([x, z1], [x + 0.5, z0]);
+    await drag(pts.map(([x, z]) => [x * U, z * U]), 3);
+  } else for (let x = -sh.w / 2 + 1; x < sh.w / 2 - 0.3; x += 1) { await guardCat(); await knife(x, z0, x, z1, 4); }
+  if (rotate) {
+    await turnBoard('KeyD');
+    // после поворота по часовой поперечные линии продукта z = c идут на экране сверху вниз: X = −c
+    for (const cz of zs) for (let z = cz - sh.d / 2 + 1; z < cz + sh.d / 2 - 0.3; z += 1) { await guardCat(); await knife(-z, -sh.w / 2 - 0.9, -z, sh.w / 2 + 0.9, 4); }
+  } else {
+    for (const cz of zs) for (let z = cz - sh.d / 2 + 1; z < cz + sh.d / 2 - 0.3; z += 1) { await guardCat(); await knife(-sh.w / 2 - 0.9, z, sh.w / 2 + 0.9, z, 4); }
   }
 }
 // Кружочки: только поперёк, сверху вниз, шаг ~0,5 кубика.
@@ -176,13 +178,16 @@ async function grate() {
   await drag(pts, 3);
 }
 // Выбрать продукт на доске вкладкой, проверить перекрытие, нарезать, перенести в миску.
-async function boardProduct(stepId, name) {
+async function boardProduct(stepId, name, how = {}) {
   await actBtn('boardSelect', `"olivier:${stepId}"`); await wait(700);
   const cov = await boardCover();
   check(`${name}: интерфейс закрывает ≤ 10 % продукта`, cov && cov.frac <= 0.1, cov ? `${Math.round(cov.frac * 100)} %${cov.by ? ' — ' + cov.by : ''}` : 'нет кусков');
   await shot(`d1_board_${stepId}`);
-  await cutCubes();
+  await cutCubes(how);
   await guardCat();
+  const q = await sess('s.boardQuality(s.boardCur())');
+  const ang = await sess('s.boardCur().angle ?? 0');
+  check(`${name}: кубики 1 см${how.chop ? ' рубкой' : how.rotate === false ? ' без поворота' : ' с поворотом доски (D)'}`, q.score > 0.6 && (how.rotate === false || Math.abs(Math.abs(ang) - Math.PI / 2) < 0.05), `${Math.round(q.score * 100)} %, кубиков ${q.neat}, доска ${Math.round((ang * 180) / Math.PI)}°`);
   await shot(`d1_board_${stepId}_cubes`);
   await actBtn('boardTransfer'); await wait(400);
 }
@@ -205,6 +210,29 @@ async function peelProduct(stepId, name) {
     await guardCat();
   }
   check(`${name}: кожура снята ножом`, await sess(`s.stepDone('olivier','${stepId}')`), `проход до ${Math.round(((await sess('s.boardCur()?.peel?.coverage?.() ?? 1')) ?? 1) * 100)} %`);
+}
+// Крутилка огня в доке: зажать и повести по кругу (30° на деление).
+async function turnKnob(i, heat) {
+  const k = page.locator(`[data-knob="${i}"]`).first();
+  const b = await k.boundingBox();
+  const cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = b.width * 0.9;
+  const cur = await sess(`s.burners[${i}].heat`);
+  const a0 = -Math.PI / 2;
+  await page.mouse.move(cx + r * Math.cos(a0), cy + r * Math.sin(a0));
+  await page.mouse.down();
+  const steps = (heat - cur) * 3;
+  for (let k2 = 1; k2 <= steps; k2++) { const a = a0 + (k2 / 3) * (Math.PI / 6); await page.mouse.move(cx + r * Math.cos(a), cy + r * Math.sin(a)); await wait(30); }
+  await page.mouse.up(); await wait(200);
+}
+// Остудить под краном: положить в раковину, зажать кнопку над раковиной, пока не уйдёт пар.
+async function coolUnderTap(product) {
+  await actBtn('coolPick', `"${product}"`); await wait(400);
+  const p = await local(0, 0);
+  await page.mouse.move(p.x, p.y); await page.mouse.down();
+  await wait(600); await shot(`d1_sink_tap_${product}`);
+  const ok = await waitFor((pr) => !(window.__sueta.session.hot[pr] > window.__sueta.session.t), 30000, product);
+  await page.mouse.up(); await wait(200);
+  check(`${product === 'egg' ? 'Яйца' : 'Картофель'}: остужено под краном — держала кнопку, вода лилась`, ok);
 }
 // Телефон: открыть кнопкой HUD (или подписью), пройти все вкладки/приложения, снять каждое.
 async function phoneTour(prefix) {
@@ -275,7 +303,14 @@ try {
   // день 1: плита — обе кастрюли сразу
   check('плита', await goStation('Плита', 'stove'));
   await actBtn('placePot', '"olivier:boil"'); await noAction(); await wait(300);
+  check('кастрюля поставлена, огонь выключен — крутилка на 0', (await sess('s.burners[0].heat')) === 0);
+  await turnKnob(0, 6);
+  check('крутилка повёрнута мышью по кругу — огонь 6', (await sess('s.burners[0].heat')) === 6, String(await sess('s.burners[0].heat')));
   await actBtn('placePot', '"olivier:boilEgg"'); await noAction(); await wait(300);
+  for (let i = 0; i < 6; i++) { await actBtn('setHeat', `[1,${i + 1}]`).catch(() => {}); await wait(120); }
+  check('вторая крутилка кнопкой «+» — огонь 6', (await sess('s.burners[1].heat')) === 6, String(await sess('s.burners[1].heat')));
+  await wait(1500);
+  await shot('d1_stove_knobs');
   await shot('d1_stove_two');
   check('две кастрюли на двух конфорках', (await sess("s.burners.map(b => b.state + ':' + b.product).join()")) === 'boiling:potato,boiling:egg');
 
@@ -293,31 +328,34 @@ try {
   await wait(300);
   check('морковь × 2 — один заход, две копии', (await sess('s.boardCur()?.qty')) === 2 && (await sess('s.boardCur().pieces.length')) === 2);
   await shot('d1_board_carrot');
-  // ошибки игрока: мимо, наискосок, клик без движения, перенос до разреза — игра не зависает
+  // ошибки игрока: мимо, клик без движения, перенос до разреза — игра не зависает
   const b0 = await boardBox();
-  await knife(b0.x1 + 1.3, b0.z0 - 0.5, b0.x1 + 1.3, b0.z1 + 0.5);
+  await knife(b0.x1 + 2.5, b0.z0 - 0.5, b0.x1 + 2.5, b0.z1 + 0.5);
   check('росчерк мимо продукта — без разреза, с подсказкой', (await sess('s.boardCur().cuts')) === 0 && /мимо/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
-  await knife(b0.x0, b0.z0, b0.x1, b0.z1);
-  check('росчерк наискосок — без разреза, с подсказкой', (await sess('s.boardCur().cuts')) === 0 && /наискосок/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
   { const c = await local(0, 0); await page.mouse.move(c.x, c.y); await page.mouse.down(); await wait(120); await page.mouse.up(); await wait(100); }
   check('клик без движения — не режет', (await sess('s.boardCur().cuts')) === 0, await sess('s.hint?.text'));
   await actBtn('boardTransfer'); await wait(200);
   check('«В миску» до разреза — отказ с подсказкой', !(await sess("s.stepDone('olivier','carrot')")) && /разрез/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
-  await knife(-1.37, b0.z0 - 0.7, -1.37, b0.z1 + 0.7, 10);
-  const ws = await sess('s.boardCur().pieces.map(p => +(p.w).toFixed(3))');
-  check('после ошибок нож режет: разрез по координате мыши, обе копии', ws.filter((w) => Math.abs(w - 0.63) < 0.06).length >= 2, ws.join(' / '));
-  await cutCubes();
+  // нож режет по следу мыши: прямой росчерк сверху вниз режет обе морковки сразу
+  await knife(-5.5, b0.z0 - 0.9, -5.5, b0.z1 + 0.9, 6);
+  check('прямой росчерк через обе морковки — отрезал от каждой', (await sess('s.boardCur().pieces.length')) === 4, String(await sess('s.boardCur().pieces.length')));
+  // дрогнула рука: волнистый росчерк — край куска кривой (рамка шире прямого)
+  { const pts = []; for (let k = 0; k <= 16; k++) pts.push([(-4.5 + 0.45 * Math.sin(k * 1.4)) * U, (b0.z0 - 0.9 + ((b0.z1 - b0.z0 + 1.8) * k) / 16) * U]); await drag(pts, 2); await wait(200); }
+  const wob = await sess('s.boardCur().pieces.filter((p) => p.x > -5.6 && p.x < -5.3).map((p) => +p.w.toFixed(2))');
+  check('дрогнула рука — кусок кривой: рамка куска шире расстояния между росчерками', wob.some((w) => w > 1.3), wob.join(' / '));
+  await shot('d1_board_carrot_wobbly');
+  await cutCubes({ rotate: false });
   await shot('d1_board_carrot_cubes');
-  const q = await sess('s.boardQuality(s.boardCur()).score');
-  check('морковь нарезана кубиками', q > 0.5, (q * 100).toFixed(0) + ' %');
+  const q = await sess('s.boardQuality(s.boardCur())');
+  check('морковь нарезана кубиками без поворота доски', q.score > 0.5, `${Math.round(q.score * 100)} %, кубиков ${q.neat}`);
   // смена продукта и возврат
   await actBtn('boardSelect', '"olivier:sausage"'); await wait(300);
   await actBtn('boardSelect', '"olivier:carrot"'); await wait(300);
-  check('смена продукта сохраняет части', (await sess('s.boardCur().product')) === 'carrot' && (await sess('s.boardCur().pieces.length')) > 8);
+  check('смена продукта сохраняет части', (await sess('s.boardCur().product')) === 'carrot' && (await sess('s.boardCur().pieces.length')) > 20);
   await actBtn('boardTransfer'); await wait(400);
   check('морковь в миске', await sess("s.stepDone('olivier','carrot')"));
   await boardProduct('sausage', 'Колбаса');
-  await boardProduct('pickle', 'Солёные огурцы × 2');
+  await boardProduct('pickle', 'Солёные огурцы × 2', { chop: true });
   check('морковь, колбаса, солёные огурцы нарезаны, пока варится', await sess("['carrot','sausage','pickle'].every(k => s.stepDone('olivier', k))"));
   // яйца: сварились → горячие → остудить у раковины → резать
   await S(() => window.__sueta.session.fastForward(Math.max(0, window.__sueta.session.burners[1].readyAt - window.__sueta.session.t + 0.5)));
@@ -328,7 +366,7 @@ try {
   await actBtn('boardSelect', '"olivier:peelEgg"'); await wait(300);
   check('горячие яйца не чистятся', (await sess('s.boardCur()?.product')) !== 'egg', await sess('s.hint?.text'));
   await goStation('Раковина', 'sink'); await shot('d1_sink_cool');
-  await actBtn('coolProduct', '"egg"'); await noAction();
+  await coolUnderTap('egg');
   check('яйца остужены у раковины', !(await sess('s.hot.egg > s.t')));
   await goStation('Доска', 'board');
   await peelProduct('peelEgg', 'Яйца');
@@ -340,7 +378,7 @@ try {
   check('плита (картофель готов)', await goStation('Плита', 'stove'));
   for (let i = 0; i < 2 && (await sess('s.burners.some(b => b.overflow)')); i++) { await actBtn('reduceHeat'); await noAction(); }
   await actBtn('takePot'); await noAction();
-  await goStation('Раковина', 'sink'); await actBtn('coolProduct', '"potato"'); await noAction();
+  await goStation('Раковина', 'sink'); await coolUnderTap('potato');
   check('доска (картофель)', await goStation('Доска', 'board'));
   await peelProduct('peelPotato', 'Картофель');
   await boardProduct('potato', 'Картофель × 2');

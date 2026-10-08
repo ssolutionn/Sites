@@ -24,16 +24,28 @@ export function knife(s, axis, pos, from, to, steps = 8) {
     const v = from + ((to - from) * k) / steps;
     return axis === 'x' ? [pos * BOARD_UNIT, v * BOARD_UNIT] : [v * BOARD_UNIT, pos * BOARD_UNIT];
   };
+  const it = s.boardCur();
+  const before = it?.cuts ?? 0;
   s.pointer('down', ...pt(0));
   for (let k = 1; k <= steps; k++) s.pointer('move', ...pt(k));
   const r = s.pointer('up', ...pt(steps));
   waitAction(s);
+  // нож по сетке режет по ходу движения: «cut» — если появился новый кусок
+  if (it?.body) return it.cuts > before ? 'cut' : r;
   return r;
 }
 
-// Нарезка кубиками росчерками: полоски вдоль, затем поперёк — без поворота доски.
-export function cutCubes(s) {
+// Нарезка кубиком step см: полоски сверху вниз, затем поперёк каждой штуки (доска не повёрнута).
+export function cutCubes(s, step = 1) {
   const it = s.boardCur();
+  if (it.body) {
+    const { w, d } = it.body.shape;
+    const zs = it.body.copies.map((c) => c.cz);
+    const z0 = Math.min(...zs) - d / 2 - 0.8, z1 = Math.max(...zs) + d / 2 + 0.8;
+    for (let x = -w / 2 + step; x < w / 2 - 0.3; x += step) knife(s, 'x', x, z0, z1, 16);
+    for (const cz of zs) for (let z = cz - d / 2 + step; z < cz + d / 2 - 0.3; z += step) knife(s, 'z', z, -w / 2 - 0.8, w / 2 + 0.8, 16);
+    return;
+  }
   for (let guard = 0; guard < 60; guard++) {
     const wide = it.pieces.filter((p) => p.w > 1.25).sort((a, c) => a.x - c.x)[0];
     if (!wide) break;
@@ -52,10 +64,10 @@ export function cutCubes(s) {
   }
 }
 
-export function cutRounds(s, thickness = 0.5) {
+export function cutRounds(s, thickness = s.cfg.roundTarget.thickness) {
   const it = s.boardCur();
   const L = it.log.length / 2;
-  for (let x = -L + 0.3; x < L - 0.2; x += thickness) knife(s, 'x', x, -it.radius - 0.3, it.radius + 0.3);
+  for (let x = -L + 0.6; x < L - 0.4; x += thickness) knife(s, 'x', x, -it.radius - 0.6, it.radius + 0.6);
 }
 
 // Круговые движения в миске.

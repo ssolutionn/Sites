@@ -259,11 +259,39 @@ export class CampaignView {
     const ch = g2.children;
     this.pots = [
       { group: pot0.group, lid: pot0.lid, foam: pot0.foam, content: pot0.potatoes, steam: pot0.steam, home: k.potHome.clone(), on: k.potOnStove.clone(), move: null, hideHome: false },
-      { group: g2, lid: ch[5], foam: ch[4], content: ch[3], steam: pot0.steam.map((st) => { const c = st.clone(); c.material = st.material.clone(); this.scene.add(c); return c; }), home: k.potHome.clone().add(new THREE.Vector3(-0.05, 0, 0)), on: k.potOnStove.clone().add(new THREE.Vector3(-0.3, 0, 0)), move: null, hideHome: true },
+      // ковшик поменьше — на задней левой конфорке, по диагонали: кастрюли не касаются друг друга
+      { group: g2, lid: ch[5], foam: ch[4], content: ch[3], steam: pot0.steam.map((st) => { const c = st.clone(); c.material = st.material.clone(); this.scene.add(c); return c; }), home: k.potHome.clone().add(new THREE.Vector3(0, 0, -0.28)), on: k.potOnStove.clone().add(new THREE.Vector3(-0.3, 0, -0.28)), move: null, hideHome: true },
     ];
+    g2.scale.setScalar(0.8);
     for (const p of this.pots) p.content.traverse((o) => o.isMesh && (o.material = o.material.clone()));
     g2.visible = false;
     tag(g2, 'stove');
+    // огонь под кастрюлей и пузыри в воде; крутилка конфорки 0 — правая передняя (3), конфорки 1 — левая задняя (0)
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0x4f8dff, transparent: true, opacity: 0.85, depthWrite: false });
+    const bubbleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false });
+    this.pots.forEach((pot, bi) => {
+      pot.knob = k.stoveKnobs?.[bi === 0 ? 3 : 0] ?? null;
+      pot.flame = new THREE.Group();
+      for (let i = 0; i < 14; i++) {
+        const f = new THREE.Mesh(new THREE.ConeGeometry(0.007, 0.03, 6), flameMat);
+        const a = (i / 14) * Math.PI * 2;
+        f.position.set(Math.cos(a) * 0.075, 0.015, Math.sin(a) * 0.075);
+        f.userData.ph = i * 1.7;
+        pot.flame.add(f);
+      }
+      pot.flame.position.set(pot.on.x, pot.on.y - 0.025, pot.on.z);
+      pot.flame.visible = false;
+      this.scene.add(pot.flame);
+      pot.water = pot.group.children[2];
+      pot.bubbles = [];
+      for (let i = 0; i < 8; i++) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 5), bubbleMat);
+        b.visible = false;
+        b.userData.ph = i / 8;
+        pot.group.add(b);
+        pot.bubbles.push(b);
+      }
+    });
 
     // доска грязная после сельди/свёклы
     this.boardDirt = new THREE.Mesh(new THREE.CircleGeometry(0.12, 24), new THREE.MeshStandardMaterial({ color: 0x7a1d3c, transparent: true, opacity: 0.4, depthWrite: false }));
@@ -347,6 +375,13 @@ export class CampaignView {
         pos.set(a.x, ISLAND_H + 0.72 * back, a.z + 0.46 * back);
         return true;
       }
+      case 'c-stove': {
+        // плита крупно: кастрюли, огонь и крутилки на передней панели
+        const a = S.stove.anchor;
+        look.set(a.x, 0.86, a.z + 0.12);
+        pos.set(a.x + 0.04, 0.86 + 0.62 * back, a.z + 0.95 * back);
+        return true;
+      }
       case 'c-sink': {
         const a = S.sink.anchor;
         look.set(a.x, ISLAND_H, a.z + 0.02);
@@ -385,7 +420,7 @@ export class CampaignView {
     if (!session || session.heroine.away) return 'c-overview';
     const p = session.panel;
     if (p === 'board') return 'board';
-    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table') return 'c-' + p;
+    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove') return 'c-' + p;
     return 'c-overview';
   }
 
@@ -513,8 +548,11 @@ export class CampaignView {
         p.group.visible = true;
         p.move = { from: p.group.position.clone(), to: p.on.clone(), t: 0 };
         p.content.visible = true;
-        const col = { potato: 0xe8c77a, egg: 0xf6f1e6, beet: 0x7a1d3c }[e.product] ?? 0xe8c77a;
+        // варится в кожуре: картофель в мундире, яйца в скорлупе
+        const col = PRODUCTS[e.product]?.peel ?? { beet: 0x5a1530 }[e.product] ?? PRODUCTS[e.product]?.color ?? 0xe8c77a;
+        const egg = e.product === 'egg';
         p.content.traverse((o) => o.isMesh && o.material.color.setHex(col));
+        p.content.children.forEach((o) => o.scale.set(egg ? 0.85 : 1.2, egg ? 0.75 : 0.9, egg ? 1.15 : 1));
         break;
       }
       case 'potatoTaken': {
@@ -534,7 +572,7 @@ export class CampaignView {
         break;
       case 'cut': {
         const it = this.session?.board.items[e.key];
-        if (it) this.particles.emit(this.k.boardCenter.clone().add(new THREE.Vector3((e.x ?? 0) * 0.042, 0.03, 0)), PRODUCTS[it.product]?.color ?? 0xffffff, 6, { spread: 0.03, up: 0.35, life: 0.6, size: 0.008 });
+        if (it) this.particles.emit(this.k.boardCenter.clone().add(new THREE.Vector3((e.x ?? 0) * UNIT, 0.03, (e.z ?? 0) * UNIT)), PRODUCTS[it.product]?.color ?? 0xffffff, 6, { spread: 0.03, up: 0.35, life: 0.6, size: 0.008 });
         break;
       }
       case 'pinch': {
@@ -782,7 +820,27 @@ export class CampaignView {
           pot.move = null;
         }
       }
-      const boiling = !!b && (b.state === 'boiling' || b.state === 'ready');
+      // огонь и крутилка: метка поворачивается на 30° за деление, пламя растёт с огнём
+      const heat = b?.heat ?? 0;
+      if (pot.knob) pot.knob.rotation.y += (-(heat * Math.PI) / 6 - pot.knob.rotation.y) * (1 - Math.exp(-dt * 12));
+      pot.flame.visible = heat > 0;
+      if (heat > 0) {
+        for (const f of pot.flame.children) f.scale.set(1, 0.4 + (heat / 9) * 1.4 * (0.85 + 0.15 * Math.sin(t * 18 + f.userData.ph)), 1);
+      }
+      // вода: греется — редкие пузырьки со дна, кипит — бурлит
+      const temp = b?.temp ?? 20;
+      const bubbling = b?.state === 'boiling' && temp > 70;
+      pot.bubbles.forEach((bb, i) => {
+        bb.visible = bubbling && (temp > 98 || i < 3);
+        if (!bb.visible) return;
+        const sp = temp > 98 ? 1.6 : 0.5;
+        const ph = (t * sp + bb.userData.ph) % 1;
+        const a = i * 2.4 + Math.floor(t * sp + bb.userData.ph) * 1.3;
+        bb.position.set(Math.cos(a) * 0.08 * ((i % 3) / 3 + 0.3), 0.06 + ph * 0.09, Math.sin(a) * 0.08 * ((i % 3) / 3 + 0.3));
+        bb.scale.setScalar(0.6 + ph);
+      });
+      if (pot.water) pot.water.position.y = 0.15 + (temp > 98 ? Math.sin(t * 20 + bi) * 0.003 : 0);
+      const boiling = !!b && ((b.state === 'boiling' && (b.water == null || b.water === 'boil')) || b.state === 'ready');
       const over = !!b?.overflow;
       pot.foam.visible = over;
       pot.lid.position.y = 0.21 + (over ? Math.abs(Math.sin(t * 22 + bi)) * 0.03 : boiling ? Math.abs(Math.sin(t * 6 + bi)) * 0.004 : 0);
@@ -1302,6 +1360,59 @@ export class CampaignView {
 
   // ---------- раковина и лужи ----------
   _updateSink(s, t) {
+    // остужаем под краном: горячее в дуршлаге, струя из крана, пар уходит
+    const cool = s.sinkCool;
+    const ckey = cool ? cool.product : null;
+    if (ckey !== this.coolKey) {
+      this.coolKey = ckey;
+      if (this.coolFood) {
+        F.disposeGroup(this.coolFood);
+        this.coolFood = null;
+      }
+      if (cool) {
+        const g = new THREE.Group();
+        const colander = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xdfe5ea, metalness: 0.6, roughness: 0.3, side: THREE.DoubleSide }));
+        colander.position.y = 0.11;
+        g.add(colander);
+        const egg = cool.product === 'egg';
+        const col = PRODUCTS[cool.product]?.peel ?? PRODUCTS[cool.product]?.color ?? 0xe0c080;
+        for (let i = 0; i < 5; i++) {
+          const m = new THREE.Mesh(new THREE.SphereGeometry(egg ? 0.024 : 0.032, 12, 9), new THREE.MeshStandardMaterial({ color: col, roughness: 0.6 }));
+          m.scale.set(egg ? 0.85 : 1.2, egg ? 1.15 : 0.85, 1);
+          m.position.set(Math.cos(i * 1.3) * 0.045, 0.035 + (i % 2) * 0.02, Math.sin(i * 1.3) * 0.045);
+          g.add(m);
+        }
+        g.position.set(0, 0, 0.02);
+        this.sinkItem.add(g);
+        this.coolFood = g;
+        if (!this.tapStream) {
+          this.tapStream = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.13, 10, 1, true), new THREE.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.55, roughness: 0.05, metalness: 0.1 }));
+          this.tapStream.position.set(0, 0.075, -0.1);
+          this.sinkItem.add(this.tapStream);
+          this.coolSteam = [];
+          for (let i = 0; i < 7; i++) {
+            const st = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false }));
+            st.userData.ph = i / 7;
+            this.sinkItem.add(st);
+            this.coolSteam.push(st);
+          }
+        }
+      }
+    }
+    if (this.tapStream) {
+      const open = !!cool?.open;
+      this.tapStream.visible = open;
+      if (open) this.tapStream.scale.set(1 + Math.sin(t * 40) * 0.08, 1, 1 + Math.cos(t * 37) * 0.08);
+      const heatLeft = cool ? 1 - Math.min(1, cool.run / s.cfg.cool.underTap) : 0;
+      this.coolSteam.forEach((st, i) => {
+        st.visible = !!cool && heatLeft > 0.05;
+        if (!st.visible) return;
+        const ph = (t * 0.5 + st.userData.ph) % 1;
+        st.position.set(Math.sin(i * 2.1 + t) * 0.04, 0.08 + ph * 0.22, 0.02 + Math.cos(i * 1.7) * 0.03);
+        st.scale.setScalar(0.6 + ph * 1.5);
+        st.material.opacity = (1 - ph) * 0.35 * heatLeft;
+      });
+    }
     const job = s.sinkJob;
     const key = job ? job.item : null;
     if (key !== this.washKey) {

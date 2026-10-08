@@ -9,19 +9,26 @@ export const CAMPAIGN = {
   maxFrameDt: 0.25,
   subStep: 0.05,
   walkSpeed: 2.2,
-  knifeDuration: 0.22, // нож уже прошёл росчерком — короткий удар до доски
-  batchGap: 0.7, // зазор между одинаковыми продуктами на доске, в кубиках
-  cutRules: { angleTolerance: 28, cover: 0.6, maxWobble: 1.9, minLength: 0.6 }, // допуски росчерка ножа (gestures.js)
+  knifeDuration: 0.22, // кружочки: нож прошёл росчерком — короткий удар до доски
+  // Доска: единица u = 1 см продукта, целевой кубик оливье — 1 см (st-board.js, raster-cut.js)
+  batchGap: 1.2, // зазор между одинаковыми продуктами на доске, см
+  board: { turn: 7.5, spin: 1.9 }, // A/D: доворот на четверть оборота (рад/с) и свободное вращение при удержании (рад/с)
+  crumbs: { area: 0.12, thick: 0.15 }, // кусок меньше 12 мм² или тоньше 1,5 мм — крошка, осыпается с доски
+  cutRules: { angleTolerance: 28, cover: 0.6, maxWobble: 3.8, minLength: 1.2 }, // кружочки: допуски росчерка (gestures.js), см
   potatoReadyAfter: 120, // 2:00 после установки кастрюли (поправка тестового билда)
-  boilTimes: { potato: 120, egg: 60, beet: 150 }, // у каждой кастрюли свой срок; конфорок две
+  boilTimes: { potato: 96, egg: 36, beet: 126 }, // сколько секунд варится после закипания (на огне 6 закипает за ~24 с: итого 2:00 и 1:00); конфорок две
+  // Крутилка огня 0–9: вода греется на heatRate·огонь °C/с и остывает на loss·(T−20); на 2 и ниже не закипает.
+  // Огонь ≥ foamHeat дольше foamAfter секунд кипения — пена убегает; simmer — «убавить огонь».
+  stove: { heatRate: 0.7, loss: 0.02, boilAt: 99.5, simmer: 4, foamHeat: 7, foamAfter: 8, placeHeat: 6, eventHeat: 6, maxHeat: 9 },
   burners: 2,
-  cool: { time: 25, sinkCool: 1.5 }, // сваренное горячее: ждать или остудить под холодной водой
+  cool: { time: 25, sinkCool: 1.5, underTap: 2.5 }, // сваренное горячее: ждать или остудить под холодной водой (держать кран открытым underTap с)
   minCutFraction: 0.2,
   maxPiecesPerProduct: 150,
   edgeTrimAllowance: 0.1, // до 10 % исходного объёма порции — краевые обрезки без штрафа;
   // для профилей, где эталонной нарезке этого мало, допуск задан в PRODUCTS[*].cut.trim (scripts/calibrate-trims.mjs)
-  tolerance: { min: 0.75, max: 1.25 },
-  roundTarget: { thickness: 0.5, min: 0.32, max: 0.72, minCut: 0.18 },
+  // Кубик: √площади куска в [min, max] см и вытянутость не больше elong (полоска 1×3 — уже не кубик)
+  tolerance: { min: 0.65, max: 1.45, elong: 2 },
+  roundTarget: { thickness: 1, min: 0.64, max: 1.44, minCut: 0.36 }, // кружочки, см
 
   durations: {
     placePot: 1,
@@ -49,7 +56,7 @@ export const CAMPAIGN = {
   // Высыпать и выдавить над миской: rate — порции за метр движения руки над миской, need — сколько нужно.
   // Майонез: меньше light — «поменьше майонеза», как просят гости.
   pour: { default: { rate: 5, max: 1, need: 1 }, mayo: { rate: 2.4, max: 1.6, need: 0.45, light: 0.8, squeeze: true } },
-  shake: { amplitude: 0.03, minInterval: 0.22 }, // солонка: взмах не меньше 3 см, не чаще ~4 раз в секунду
+  shake: { amplitude: 0.03, minInterval: 0.22, tapTime: 0.45 }, // солонка: взмах не меньше 3 см, не чаще ~4 раз в секунду; клик над миской короче tapTime — тоже щепотка
   restir: 1, // досолила после перемешивания — ещё оборот ложкой, иначе проба обманет
   // Чистка ножом: кисть — ширина снятой полоски кожуры (м), complete — сколько поверхности очистить
   peel: { cols: 26, rows: 22, brush: 0.017, amount: 0.7, complete: 0.86 },
@@ -103,25 +110,25 @@ export const CAMPAIGN = {
 // --- Продукты ---
 // unit — игровые порции; storage — где хранится; cut — профиль для доски.
 export const PRODUCTS = {
-  potato: { name: 'Картофель', price: 40, unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 4, d: 3, profile: 'oval' }, grate: true, peel: 0x9a7448, peelDone: ['Картофелина почищена', 'Картошка почищена'], note: 'варится в мундире, потом чистим' },
-  carrot: { name: 'Морковь', price: 30, unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 4, d: 2, profile: 'carrot', trim: 0.39 }, grate: true, note: 'варёная' },
-  sausage: { name: 'Колбаса', price: 180, unit: 'порц.', storage: 'fridge', color: 0xe7909a, cut: { w: 3, d: 3, profile: 'rectangle' }, round: { length: 5, radius: 0.9 } },
-  cucumber: { name: 'Огурец свежий', price: 60, unit: 'шт.', storage: 'fridge', color: 0x8cc84b, cut: { w: 5, d: 2, profile: 'oval' }, round: { length: 5, radius: 0.75 } },
-  pickle: { name: 'Огурец солёный', price: 70, unit: 'шт.', storage: 'fridge', color: 0x8a9a3e, cut: { w: 5, d: 2, profile: 'oval' }, note: 'для оливье — солёные или маринованные' },
-  egg: { name: 'Яйцо', price: 15, unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 4, d: 3, profile: 'egg', trim: 0.28 }, peel: 0xe6cba0, peelDone: ['Яйцо почищено', 'Яйца почищены'], note: 'варится в кастрюле, потом чистим' },
+  potato: { name: 'Картофель', price: 40, unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 8, d: 6, profile: 'oval' }, grate: true, peel: 0x9a7448, peelDone: ['Картофелина почищена', 'Картошка почищена'], note: 'варится в мундире, потом чистим' },
+  carrot: { name: 'Морковь', price: 30, unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 13, d: 3.4, profile: 'carrot' }, grate: true, note: 'варёная' },
+  sausage: { name: 'Колбаса', price: 180, unit: 'порц.', storage: 'fridge', color: 0xe7909a, cut: { w: 8, d: 6, profile: 'rectangle' }, round: { length: 10, radius: 1.8 } },
+  cucumber: { name: 'Огурец свежий', price: 60, unit: 'шт.', storage: 'fridge', color: 0x8cc84b, cut: { w: 12, d: 3.4, profile: 'oval' }, round: { length: 10, radius: 1.5 } },
+  pickle: { name: 'Огурец солёный', price: 70, unit: 'шт.', storage: 'fridge', color: 0x8a9a3e, cut: { w: 9, d: 3.2, profile: 'oval' }, note: 'для оливье — солёные или маринованные' },
+  egg: { name: 'Яйцо', price: 15, unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 5.6, d: 4.2, profile: 'egg', trim: 0.14 }, peel: 0xe6cba0, peelDone: ['Яйцо почищено', 'Яйца почищены'], note: 'варится в кастрюле, потом чистим' },
   peas: { name: 'Горошек', price: 90, unit: 'банка', storage: 'pantry', color: 0x6dbb3a },
   mayo: { name: 'Майонез', price: 110, unit: 'порц.', storage: 'fridge', color: 0xfffbea },
-  crab: { name: 'Крабовые палочки', price: 150, unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 5, d: 2, profile: 'rectangle' } },
+  crab: { name: 'Крабовые палочки', price: 150, unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 10, d: 4, profile: 'rectangle' } },
   corn: { name: 'Кукуруза', price: 90, unit: 'банка', storage: 'pantry', color: 0xf4c430 },
-  bread: { name: 'Хлеб', price: 10, unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 4, d: 2, profile: 'rectangle' } },
+  bread: { name: 'Хлеб', price: 10, unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 8, d: 4, profile: 'rectangle' } },
   butter: { name: 'Сливочное масло', price: 160, unit: 'пачка', storage: 'fridge', color: 0xfff1a8 },
   caviar: { name: 'Красная икра', price: 350, unit: 'банка', storage: 'fridge', color: 0xe8461f },
   tartlet: { name: 'Корзинки', price: 20, unit: 'шт.', storage: 'pantry', color: 0xd9a35a },
-  cheese: { name: 'Сыр', price: 170, unit: 'порц.', storage: 'fridge', color: 0xf7d55b, cut: { w: 4, d: 2, profile: 'rectangle' }, grate: true },
+  cheese: { name: 'Сыр', price: 170, unit: 'порц.', storage: 'fridge', color: 0xf7d55b, cut: { w: 8, d: 4, profile: 'rectangle' }, grate: true },
   greens: { name: 'Зелень', price: 60, unit: 'пучок', storage: 'fridge', color: 0x3f9b3a },
   tomato: { name: 'Помидор', price: 35, unit: 'шт.', storage: 'fridge', color: 0xe23b2e },
-  onion: { name: 'Лук', price: 15, unit: 'шт.', storage: 'pantry', color: 0xf3ecd6, cut: { w: 3, d: 2, profile: 'oval' } },
-  herring: { name: 'Сельдь', price: 220, unit: 'филе', storage: 'fridge', messy: true, color: 0xc9b6a6, cut: { w: 4, d: 2, profile: 'rectangle' } },
+  onion: { name: 'Лук', price: 15, unit: 'шт.', storage: 'pantry', color: 0xf3ecd6, cut: { w: 6, d: 4, profile: 'oval' } },
+  herring: { name: 'Сельдь', price: 220, unit: 'филе', storage: 'fridge', messy: true, color: 0xc9b6a6, cut: { w: 8, d: 4, profile: 'rectangle' } },
   beet: { name: 'Свёкла', price: 35, unit: 'порц.', storage: 'fridge', messy: true, color: 0x8e1b4a, grate: true, note: 'варится дольше всех' },
   skewer: { name: 'Шпажки', price: 5, unit: 'шт.', storage: 'pantry', color: 0xd8b07a },
   mandarin: { name: 'Мандарин', price: 30, unit: 'шт.', storage: 'pantry', color: 0xff8c1a },
@@ -409,9 +416,9 @@ export const DAYS = [
     id: 1,
     title: 'Начинаем подготовку',
     dishes: ['olivier'],
-    intro: 'Первый салат года. Режем как в жизни: зажми кнопку и проведи ножом через продукт — вдоль, потом поперёк, и получатся кубики. Конфорок две: поставь картошку (2:00) и яйца (1:00), режь, пока варятся. Сваренное остуди под холодной водой и почисти ножом. В конце посоли, перемешай и попробуй.',
-    newSkills: ['Росчерк ножом', 'Вдоль и поперёк', 'Две конфорки', 'Остывание', 'Чистка', 'Соль → перемешать → проба'],
-    targetMinutes: 6,
+    intro: 'Первый салат года. Нож режет там, где прошёл: сверху вниз — полоски, поверни доску клавишей D — и снова сверху вниз: кубики по 1 см. Быстрее — рубкой: качай нож вверх-вниз, сдвигая вбок. Поставь картошку и яйца на две конфорки и поверни крутилки: сильный огонь быстрее, но может убежать. Сваренное остуди под краном и почисти. В конце посоли, перемешай и попробуй.',
+    newSkills: ['Нож по следу', 'Доска A/D', 'Рубка', 'Крутилки огня', 'Под краном', 'Чистка', 'Соль → перемешать → проба'],
+    targetMinutes: 7, // 0.7: крутилки, кран и кубик 1 см — уверенный игрок ~6:30
     budget: 300,
     wishes: 0,
     stock: { potato: 2, carrot: 2, sausage: 2, pickle: 2, egg: 2, peas: 1, mayo: 1 },

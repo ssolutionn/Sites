@@ -90,7 +90,7 @@ function boot() {
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny',
-    pinch: 'salt', taste: 'taste', dilute: 'pour', seasoned: 'ready', catFed: 'feed', catPlay: 'ball', catHungry: 'meow', catSleep: 'purr', cooled: 'fizz',
+    pinch: 'salt', taste: 'taste', dilute: 'pour', seasoned: 'ready', catFed: 'feed', catPlay: 'ball', catHungry: 'meow', catSleep: 'purr', cooled: 'fizz', heat: 'select', potBoils: 'boil', coolStart: 'select',
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
     unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', peel: 'select', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
   };
@@ -451,6 +451,9 @@ function boot() {
     if (hit.station) act('goTo', hit.station);
     else if (hit.floor) act('goToPoint', hit.floor.x, hit.floor.z);
   });
+  const TURN_KEYS = { KeyA: 1, KeyD: -1 };
+  let turnHeld = null;
+  const TURN_HOLD = 180; // мс: дольше — уже не тап, а вращение
   const KNIFE_DENY = new Set(['too-close', 'limit', 'short', 'diagonal', 'wobbly', 'rounds-only', 'outside']);
   const release = () => {
     if (!session || mode !== 'kitchen') return;
@@ -472,10 +475,20 @@ function boot() {
     } else if (e.code === 'KeyR') {
       sound.unlock();
       act('rotate');
+    } else if (TURN_KEYS[e.code] && mode === 'kitchen' && session?.panel === 'board') {
+      // A/D: короткое нажатие — доска на четверть оборота, удержание — плавно на любой угол
+      sound.unlock();
+      turnHeld = { code: e.code, dir: TURN_KEYS[e.code], t0: performance.now(), spun: false };
     } else if (e.code === 'KeyM') app.toggleMute();
     else if (e.code === 'KeyQ' && mode === 'kitchen') ui.toggleRecipe();
   });
+  window.addEventListener('keyup', (e) => {
+    if (!turnHeld || e.code !== turnHeld.code) return;
+    if (!turnHeld.spun) act('boardTurn', turnHeld.dir);
+    turnHeld = null;
+  });
   window.addEventListener('blur', () => {
+    turnHeld = null;
     session?.pointerUp();
     app.pause();
   });
@@ -514,6 +527,10 @@ function boot() {
     const real = Math.max(0, (now - last) / 1000);
     last = now;
     if (mode === 'kitchen' && session) {
+      if (turnHeld && now - turnHeld.t0 > TURN_HOLD) {
+        turnHeld.spun = true;
+        session.boardSpin(turnHeld.dir, Math.min(real, CAMPAIGN.maxFrameDt));
+      }
       session.update(real);
       for (const e of session.drain()) dispatch(e);
       if (stream && !session.practice) stream.update(Math.min(real, CAMPAIGN.maxFrameDt));

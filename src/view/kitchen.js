@@ -105,11 +105,18 @@ export function buildKitchen(scene) {
   const ovenGlass = box(0.44, 0.24, 0.01, new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.1, metalness: 0.4 }));
   ovenGlass.position.set(0, 0.45, 0.375);
   stove.add(ovenGlass);
+  // крутилки огня: белая метка показывает, на сколько повёрнута
+  k.stoveKnobs = [];
   for (let i = 0; i < 4; i++) {
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.025, 12), metal);
+    const knob = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.024, 0.025, 18), metal);
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.004, 0.018), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x331100, roughness: 0.4 }));
+    mark.position.set(0, 0.0135, 0.008);
+    knob.add(body, mark);
     knob.rotation.x = Math.PI / 2;
     knob.position.set(-0.2 + i * 0.13, 0.78, 0.37);
     stove.add(knob);
+    k.stoveKnobs.push(knob);
   }
   stove.position.set(st.anchor.x, 0, bc.z);
   scene.add(stove);

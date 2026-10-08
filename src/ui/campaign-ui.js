@@ -21,8 +21,32 @@ const PICON = { potato: '🥔', carrot: '🥕', sausage: '🌭', cucumber: '🥒
 const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', fridge: '🧊', bag: '🛍', table: '🎄', puddle: '🧽' };
 const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука' };
 
+// Шкала пробы: где вкус относительно «в самый раз» — понятнее, чем слово «пресно».
+function tasteScale(last) {
+  const mark = (d) => Math.max(4, Math.min(96, 50 + d * 16));
+  const row = (label, d) => `<span class="tscale" title="${label}: слева — мало, по центру — в самый раз, справа — много"><em>${label}</em><span class="tbar"><i class="lo"></i><i class="ok"></i><i class="hi"></i><b style="left:${mark(d)}%"></b></span></span>`;
+  return row('соль', last.ds ?? last.salt ?? 0) + row('перец', last.dp ?? last.pepper ?? 0);
+}
+
+// Что с водой в кастрюле: понятнее, чем таймер.
+function burnerStatus(s, b) {
+  if (b.state === 'ready') return 'готово — достань';
+  if (b.state !== 'boiling') return (b.heat ?? 0) ? 'огонь горит впустую' : '';
+  if (!(b.heat > 0)) return 'огонь выключен — поверни крутилку';
+  if (b.water === 'boil') return `кипит · ещё ${fmt(b.readyAt - s.t)}${b.heat >= CAMPAIGN.stove.foamHeat ? ' · убавь, убежит!' : ''}`;
+  const left = b.readyAt - s.t;
+  return left > 5000 ? `вода ${Math.round(b.temp)}° · так не закипит` : `вода ${Math.round(b.temp)}° · греется`;
+}
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
 export const TIPS = {
-  cube: 'Нарезка как в жизни: зажми кнопку мыши и проведи ножом через продукт. Сверху вниз — полоски, слева направо — поперёк полосок, получатся кубики. Нож режет то, над чем прошёл: можно резать обе морковки сразу или по одной. Размер — на глаз, по кубику-образцу.',
+  cube: 'Нож режет там, где прошёл: зажми кнопку и веди. Сверху вниз — полоски, поперёк — кубики. Дрогнула рука — кусок выйдет кривым. Мелко и быстро — рубка: качай нож вверх-вниз, понемногу сдвигая вбок. Доску крутят A и D: нажал — четверть оборота, держишь — плавно. Кубик для оливье — 1 см, как образец.',
   round: 'Кружочки: проведи ножом сверху вниз через продукт — отрежешь кружок. Толщина — расстояние до прошлого разреза, сравни с образцом. Вдоль кружочки не режут.',
   grate: 'Тёрка: зажми левую кнопку и води мышью вверх-вниз. Засчитываются только полные движения.',
   peel: 'Чистка: зажми кнопку и води ножом по продукту — кожура снимается там, где прошёл нож. Почисти всё, и продукт сразу останется на доске для нарезки.',
@@ -789,7 +813,7 @@ export class CampaignUI {
     // активные таймеры: кастрюли, горячее, духовка, курьер
     const timers = [];
     for (const b of s.burners) {
-      if (b.state === 'boiling') timers.push(`<span class="timer">${PICON[b.product]} ${fmt(b.readyAt - s.t)}</span>`);
+      if (b.state === 'boiling') timers.push(`<span class="timer">${PICON[b.product]} ${b.readyAt - s.t > 5000 ? '🔥?' : fmt(b.readyAt - s.t)}</span>`);
       else if (b.state === 'ready') timers.push(`<span class="timer done">${PICON[b.product]} готово</span>`);
     }
     for (const x of s.hotList()) timers.push(`<span class="timer hot">${PICON[x.product]} горячо ${Math.ceil(x.left)} с</span>`);
@@ -907,6 +931,32 @@ export class CampaignUI {
       this.el.ghost.classList.remove('hidden');
       this._moveGhost(e);
     });
+    // крутилка огня: зажала и ведёшь по кругу — 30° на деление
+    p.addEventListener('pointerdown', (e) => {
+      const k = e.target.closest('[data-knob]');
+      if (!k) return;
+      e.preventDefault();
+      this.sound.unlock();
+      const r = k.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const i = +k.dataset.knob;
+      this.knob = { i, cx, cy, a0: Math.atan2(e.clientY - cy, e.clientX - cx), h0: +(k.querySelector('span')?.textContent ?? 0), last: null };
+    });
+    window.addEventListener('pointermove', (e) => {
+      const k = this.knob;
+      if (!k) return;
+      let d = Math.atan2(e.clientY - k.cy, e.clientX - k.cx) - k.a0;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      k.acc = (k.acc ?? 0) + d;
+      k.a0 += d;
+      const h = Math.max(0, Math.min(CAMPAIGN.stove.maxHeat, Math.round(k.h0 + (k.acc * 180) / Math.PI / 30)));
+      if (h !== k.last) {
+        k.last = h;
+        this.act('setHeat', k.i, h);
+      }
+    });
+    window.addEventListener('pointerup', () => (this.knob = null));
     window.addEventListener('pointermove', (e) => this.dragDish && this._moveGhost(e));
     window.addEventListener('pointerup', (e) => {
       if (!this.dragDish) return;
@@ -958,13 +1008,13 @@ export class CampaignUI {
         return `${base}|${id}|${s.trayDishes().map((x) => x + s.trayBlock(x)).join(',')}|${d ? d.recipe.steps.map((st) => +s.stepDone(id, st.id)).join('') : ''}|${s.tool}|${s.canConfirm(id ?? '')?.ok}|${extra}|${s.workPlate.owner}`;
       }
       case 'stove':
-        return `${base}|${s.burners.map((b) => b.state + !!b.overflow + b.product).join()}|${s.stoveTasks().map((t) => t.stepId).join()}`;
+        return `${base}|${s.burners.map((b) => b.state + !!b.overflow + b.product + ':' + (b.heat ?? 0)).join()}|${s.stoveTasks().map((t) => t.stepId).join()}`;
       case 'catbowl':
         return `${base}|${s.cat.state}|${s.catCalm()}`;
       case 'oven':
         return `${base}|${s.oven.state}|${s.dishes.chicken?.steps.marinade.done}|${s.dishes.chicken?.done}`;
       case 'sink':
-        return `${base}|${s.dirtyItems().map((x) => x.id).join(',')}|${s.sinkJob?.item}|${s.hotList().map((x) => x.product).join()}`;
+        return `${base}|${s.dirtyItems().map((x) => x.id).join(',')}|${s.sinkJob?.item}|${s.hotList().map((x) => x.product).join()}|${s.sinkCool?.product}`;
       case 'radio':
         return `${base}|${s.radio.broken}|${s.radio.enabled}`;
       case 'garland':
@@ -1000,6 +1050,11 @@ export class CampaignUI {
     if (bar) bar.style.width = s.action && s.action.type !== 'cut' ? `${(s.action.elapsed / s.action.duration) * 100}%` : '0%';
     const live = p.querySelector('[data-live]');
     if (live) live.innerHTML = this._live(s);
+    for (const el of p.querySelectorAll('[data-burner]')) {
+      const b = s.burners[+el.dataset.burner];
+      const txt = b ? burnerStatus(s, b) : '';
+      if (el.textContent !== txt) el.textContent = txt;
+    }
   }
 
   // Часто меняющиеся показатели без пересборки панели.
@@ -1015,7 +1070,7 @@ export class CampaignUI {
         }
         const q = s.boardQuality(it);
         const block = s.transferBlock(it);
-        return `<span class="qbar" title="Аккуратность"><i style="width:${Math.round(q.score * 100)}%"></i></span><span class="q">${it.cuts ? `Ровно на ${Math.round(q.score * 100)} %` : 'Ещё ни одного разреза'}</span><span>кусочков: ${it.pieces?.length ?? it.log.segments.length}</span>${block && it.cuts ? `<span>· ${esc(block)}</span>` : ''}`;
+        return `<span class="qbar" title="Аккуратность"><i style="width:${Math.round(q.score * 100)}%"></i></span><span class="q">${it.cuts ? `Ровно на ${Math.round(q.score * 100)} %` : 'Ещё ни одного разреза'}</span><span>кусочков: ${it.pieces?.length ?? it.log.segments.length}${it.body && q.neat ? ` · кубиков: ${q.neat}` : ''}</span>${block && it.cuts ? `<span>· ${esc(block)}</span>` : it.body ? '<span>· A/D — повернуть доску</span>' : ''}`;
       }
       case 'bowl': {
         const p = s.bowl.pouring;
@@ -1026,11 +1081,12 @@ export class CampaignUI {
         }
         if (s.bowl.shaker) {
           const se = s.dishes[s.bowl.shaker.dishId].season;
-          return `<span class="q">${s.bowl.shaker.kind === 'salt' ? '🧂 Соль' : '🌶 Перец'}: ${se[s.bowl.shaker.kind]} щеп.</span><span>зажми и встряхни над миской — вниз-вверх</span>${se.last ? `<span>· проба: ${esc(se.last.verdict)}</span>` : ''}`;
+          const k = s.bowl.shaker.kind;
+          return `<span class="q">${k === 'salt' ? '🧂 Солонка' : '🌶 Перечница'} в руке · ${se[k]} ${plural(se[k], 'щепотка', 'щепотки', 'щепоток')}</span><span>кликни над миской — щепотка; или зажми и тряхни вниз-вверх</span>${se.last ? tasteScale(se.last) : ''}`;
         }
         const mt = s.mixTarget();
         const ph = s.bowl.owner && s.seasonState(s.bowl.owner);
-        if (ph?.phase === 'spice') return `<span class="q">1. Посоли и поперчи</span><span>→ 2. перемешай → 3. попробуй</span>`;
+        if (ph?.phase === 'spice') return `<span class="q">1. Посоли и поперчи</span><span>возьми 🧂 внизу и кликни над миской 2–3 раза → 2. перемешай → 3. попробуй</span>`;
         if (mt?.ok) {
           const m = Math.min(1, s.mixTurns() / CAMPAIGN.mix.turnsRequired);
           return `<span class="qbar"><i style="width:${m * 100}%"></i></span><span class="q">Однородность ${Math.round(m * 100)} %</span><span>зажми и веди ложку по кругу</span>`;
@@ -1040,7 +1096,7 @@ export class CampaignUI {
           return `<span class="qbar"><i style="width:${t * 100}%"></i></span><span class="q">Досолила — перемешай ещё оборот</span><span>потом попробуй</span>`;
         }
         const se = s.bowl.owner && s.dishes[s.bowl.owner]?.season;
-        if (ph?.phase === 'taste') return se?.last ? `<span class="q">Проба: ${esc(se.last.verdict)}</span>${se.last.ok ? '<span>— можно подавать</span>' : '<span>— поправь щепоткой и перемешай</span>'}` : '<span class="q">3. Попробуй ложкой</span><span>соль разошлась — проба честная</span>';
+        if (ph?.phase === 'taste') return se?.last ? `<span class="q">Проба: ${esc(se.last.verdict)}</span>${tasteScale(se.last)}${se.last.ok ? '<span>— можно подавать: «✓ Вкус готов»</span>' : se.last.ds > 0 || se.last.dp > 0 ? '<span>— спаси: «🥔 Досыпать картошки»</span>' : '<span>— добавь щепотку и перемешай</span>'}` : '<span class="q">3. Попробуй ложкой</span><span>соль разошлась — проба честная</span>';
         return mt?.block ? `<span>${esc(mt.block)}</span>` : '';
       }
       case 'tray': {
@@ -1056,6 +1112,10 @@ export class CampaignUI {
         return '';
       }
       case 'sink':
+        if (s.sinkCool) {
+          const k = Math.min(1, s.sinkCool.run / CAMPAIGN.cool.underTap);
+          return `<span class="qbar"><i style="width:${k * 100}%"></i></span><span class="q">${s.sinkCool.open ? 'Вода льётся — остывает' : 'Зажми над раковиной — откроется кран'}</span><span>${Math.round(k * 100)} %</span>`;
+        }
         return s.sinkJob ? `Чистота: ${Math.round(s.sinkJob.mask.coverage() * 100)} %` : '';
       case 'puddle': {
         const p = s._activePuddle();
@@ -1066,7 +1126,7 @@ export class CampaignUI {
       case 'garland':
         return s.garland.broken ? `Контакт: ${Math.round((s.garland.progress / CAMPAIGN.durations.garlandHold) * 100)} %` : '';
       case 'stove':
-        return s.burners.filter((b) => b.state === 'boiling').map((b) => `${PICON[b.product]} ${esc(PRODUCTS[b.product].name)}: ${fmt(b.readyAt - s.t)}`).join(' · ');
+        return '<span>Сильный огонь — быстрее закипит, но может убежать. Закипело — убавь до 4–5.</span>';
       case 'oven':
         return s.oven.state === 'baking' ? `Запекание: ${Math.round(s.oven.doneness * 100)} % · готово через ${fmt(s.oven.readyAt - s.t)}` : '';
       default:
@@ -1098,6 +1158,7 @@ export class CampaignUI {
         return `<h2>${it.grater ? '🧀 Тёрка' : it.peel ? '🔪 Чистка' : '🔪 Доска'} · ${esc(PRODUCTS[it.product].name)}${it.qty > 1 ? ' ×' + it.qty : ''}<span class="sub">${esc(s.recipes[it.dishId].name)}</span></h2>
           <div class="dock">${backBtn}<div class="dock-items">${chips}</div>
             <div class="dock-main">
+              ${it.body ? this._btn('⟲ <kbd>A</kbd>', 'boardTurn', [1], 'ghost turn', busy, 'Повернуть доску против часовой (держи A — плавно)') + this._btn('<kbd>D</kbd> ⟳', 'boardTurn', [-1], 'ghost turn', busy, 'Повернуть доску по часовой (держи D — плавно)') : ''}
               ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
               ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
               ${(it.grater && !s.practice) || it.peel ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : ''), busy, block ?? '')}
@@ -1123,8 +1184,10 @@ export class CampaignUI {
           const dis = busy || !!ss.block;
           const canTaste = ss.phase === 'taste' && !ss.unmixed;
           const tasteWhy = ss.phase !== 'taste' ? 'Сначала перемешай — соль лежит сверху' : ss.unmixed ? 'Досолила — ещё оборот ложкой' : '';
-          season = chip('🧂', `Соль · ${ss.salt}`, 'seasonPick', [id, 'salt'], hand === 'salt' ? 'active' : '', dis, ss.block ?? '') + chip('🌶', `Перец · ${ss.pepper}`, 'seasonPick', [id, 'pepper'], hand === 'pepper' ? 'active' : '', dis, ss.block ?? '');
-          if (ss.phase === 'taste') season += chip('👅', 'Попробовать', 'seasonTaste', [id], canTaste ? '' : 'locked', dis, tasteWhy) + (ss.salt || ss.pepper ? chip('💧', 'Разбавить', 'seasonDilute', [id], canTaste ? '' : 'locked', dis, tasteWhy) : '');
+          season = chip('🧂', hand === 'salt' ? `Соль в руке · ${ss.salt}` : `Соль · ${ss.salt}`, 'seasonPick', [id, 'salt'], hand === 'salt' ? 'active' : '', dis, ss.block ?? 'Взять солонку: потом кликай над миской') + chip('🌶', hand === 'pepper' ? `Перец в руке · ${ss.pepper}` : `Перец · ${ss.pepper}`, 'seasonPick', [id, 'pepper'], hand === 'pepper' ? 'active' : '', dis, ss.block ?? 'Взять перечницу: потом кликай над миской');
+          // пересол спасают отварной картошкой — воду в салат не льют
+          const salty = ss.last && (ss.last.ds > 0 || ss.last.dp > 0);
+          if (ss.phase === 'taste') season += chip('👅', 'Попробовать', 'seasonTaste', [id], canTaste ? '' : 'locked', dis, tasteWhy) + (salty ? chip('🥔', 'Досыпать картошки', 'seasonDilute', [id], canTaste ? '' : 'locked', dis, tasteWhy || 'Пересолила — досыпь отварной картошки, соли станет меньше') : '');
           if (ss.phase === 'spice') main = this._btn('🥄 Посолено — мешать', 'seasonDone', [id], 'primary big', dis);
           if (ss.phase === 'taste') main = this._btn('✓ Вкус готов', 'seasonDone', [id], 'primary big ' + (canTaste ? '' : 'soft-disabled'), dis, tasteWhy);
         }
@@ -1147,9 +1210,13 @@ export class CampaignUI {
             let act = '';
             if (b.overflow) act = this._btn('🔥 Убавить огонь', 'reduceHeat', [b.i], 'danger', busy);
             else if (b.state === 'ready') act = this._btn(`${PICON[b.product]} Достать`, 'takePot', [b.i], 'primary', busy);
-            else if (b.state === 'boiling') act = `<span class="small">${PICON[b.product]} ${esc(PRODUCTS[b.product].name)} варится</span>`;
-            else act = tasks.length ? tasks.map((t) => this._btn(`${PICON[t.product]} ${esc(PRODUCTS[t.product].name)} · ${fmt(s.boilTime(t.product))}`, 'placePot', [b.i, `${t.dishId}:${t.stepId}`], 'primary', busy)).join('') : '<span class="small">свободна</span>';
-            return `<div class="burner ${b.state}"><b>${name}</b> ${act}</div>`;
+            else if (b.state === 'boiling') act = `<span class="small">${PICON[b.product]} ${esc(PRODUCTS[b.product].name)}</span>`;
+            else act = tasks.length ? tasks.map((t) => this._btn(`${PICON[t.product]} Поставить ${esc(PRODUCTS[t.product].name.toLowerCase())}`, 'placePot', [b.i, `${t.dishId}:${t.stepId}`, 0], 'primary', busy)).join('') : '<span class="small">свободна</span>';
+            // крутилка огня: тяни по кругу или −/+; 0 — выключено, 9 — максимум
+            const heat = b.heat ?? 0;
+            const knob = `<div class="knob ${heat ? 'on' : ''}" data-knob="${b.i}" style="--a:${-135 + heat * 30}deg" title="Крутилка огня: зажми и поверни по кругу"><i></i><span>${heat}</span></div>`;
+            const pm = `<div class="kbtns">${this._btn('−', 'setHeat', [b.i, heat - 1], 'ghost', heat <= 0, 'Слабее')}${this._btn('+', 'setHeat', [b.i, heat + 1], 'ghost', heat >= CAMPAIGN.stove.maxHeat, 'Сильнее')}</div>`;
+            return `<div class="burner ${b.state}">${knob}<div class="bcol"><b>${name}</b>${pm}<span class="bstat" data-burner="${b.i}">${burnerStatus(s, b)}</span>${act}</div></div>`;
           })
           .join('');
         return `<h2>♨️ Плита · две конфорки</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="burners2">${burners}</div></div><div class="row">${bar}</div>${tasks.length || s.burners.some((b) => b.state !== 'empty') ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
@@ -1170,7 +1237,7 @@ export class CampaignUI {
       case 'sink': {
         const dirty = s.dirtyItems();
         const btns = dirty.map((d) => this._btn(`🧽 ${esc(d.label)}`, 'sinkSelect', [d.id], s.sinkJob?.item === d.id ? 'primary active' : 'ghost', busy)).join('');
-        const cool = s.hotList().map((x) => this._btn(`❄️ Остудить: ${PICON[x.product]} ${esc(PRODUCTS[x.product].name.toLowerCase())}`, 'coolProduct', [x.product], 'primary', busy)).join('');
+        const cool = s.hotList().map((x) => this._btn(`❄️ Под кран: ${PICON[x.product]} ${esc(PRODUCTS[x.product].name.toLowerCase())}`, 'coolPick', [x.product], s.sinkCool?.product === x.product ? 'primary active' : 'primary', busy)).join('');
         return `<h2>🚰 Раковина</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${cool}${btns || (cool ? '' : '<span class="small">Вся посуда чистая, остужать нечего.</span>')}</div></div><div class="row">${bar}</div>${live}`;
       }
       case 'puddle':

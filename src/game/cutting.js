@@ -11,6 +11,7 @@ export function makePiece(id, x, z, w, d) {
 }
 
 export function pieceVolume(p) {
+  if (p.area != null) return p.area; // кусок с сетки (raster-cut.js)
   return p.polygon ? polygonArea(p.polygon) : p.w * p.d;
 }
 
