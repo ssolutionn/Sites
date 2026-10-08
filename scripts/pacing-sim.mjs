@@ -125,11 +125,26 @@ function ui(fn) {
   waitAction();
   return r;
 }
-function board(key) {
-  go('board');
-  ui(() => s.boardSelect(key));
-  const it = s.boardCur();
-  tip(it.grater ? 'grate' : it.log ? 'round' : 'cube');
+// Чистка зигзагом ножа по всем копиям продукта, пока не дочищено.
+function peelIt(it) {
+  const b = bounds(it.pieces);
+  const U = BOARD_UNIT;
+  for (let pass = 0; pass < 4 && s.board.items[it.key]; pass++) {
+    const pts = [];
+    const rows = 12;
+    for (let r = 0; r <= rows; r++) {
+      const z = (b.minZ + ((b.maxZ - b.minZ) * r) / rows + pass * 0.12) * U;
+      pts.push([(r % 2 ? b.maxX + 0.2 : b.minX - 0.2) * U, z], [(r % 2 ? b.minX - 0.2 : b.maxX + 0.2) * U, z]);
+    }
+    dragPath(pts);
+  }
+}
+function work(it) {
+  tip(it.grater ? 'grate' : it.peel ? 'peel' : it.log ? 'round' : 'cube');
+  if (it.peel) {
+    peelIt(it);
+    return;
+  }
   if (it.grater) {
     for (let c = 0; c < it.grater.cycles + 1 && !it.grater.complete; c++) {
       s.pointer('down', 0, 0.05);
@@ -150,7 +165,18 @@ function board(key) {
     else if (it.log) rounds(it);
   }
   think(PACE.inspect);
-  if (s.board.items[key]) ui(() => s.boardTransfer());
+  if (s.board.items[it.key]) ui(() => s.boardTransfer());
+}
+// Доска: выбрать шаг и сделать его; после чистки очищенный продукт сразу режется или трётся.
+function board(key) {
+  go('board');
+  ui(() => s.boardSelect(key));
+  let it = s.boardCur();
+  work(it);
+  if (it.peel && s.boardCur() && s.boardCur() !== it) {
+    it = s.boardCur();
+    work(it);
+  }
 }
 function wishOf(dish, kind) {
   return s.requests.some((r) => r.known && r.recipe === dish && r.kind === kind);
@@ -159,15 +185,18 @@ function adds(dish) {
   go('bowl');
   for (const t of s.bowlTasks().filter((t) => t.dishId === dish && t.type === 'add' && t.state === 'ready')) ui(() => s.bowlAdd(dish, t.stepId, t.product === 'mayo' && wishOf(dish, 'lightMayo') ? 'light' : 'full'));
 }
-// Вкус «как у игрока»: щепотки наугад, проба, поправка по ответу, ещё проба.
+// Вкус «как у игрока»: посолить и поперчить наугад → перемешать → попробовать, поправить, ещё оборот, ещё проба.
 function season(dish) {
   readPhone();
   go('bowl');
   tip('season');
-  const se = s.dishes[dish].season;
   const noPepper = wishOf(dish, 'noPepper');
   for (let i = 0; i < 3; i++) ui(() => s.seasonAdd(dish, 'salt'));
   if (!noPepper) ui(() => s.seasonAdd(dish, 'pepper'));
+  ui(() => s.seasonDone(dish));
+}
+function taste(dish) {
+  const se = s.dishes[dish].season;
   for (let k = 0; k < 4; k++) {
     ui(() => s.seasonTaste(dish));
     read(1.5);
@@ -176,6 +205,7 @@ function season(dish) {
     if (l.salt > 0 || l.pepper > 0) ui(() => s.seasonDilute(dish));
     if (l.salt < 0) ui(() => s.seasonAdd(dish, 'salt'));
     if (l.pepper < 0) ui(() => s.seasonAdd(dish, 'pepper'));
+    if (se.unmixed) stir(1.2);
   }
   ui(() => s.seasonDone(dish));
 }
@@ -207,9 +237,8 @@ function boiled(product) {
   go('sink');
   ui(() => s.coolProduct(product));
 }
-function stir() {
+function stir(turns = 4.2) {
   tip('bowl');
-  const turns = 4.2;
   const pts = [];
   for (let i = 0; i <= turns * 36; i++) pts.push([Math.cos((i / 36) * Math.PI * 2) * 0.1, Math.sin((i / 36) * Math.PI * 2) * 0.1]);
   dragPath(pts, 0.1 * Math.PI * 2 * PACE.stirSpeed);
@@ -302,20 +331,21 @@ const days = [
   () => {
     read(PACE.recipeCheck);
     placeAll();
-    for (const k of ['carrot', 'sausage', 'cucumber']) {
+    for (const k of ['carrot', 'sausage', 'pickle']) {
       board('olivier:' + k);
       handleOverflow();
       catCheck();
     }
     boiled('egg');
-    board('olivier:egg');
+    board('olivier:peelEgg');
     adds('olivier');
     readPhone();
     fixHome();
     boiled('potato');
-    board('olivier:potato');
+    board('olivier:peelPotato');
     season('olivier');
     stir();
+    taste('olivier');
   },
   () => {
     read(PACE.recipeCheck);
@@ -326,11 +356,12 @@ const days = [
     for (const k of ['crab', 'cucumber']) board('crab:' + k);
     catCheck();
     boiled('egg');
-    board('crab:egg');
+    board('crab:peelEgg');
     collect();
     adds('crab');
     season('crab');
     stir();
+    taste('crab');
   },
   () => {
     read(PACE.recipeCheck);
@@ -349,6 +380,7 @@ const days = [
     catCheck();
     wash('tray');
     boiled('egg');
+    board('eggs:peelEgg');
     tray('eggs');
     s.setTool('knife');
     for (const e of s.dishes.eggs.work.eggs) clickAt(e.x, e.z);
@@ -357,6 +389,7 @@ const days = [
     adds('eggs');
     season('eggs');
     stir();
+    taste('eggs');
     tray('eggs');
     s.setTool('spoon');
     fill(s.dishes.eggs.work.eggs.flatMap((e) => e.halves));
@@ -373,10 +406,11 @@ const days = [
     board('tartlets:cheese');
     catCheck();
     boiled('egg');
-    board('tartlets:egg');
+    board('tartlets:peelEgg');
     adds('tartlets');
     season('tartlets');
     stir();
+    taste('tartlets');
     collect();
     tray('tartlets');
     s.setTool('spoon');
@@ -401,6 +435,7 @@ const days = [
     adds('tomatoes');
     season('tomatoes');
     stir();
+    taste('tomatoes');
     tray('tomatoes');
     s.setTool('spoon');
     fill(s.dishes.tomatoes.work.toms);
@@ -418,7 +453,7 @@ const days = [
     readPhone();
     fixHome();
     boiled('potato');
-    board('shuba:potato');
+    board('shuba:peelPotato');
     board('shuba:herring');
     tip('boardDirty');
     wash('board');

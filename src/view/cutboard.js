@@ -22,7 +22,8 @@ const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vect
 /** Внешний вид продуктов на доске: kind — рисунок в шейдере, h — высота купола (кубиков). */
 export const LOOK = {
   carrot: { kind: 0, h: 0.95, base: 0.24, k: 1, rough: 0.55, lean: 0.1 },
-  cucumber: { kind: 1, h: 0.95, base: 0.24, k: 0.3, rough: 0.42, lean: 0.12 },
+  pickle: { kind: 1, h: 0.95, base: 0.24, k: 0.3, rough: 0.42, lean: 0.12 },
+  cucumber: { kind: 10, h: 0.95, base: 0.24, k: 0.3, rough: 0.32, lean: 0.12 },
   potato: { kind: 2, h: 1.2, base: 0.3, k: 1, rough: 0.78, bumps: 0.08, lean: 0.12 },
   egg: { kind: 3, h: 1.2, base: 0.3, k: 1, rough: 0.28, lean: 0.2 },
   sausage: { kind: 4, h: 1.15, base: 0.3, k: 0, rough: 0.5, lean: 0.08 },
@@ -134,16 +135,47 @@ vec3 productColor(vec3 p, float skin) {
     c = mix(fl, vec3(.62, .64, .66) * (.85 + .15 * n), skin);
   } else if (uKind < 9.5) { // лук: кольца
     c = vec3(.96, .95, .86) * (1. - .1 * smoothstep(.04, .0, abs(fract(r * 5.) - .5) - .45));
+  } else if (uKind < 10.5) { // свежий огурец: тёмно-зелёная глянцевая кожица со светлыми штрихами, сочная мякоть
+    float ang = atan(p.y - yc * .6, p.z);
+    float streak = smoothstep(.7, .95, sin(ang * 9. + vnoise(vec3(p.x * 2., 0., 0.)) * 3.));
+    vec3 sk = mix(vec3(.12, .38, .1), vec3(.42, .64, .22), streak * .55) * (.92 + .08 * vnoise(p * 4.));
+    vec3 fl = mix(vec3(.9, .96, .74), vec3(.66, .84, .44), smoothstep(.62, .97, r));
+    float seed = spots(vec3(p.x, p.y * 1.4, p.z), 3.2, .22) * smoothstep(.48, .34, r);
+    fl = mix(fl, vec3(.97, .98, .9), seed * .9);
+    c = mix(fl, sk, skin);
   }
   // палитра задана в sRGB, освещение считается в линейном пространстве
   return pow(c, vec3(2.2));
 }
 `;
 
+// Кожура при чистке: мундир картофеля, скорлупа яйца (трещинки появляются после первого движения ножом).
+const JACKET = /* glsl */ `
+uniform sampler2D uPeel;
+uniform vec2 uPeelSize;
+uniform vec3 uJacket;
+uniform float uCrack;
+varying vec2 vBoard;
+vec3 withJacket(vec3 c, vec3 p, float skin) {
+  float peeled = texture2D(uPeel, vBoard / uPeelSize + .5).r;
+  float n = vnoise(p * 5.);
+  vec3 j = uJacket * (.88 + .12 * n);
+  if (uKind > 2.5 && uKind < 3.5) { // яичная скорлупа: мелкие крапинки и трещины
+    j *= 1. - .08 * spots(p, 9., .06);
+    float crack = smoothstep(.035, .0, abs(vnoise(p * 3.1) - .5)) * uCrack;
+    j = mix(j, vec3(.55, .48, .4), crack * .8);
+  } else { // мундир: тёмные «глазки» и землистые пятна
+    j *= (1. - .35 * spots(p, 1.6, .06)) * (.9 + .1 * vnoise(p * 11.));
+  }
+  return mix(c, pow(j, vec3(2.2)), skin * (1. - smoothstep(.25, .6, peeled)));
+}
+`;
+
 const mats = new Map();
-/** Материал продукта: один шейдер, разные параметры. */
-export function productMaterial(product) {
-  if (mats.has(product)) return mats.get(product);
+/** Материал продукта: один шейдер, разные параметры. peel — отдельный материал с маской чистки. */
+export function productMaterial(product, peel = null) {
+  const key = product + (peel ? ':peel' : '');
+  if (mats.has(key)) return mats.get(key);
   const sh = shapeOf(product);
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: sh.look.rough ?? 0.6, metalness: 0 });
   const uniforms = {
@@ -151,17 +183,24 @@ export function productMaterial(product) {
     uDim: { value: new THREE.Vector4(sh.W, sh.D, sh.look.h, sh.look.base ?? 0) },
     uBase: { value: new THREE.Color().setHex(PRODUCTS[product]?.color ?? 0xdddddd, THREE.LinearSRGBColorSpace) },
   };
+  if (peel) {
+    uniforms.uPeel = { value: peel.texture };
+    uniforms.uPeelSize = { value: peel.size };
+    uniforms.uJacket = { value: new THREE.Color().setHex(PRODUCTS[product]?.peel ?? 0x9a7448, THREE.LinearSRGBColorSpace) };
+    uniforms.uCrack = peel.crack;
+  }
+  mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 pp;\nattribute float skin;\nvarying vec3 vPP;\nvarying float vSkin;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPP = pp;\nvSkin = skin;');
+      .replace('#include <common>', '#include <common>\nattribute vec3 pp;\nattribute float skin;\nvarying vec3 vPP;\nvarying float vSkin;' + (peel ? '\nvarying vec2 vBoard;' : ''))
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPP = pp;\nvSkin = skin;' + (peel ? '\nvBoard = position.xz;' : ''));
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\n' + NOISE)
-      .replace('vec4 diffuseColor = vec4( diffuse, opacity );', 'vec4 diffuseColor = vec4( productColor(vPP, vSkin) * diffuse, opacity );');
+      .replace('#include <common>', '#include <common>\n' + NOISE + (peel ? JACKET : ''))
+      .replace('vec4 diffuseColor = vec4( diffuse, opacity );', peel ? 'vec4 diffuseColor = vec4( withJacket(productColor(vPP, vSkin), vPP, vSkin) * diffuse, opacity );' : 'vec4 diffuseColor = vec4( productColor(vPP, vSkin) * diffuse, opacity );');
   };
-  mat.customProgramCacheKey = () => 'product-v1';
-  mats.set(product, mat);
+  mat.customProgramCacheKey = () => (peel ? 'product-peel-v1' : 'product-v1');
+  mats.set(key, mat);
   return mat;
 }
 
@@ -559,7 +598,7 @@ export class CutBoardView {
       const mc = p.m ?? ctr;
       const target = { x: (ctr.x - (mc.cx ?? ctr.x)) * SPREAD, z: (ctr.z - (mc.cz ?? ctr.z)) * SPREAD };
       if (!m) {
-        m = new THREE.Mesh(pieceGeometry(p, cube.product), productMaterial(cube.product));
+        m = new THREE.Mesh(pieceGeometry(p, cube.product), cube.peel ? productMaterial(cube.product, this._peelState(cube.peel)) : productMaterial(cube.product));
         m.castShadow = true;
         m.receiveShadow = true;
         const parent = this.prev.find((q) => ctr.x >= q.x - 1e-6 && ctr.x <= q.x + q.w + 1e-6 && ctr.z >= q.z - 1e-6 && ctr.z <= q.z + q.d + 1e-6 && !alive.has(q.id));
@@ -593,8 +632,9 @@ export class CutBoardView {
     this.lastCuts = it?.cuts ?? 0;
     this._updateCrumbs(dt);
 
-    this._setSample(it && !it.grater ? it.product : null, !!it?.log);
-    this.sample.visible = !!it && !it.grater;
+    this._setSample(it && !it.grater && !it.peel ? it.product : null, !!it?.log);
+    this.sample.visible = !!it && !it.grater && !it.peel;
+    if (cube?.peel) this._syncPeel(cube, pointer);
 
     // нож, рука, полоса будущего разреза, подсказка
     const showTools = closeup && !!it && !it.grater && s.panel === 'board';
@@ -651,7 +691,8 @@ export class CutBoardView {
     } else {
       kx = pointer ? pointer.x / UNIT : 0;
       kz = pointer ? pointer.z / UNIT : 0;
-      ky = ((topH(kx, kz) ?? 0) + 0.35) * UNIT + 0.006;
+      // при чистке нож скользит по поверхности продукта, лезвие плашмя к кожуре
+      ky = it.peel && s.pointerDown ? (topH(kx, kz) ?? 0) * UNIT + 0.002 : ((topH(kx, kz) ?? 0) + 0.35) * UNIT + 0.006;
       this.idleT += dt;
       this.knifeAlong = null;
     }
@@ -676,7 +717,7 @@ export class CutBoardView {
     }
 
     // подсказка: куда вести нож дальше (первый день или если замешкалась)
-    const wantGuide = !act && !stroke && (s.dayIndex === 0 || this.idleT > 4) && (this.idleT > 0.6);
+    const wantGuide = !act && !stroke && !it.peel && (s.dayIndex === 0 || this.idleT > 4) && (this.idleT > 0.6);
     if (wantGuide && cube) {
       const g = suggestCut(pieces);
       if (g) {
@@ -712,6 +753,47 @@ export class CutBoardView {
     // позиция = P − R·P + смещение
     const RP = _v3.copy(P).applyQuaternion(m.quaternion);
     m.position.set(P.x - RP.x + off.x * UNIT, P.y - RP.y, P.z - RP.z + off.z * UNIT);
+  }
+
+  // Маска чистки → текстура для шейдера кожуры (одна на доску, материал общий по продукту).
+  _peelState(mask) {
+    if (!this.peel || this.peel.cols !== mask.cols || this.peel.rows !== mask.rows) {
+      const data = new Uint8Array(mask.cols * mask.rows);
+      const texture = new THREE.DataTexture(data, mask.cols, mask.rows, THREE.RedFormat, THREE.UnsignedByteType);
+      texture.magFilter = texture.minFilter = THREE.LinearFilter;
+      texture.needsUpdate = true;
+      this.peel = { cols: mask.cols, rows: mask.rows, data, texture, size: new THREE.Vector2(mask.width, mask.depth), crack: { value: 0 }, version: -1 };
+    }
+    this.peel.size.set(mask.width, mask.depth);
+    return this.peel;
+  }
+
+  _syncPeel(it, pointer) {
+    const st = this._peelState(it.peel);
+    const mask = it.peel;
+    if (st.version === mask.version && st.key === it.key) return;
+    const grew = st.key === it.key && mask.version > st.version;
+    st.version = mask.version;
+    st.key = it.key;
+    for (let i = 0; i < st.data.length; i++) st.data[i] = Math.min(255, Math.round(Math.min(1, mask.level[i] * 2) * 255));
+    st.texture.needsUpdate = true;
+    st.crack.value = mask.coverage() > 0 ? 1 : 0;
+    // очистки летят из-под ножа: полоски мундира или осколки скорлупы
+    if (grew && pointer) {
+      const col = new THREE.Color(PRODUCTS[it.product]?.peel ?? 0x9a7448);
+      for (let i = 0; i < 3; i++) {
+        this.crumbs.push({
+          p: new THREE.Vector3(pointer.x + (Math.random() - 0.5) * 0.01, 0.8 * UNIT, pointer.z + (Math.random() - 0.5) * 0.01),
+          v: new THREE.Vector3((Math.random() - 0.5) * 0.12, 0.1 + Math.random() * 0.08, (Math.random() - 0.5) * 0.12),
+          s: (it.product === 'egg' ? 0.11 : 0.13) * UNIT,
+          sh: it.product === 'egg' ? [1.1, 0.16, 0.9] : [1.8, 0.2, 0.7], // осколок скорлупы / тонкая полоска мундира
+          r: Math.random() * 6,
+          life: 4 + Math.random(),
+          col,
+        });
+      }
+      if (this.crumbs.length > 96) this.crumbs.splice(0, this.crumbs.length - 96);
+    }
   }
 
   _showLine(mesh, axis, pos, from, to, color, opacity, it) {
@@ -774,18 +856,22 @@ export class CutBoardView {
     let n = 0;
     for (const c of this.crumbs) {
       c.life -= dt;
-      if (c.p.y > c.s / 2) {
+      const sh = c.sh ?? [1, 1, 1];
+      const hy = (c.s * sh[1]) / 2;
+      if (c.p.y > hy) {
         c.v.y -= 1.6 * dt;
         c.p.addScaledVector(c.v, dt);
         c.r += dt * 8;
-        if (c.p.y < c.s / 2) {
-          c.p.y = c.s / 2;
+        if (c.p.y < hy) {
+          c.p.y = hy;
           c.v.set(0, 0, 0);
+          c.landed = true;
         }
       }
-      const k = Math.min(1, c.life / 0.6);
-      q.setFromEuler(new THREE.Euler(c.r, c.r * 0.7, 0));
-      sc.setScalar(c.s * Math.max(0, k));
+      const k = Math.max(0, Math.min(1, c.life / 0.6));
+      // плоские очистки ложатся на доску, кубики-крошки остаются как упали
+      q.setFromEuler(c.landed && c.sh ? new THREE.Euler(0, c.r, 0) : new THREE.Euler(c.r, c.r * 0.7, 0));
+      sc.set(c.s * k * sh[0], c.s * k * sh[1], c.s * k * sh[2]);
       mtx.compose(c.p, q, sc);
       this.crumbMesh.setMatrixAt(n, mtx);
       this.crumbMesh.setColorAt(n, c.col);

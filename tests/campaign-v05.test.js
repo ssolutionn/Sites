@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CAMPAIGN } from '../src/campaign/data.js';
 import { emptySave, recordDay, parseSave } from '../src/campaign/save.js';
-import { KitchenSession, run, arrive, waitAction, cutCubes, seasonTo, stir } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, seasonTo, tasteDone, stir, peel } from './helpers-campaign.js';
 
 test('плита: две кастрюли варятся параллельно, у каждой свой срок; одна конфорка в испытании', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 2 });
@@ -37,19 +37,25 @@ test('остывание: горячее не режется, через сро�
   waitAction(s);
   assert.ok(s.hot.egg > s.t);
   arrive(s, 'board');
-  assert.equal(s.boardSelect('olivier:egg'), false);
+  assert.equal(s.boardSelect('olivier:peelEgg'), false);
   assert.match(s.hint.text, /горяч/);
   run(s, CAMPAIGN.cool.time + 1);
-  assert.ok(s.boardSelect('olivier:egg'));
+  assert.ok(s.boardSelect('olivier:peelEgg'));
 });
 
-test('вкус: норма скрыта, проба говорит честно, пересол разбавляется, оценка по точности', () => {
+test('вкус: посолить → перемешать → попробовать; проба честная, пересол разбавляется, оценка по точности', () => {
   const s = new KitchenSession({ dayIndex: 1, seed: 4 });
   const se = s.dishes.crab.season;
   s.bowl.owner = 'crab';
-  for (const st of ['boilEgg', 'crab', 'egg', 'cucumber', 'corn', 'mayo']) s.dishes.crab.steps[st].done = true;
+  for (const st of ['boilEgg', 'peelEgg', 'crab', 'egg', 'cucumber', 'corn', 'mayo']) s.dishes.crab.steps[st].done = true;
   arrive(s, 'bowl');
   for (let i = 0; i < se.target.salt + 2; i++) { s.seasonAdd('crab', 'salt'); waitAction(s); }
+  assert.equal(s.seasonTaste('crab'), false, 'до перемешивания соль сверху — проба запрещена');
+  assert.match(s.hint.text, /перемешай/);
+  assert.ok(s.seasonDone('crab'));
+  stir(s);
+  assert.ok(s.stepDone('crab', 'mix'));
+  assert.equal(s.dishes.crab.done, false);
   s.seasonTaste('crab');
   waitAction(s);
   assert.match(se.last.verdict, /пересол/);
@@ -58,11 +64,20 @@ test('вкус: норма скрыта, проба говорит честно,
   assert.equal(se.salt, se.target.salt + 1);
   s.seasonDilute('crab');
   waitAction(s);
+  // перец после перемешивания: щепотка — и ещё оборот ложкой, иначе проба запрещена
   for (let i = se.pepper; i < se.target.pepper; i++) { s.seasonAdd('crab', 'pepper'); waitAction(s); }
+  if (se.target.pepper > 0) {
+    assert.equal(s.seasonTaste('crab'), false);
+    assert.match(s.hint.text, /ещё оборот/);
+    stir(s, 1.2);
+  }
   s.seasonTaste('crab');
   waitAction(s);
   assert.equal(se.last.ok, true);
   assert.equal(s.seasonQuality('crab'), 1);
+  tasteDone(s, 'crab', { taste: false });
+  assert.ok(s.dishes.crab.done);
+  assert.equal(s.dishes.crab.parts.taste, 100);
   se.salt += 2;
   assert.ok(s.seasonQuality('crab') < 0.75);
 });
@@ -183,7 +198,7 @@ test('день 1 целиком через API даёт звёзды и меда
   waitAction(s);
   s.placePot();
   waitAction(s);
-  for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:cucumber']) {
+  for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:pickle']) {
     arrive(s, 'board');
     s.boardSelect(key);
     cutCubes(s);
@@ -198,12 +213,11 @@ test('день 1 целиком через API даёт звёзды и меда
     arrive(s, 'sink');
     s.coolProduct(s.burners[b].product ?? (b ? 'egg' : 'potato'));
     waitAction(s);
-    for (const key of b ? ['olivier:egg'] : ['olivier:potato']) {
-      arrive(s, 'board');
-      assert.ok(s.boardSelect(key), s.hint?.text);
-      cutCubes(s);
-      assert.ok(s.boardTransfer(), s.hint?.text);
-    }
+    arrive(s, 'board');
+    assert.ok(s.boardSelect(b ? 'olivier:peelEgg' : 'olivier:peelPotato'), s.hint?.text);
+    peel(s);
+    cutCubes(s);
+    assert.ok(s.boardTransfer(), s.hint?.text);
   }
   arrive(s, 'bowl');
   s.bowlAdd('olivier', 'peas');
@@ -212,6 +226,7 @@ test('день 1 целиком через API даёт звёзды и меда
   waitAction(s);
   seasonTo(s, 'olivier');
   stir(s);
+  tasteDone(s, 'olivier');
   assert.ok(s.dishes.olivier.done);
   for (const p of [...s.puddles]) s.puddles = s.puddles.filter((x) => x !== p);
   const r = s.finishDay();

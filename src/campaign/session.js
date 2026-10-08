@@ -596,7 +596,10 @@ export class KitchenSession {
   // Отпускание кнопки, уход курсора за canvas, потеря фокуса — удержание прекращается.
   pointerUp() {
     this.pointerDown = false;
-    if (this.board) this.board.stroke = null;
+    if (this.board) {
+      this.board.stroke = null;
+      this.board.peelLast = null;
+    }
     this.bowl.stirrer?.release();
     this.bowl.pouring?.tracker.release();
     const it = this.board.current && this.board.items[this.board.current];
@@ -819,8 +822,9 @@ export class KitchenSession {
       }
       parts.wish = sum / reqs.length;
     }
-    if (dish.season && dish.steps.season?.done && parts.taste == null) {
-      const q = dish.steps.season.q;
+    const tasteRec = dish.steps.taste ?? dish.steps.season;
+    if (dish.season && tasteRec?.done && parts.taste == null) {
+      const q = tasteRec.q;
       parts.taste = q * 100;
       notes.splice(1, 0, q >= 0.999 ? 'Посолено идеально' : q >= 0.7 ? 'Вкус почти в норме' : dish.season.salt > dish.season.target.salt ? 'Пересолено' : 'Пресновато');
     }

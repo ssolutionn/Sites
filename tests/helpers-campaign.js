@@ -80,8 +80,8 @@ export function zigzag(s, cx, cz, w, d, rows = 7) {
   s.pointer('up', 0, 0);
 }
 
-// Посолить и поперчить ровно в норму блюда, попробовать и подтвердить (у миски).
-export function seasonTo(s, dishId, { salt = 0, pepper = 0, taste = true } = {}) {
+// Посолить и поперчить до перемешивания (у миски): норма блюда + смещение, затем «посолено — мешать».
+export function seasonTo(s, dishId, { salt = 0, pepper = 0 } = {}) {
   const se = s.dishes[dishId].season;
   arrive(s, 'bowl');
   for (let i = se.salt; i < se.target.salt + salt; i++) {
@@ -92,11 +92,41 @@ export function seasonTo(s, dishId, { salt = 0, pepper = 0, taste = true } = {})
     s.seasonAdd(dishId, 'pepper');
     waitAction(s);
   }
+  if (!s.seasonDone(dishId)) throw new Error('посолено: ' + s.hint?.text);
+}
+
+// После перемешивания: попробовать и подтвердить вкус.
+export function tasteDone(s, dishId, { taste = true } = {}) {
   if (taste) {
-    s.seasonTaste(dishId);
+    if (!s.seasonTaste(dishId)) throw new Error('проба: ' + s.hint?.text);
     waitAction(s);
   }
   if (!s.seasonDone(dishId)) throw new Error('вкус: ' + s.hint?.text);
+}
+
+// Посолить, перемешать, попробовать — весь путь вкуса у миски.
+export function seasonMixTaste(s, dishId, opts = {}) {
+  seasonTo(s, dishId, opts);
+  stir(s);
+  tasteDone(s, dishId, opts);
+}
+
+// Чистка текущего продукта на доске: зигзаг ножом по всем копиям.
+export function peel(s) {
+  const it = s.boardCur();
+  if (!it?.peel) throw new Error('на доске нечего чистить');
+  const b = bounds(it.pieces);
+  for (let pass = 0; pass < 3 && s.board.items[it.key]; pass++) {
+    const rows = 14;
+    s.pointer('down', (b.minX - 0.2) * BOARD_UNIT, b.minZ * BOARD_UNIT);
+    for (let r = 0; r <= rows && s.board.items[it.key]; r++) {
+      const z = (b.minZ + ((b.maxZ - b.minZ) * r) / rows + pass * 0.15) * BOARD_UNIT;
+      const xs = r % 2 ? [b.maxX + 0.2, b.minX - 0.2] : [b.minX - 0.2, b.maxX + 0.2];
+      for (let k = 0; k <= 12; k++) s.pointer('move', (xs[0] + ((xs[1] - xs[0]) * k) / 12) * BOARD_UNIT, z);
+    }
+    s.pointer('up', 0, 0);
+  }
+  if (s.board.items[it.key]) throw new Error(`не дочищено: ${Math.round(it.peel.coverage() * 100)} %`);
 }
 
 export { KitchenSession };

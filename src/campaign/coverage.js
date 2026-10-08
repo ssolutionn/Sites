@@ -48,11 +48,14 @@ export class CoverageMask {
   }
 
   // Отрезок мазка: шагом в полкисти, чтобы быстрое движение не оставляло пропусков.
-  strokeLine(a, b, amount = 0.5) {
+  // spread = true — порция (масло, соус) растягивается по длине мазка: длинный мазок тоньше.
+  // spread = false — инструмент (нож при чистке): каждый шаг снимает одинаково, скорость мыши не важна.
+  strokeLine(a, b, amount = 0.5, { spread = true } = {}) {
     const d = Math.hypot(b.x - a.x, b.z - a.z);
     const n = Math.max(1, Math.ceil(d / (this.brush * 0.5)));
+    const per = spread ? amount / Math.max(1, n / 2) : amount;
     let g = 0;
-    for (let i = 1; i <= n; i++) g += this.stroke(a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n, amount / Math.max(1, n / 2));
+    for (let i = 1; i <= n; i++) g += this.stroke(a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n, per);
     return g;
   }
 

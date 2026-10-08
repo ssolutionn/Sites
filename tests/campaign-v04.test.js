@@ -11,7 +11,7 @@ import { dishScore, dayScore } from '../src/campaign/scoring.js';
 import { initialPieces, cutAcross, totalVolume, rotatePieces } from '../src/game/cutting.js';
 import { TRAY, SINK, CANAPE_PILES, FRUIT_PILES, CLAYOUT } from '../src/campaign/layout.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
-import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag, seasonTo, knife } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag, seasonTo, tasteDone, knife, peel } from './helpers-campaign.js';
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps * Math.max(1, Math.abs(b)), `${a} ≈ ${b}`);
 let serial = 50000;
@@ -436,7 +436,7 @@ test('день 1: оливье от плиты до перемешивания, 
   assert.ok(s.placePot()); // яйца — вторая
   waitAction(s);
   assert.equal(s.burners[1].product, 'egg');
-  for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:cucumber']) {
+  for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:pickle']) {
     arrive(s, 'board');
     s.boardSelect(key);
     cutCubes(s);
@@ -448,19 +448,20 @@ test('день 1: оливье от плиты до перемешивания, 
   arrive(s, 'stove');
   assert.ok(s.takePot(1));
   waitAction(s);
-  // горячие яйца не режутся, пока не остынут
+  // горячие яйца не чистятся, пока не остынут; нечищеные не режутся
   arrive(s, 'board');
+  assert.equal(s.boardSelect('olivier:peelEgg'), false);
   assert.equal(s.boardSelect('olivier:egg'), false);
   arrive(s, 'sink');
   assert.ok(s.coolProduct('egg'));
   waitAction(s);
-  for (const key of ['olivier:egg']) {
-    arrive(s, 'board');
-    assert.ok(s.boardSelect(key), s.hint?.text);
-    cutCubes(s);
-    if (s.cat.state === 'theft') s.shoo();
-    assert.ok(s.boardTransfer(), s.hint?.text);
-  }
+  arrive(s, 'board');
+  assert.ok(s.boardSelect('olivier:peelEgg'), s.hint?.text);
+  peel(s);
+  assert.equal(s.boardCur()?.key, 'olivier:egg', 'почищенные яйца сразу на доске для нарезки');
+  cutCubes(s);
+  if (s.cat.state === 'theft') s.shoo();
+  assert.ok(s.boardTransfer(), s.hint?.text);
   run(s, Math.max(0, s.stove.readyAt - s.t + 0.5));
   if (s.stove.overflow) {
     arrive(s, 'stove');
@@ -471,12 +472,11 @@ test('день 1: оливье от плиты до перемешивания, 
   s.takePot();
   waitAction(s);
   run(s, CAMPAIGN.cool.time + 0.5);
-  for (const key of ['olivier:potato']) {
-    arrive(s, 'board');
-    s.boardSelect(key);
-    cutCubes(s);
-    assert.ok(s.boardTransfer(), s.hint?.text);
-  }
+  arrive(s, 'board');
+  assert.ok(s.boardSelect('olivier:peelPotato'), s.hint?.text);
+  peel(s);
+  cutCubes(s);
+  assert.ok(s.boardTransfer(), s.hint?.text);
   arrive(s, 'bowl');
   s.bowlAdd('olivier', 'peas');
   waitAction(s);
@@ -484,9 +484,12 @@ test('день 1: оливье от плиты до перемешивания, 
   assert.equal(s.dishes.olivier.done, false);
   s.bowlAdd('olivier', 'mayo');
   waitAction(s);
-  assert.equal(s.mixTarget().ok, false); // сначала вкус
+  assert.equal(s.mixTarget().ok, false); // сначала посолить
+  assert.equal(s.seasonTaste('olivier'), false, 'пробовать до перемешивания нельзя');
   seasonTo(s, 'olivier');
   stir(s);
+  assert.equal(s.dishes.olivier.done, false, 'после перемешивания — проба');
+  tasteDone(s, 'olivier');
   assert.ok(s.dishes.olivier.done);
   assert.equal(s.dishes.olivier.parts.taste, 100);
   assert.ok(s.dishes.olivier.Q >= 60);

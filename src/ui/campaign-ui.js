@@ -17,7 +17,7 @@ export function fmt(sec) {
 
 const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
-const PICON = { potato: '🥔', carrot: '🥕', sausage: '🌭', cucumber: '🥒', egg: '🥚', peas: '🫛', mayo: '🫙', crab: '🦀', corn: '🌽', bread: '🍞', butter: '🧈', caviar: '🔴', tartlet: '🧁', cheese: '🧀', greens: '🌿', tomato: '🍅', onion: '🧅', herring: '🐟', beet: '🟣', skewer: '🍡', mandarin: '🍊', apple: '🍏', grapes: '🍇', chicken: '🍗', marinade: '🥣' };
+const PICON = { potato: '🥔', carrot: '🥕', sausage: '🌭', cucumber: '🥒', pickle: '🫙', egg: '🥚', peas: '🫛', mayo: '🫙', crab: '🦀', corn: '🌽', bread: '🍞', butter: '🧈', caviar: '🔴', tartlet: '🧁', cheese: '🧀', greens: '🌿', tomato: '🍅', onion: '🧅', herring: '🐟', beet: '🟣', skewer: '🍡', mandarin: '🍊', apple: '🍏', grapes: '🍇', chicken: '🍗', marinade: '🥣' };
 const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', fridge: '🧊', bag: '🛍', table: '🎄', puddle: '🧽' };
 const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука' };
 
@@ -25,6 +25,7 @@ export const TIPS = {
   cube: 'Нарезка как в жизни: зажми кнопку мыши и проведи ножом через продукт. Сверху вниз — полоски, слева направо — поперёк полосок, получатся кубики. Нож режет то, над чем прошёл: можно резать обе морковки сразу или по одной. Размер — на глаз, по кубику-образцу.',
   round: 'Кружочки: проведи ножом сверху вниз через продукт — отрежешь кружок. Толщина — расстояние до прошлого разреза, сравни с образцом. Вдоль кружочки не режут.',
   grate: 'Тёрка: зажми левую кнопку и води мышью вверх-вниз. Засчитываются только полные движения.',
+  peel: 'Чистка: зажми кнопку и води ножом по продукту — кожура снимается там, где прошёл нож. Почисти всё, и продукт сразу останется на доске для нарезки.',
   bowl: 'Миска руками: выбери банку или майонез внизу, зажми кнопку и веди над миской — горошек высыпается, майонез ложится там, где ведёшь (меньше выдавишь — будет «поменьше»). Солонку встряхивай вниз-вверх. Ложкой мешай по кругу — кучки смешаются и покроются заправкой.',
   sink: 'Мытьё: зажми кнопку и три губкой, пока грязь не исчезнет.',
   puddle: 'Уборка: зажми кнопку и води тряпкой по луже.',
@@ -43,7 +44,7 @@ export const TIPS = {
   garland: 'Часть гирлянды погасла. Не срочно, но к концу дня её стоит починить — это влияет на порядок.',
   stove: 'Плита: две конфорки. Ставь вариться всё сразу и режи остальное, пока варится. У картофеля 2:00, у яиц 1:00, у свёклы 2:30.',
   hot: 'Сваренное горячее: резать сразу нельзя. Подожди полминуты или остуди под холодной водой у раковины — это быстрее.',
-  season: 'Вкус: соль и перец — щепотками. Норму не видно: попробуй ложкой («Попробовать»), героиня скажет честно. Пересолила — «Разбавить» (долго). Потом «Вкус готов» и перемешивай.',
+  season: 'Вкус как в жизни: сначала посоли и поперчи (встряхивай солонку над миской), потом перемешай ложкой — и только потом пробуй. Пока не перемешано, соль лежит сверху и проба обманет. Досолила после — ещё оборот ложкой.',
   catHungry: 'Кот проголодался. Голодный кот сам полезет к колбасе, селёдке или сыру на доске. Покорми его у миски кота — сытый кот спит. Мячик отвлекает, но голод не утоляет.',
   catbowl: 'Миска кота: «Покормить» обнуляет голод. «Мячик» занимает кота на 45 секунд.',
   money: 'У дня есть бюджет. Экспресс быстрее, но дороже. «Сходить самой» бесплатно, но героиня уходит на 35 секунд — плита и кот без присмотра.',
@@ -947,7 +948,8 @@ export class CampaignUI {
       case 'bowl': {
         const mt = s.mixTarget();
         const se = s.bowl.owner && s.dishes[s.bowl.owner]?.season;
-        return `${base}|${s.bowlTasks().map((t) => t.stepId + t.state + (t.block ?? '')).join(',')}|${mt?.ok}|${s.equipment.bowl.clean}|${se ? se.salt + ':' + se.pepper + ':' + se.tastes + (se.last?.verdict ?? '') : ''}|${s.bowlHand()}`;
+        const ph = s.bowl.owner && s.seasonState(s.bowl.owner);
+        return `${base}|${s.bowlTasks().map((t) => t.stepId + t.state + (t.block ?? '')).join(',')}|${mt?.ok}|${s.equipment.bowl.clean}|${se ? se.salt + ':' + se.pepper + ':' + se.tastes + (se.last?.verdict ?? '') : ''}|${s.bowlHand()}|${ph?.phase}|${ph?.unmixed}`;
       }
       case 'tray': {
         const id = s.tray.owner;
@@ -1007,6 +1009,10 @@ export class CampaignUI {
         const it = s.boardCur();
         if (!it) return '';
         if (it.grater) return `<span class="qbar"><i style="width:${(it.grater.done / it.grater.cycles) * 100}%"></i></span><span>Натёрто ${it.grater.done} из ${it.grater.cycles}</span>`;
+        if (it.peel) {
+          const c = it.peel.coverage() / CAMPAIGN.peel.complete;
+          return `<span class="qbar"><i style="width:${Math.min(100, c * 100)}%"></i></span><span class="q">Почищено ${Math.min(100, Math.round(c * 100))} %</span><span>зажми и веди ножом по кожуре</span>`;
+        }
         const q = s.boardQuality(it);
         const block = s.transferBlock(it);
         return `<span class="qbar" title="Аккуратность"><i style="width:${Math.round(q.score * 100)}%"></i></span><span class="q">${it.cuts ? `Ровно на ${Math.round(q.score * 100)} %` : 'Ещё ни одного разреза'}</span><span>кусочков: ${it.pieces?.length ?? it.log.segments.length}</span>${block && it.cuts ? `<span>· ${esc(block)}</span>` : ''}`;
@@ -1023,12 +1029,18 @@ export class CampaignUI {
           return `<span class="q">${s.bowl.shaker.kind === 'salt' ? '🧂 Соль' : '🌶 Перец'}: ${se[s.bowl.shaker.kind]} щеп.</span><span>зажми и встряхни над миской — вниз-вверх</span>${se.last ? `<span>· проба: ${esc(se.last.verdict)}</span>` : ''}`;
         }
         const mt = s.mixTarget();
+        const ph = s.bowl.owner && s.seasonState(s.bowl.owner);
+        if (ph?.phase === 'spice') return `<span class="q">1. Посоли и поперчи</span><span>→ 2. перемешай → 3. попробуй</span>`;
         if (mt?.ok) {
           const m = Math.min(1, s.mixTurns() / CAMPAIGN.mix.turnsRequired);
           return `<span class="qbar"><i style="width:${m * 100}%"></i></span><span class="q">Однородность ${Math.round(m * 100)} %</span><span>зажми и веди ложку по кругу</span>`;
         }
+        if (ph?.phase === 'taste' && ph.unmixed > 0) {
+          const t = s.bowl.restir ? Math.min(1, s.bowl.restir.turns / ph.unmixed) : 0;
+          return `<span class="qbar"><i style="width:${t * 100}%"></i></span><span class="q">Досолила — перемешай ещё оборот</span><span>потом попробуй</span>`;
+        }
         const se = s.bowl.owner && s.dishes[s.bowl.owner]?.season;
-        if (se?.last) return `<span class="q">Проба: ${esc(se.last.verdict)}</span>`;
+        if (ph?.phase === 'taste') return se?.last ? `<span class="q">Проба: ${esc(se.last.verdict)}</span>${se.last.ok ? '<span>— можно подавать</span>' : '<span>— поправь щепоткой и перемешай</span>'}` : '<span class="q">3. Попробуй ложкой</span><span>соль разошлась — проба честная</span>';
         return mt?.block ? `<span>${esc(mt.block)}</span>` : '';
       }
       case 'tray': {
@@ -1074,7 +1086,7 @@ export class CampaignUI {
         const chips = tasks
           .map((t) => {
             const cls = ['prod-chip', t.key === s.board.current ? 'active' : '', t.state === 'done' ? 'done' : '', t.state === 'locked' ? 'locked' : ''].join(' ');
-            const lbl = `<span class="pi">${PICON[t.product] ?? '🍽'}</span><span class="pn">${esc(PRODUCTS[t.product].name)}${t.qty > 1 ? ' ×' + t.qty : ''}${t.type === 'grate' ? ' · тёрка' : t.shape === 'round' ? ' · кружки' : ''}</span>`;
+            const lbl = `<span class="pi">${PICON[t.product] ?? '🍽'}</span><span class="pn">${esc(PRODUCTS[t.product].name)}${t.qty > 1 ? ' ×' + t.qty : ''}${t.type === 'grate' ? ' · тёрка' : t.type === 'peel' ? ' · чистка' : t.shape === 'round' ? ' · кружки' : ''}</span>`;
             return this._btn(lbl, 'boardSelect', [t.key], cls, busy || t.state === 'done', t.block ?? '');
           })
           .join('');
@@ -1083,12 +1095,12 @@ export class CampaignUI {
         const block = s.transferBlock();
         const step = s.stepDef(it.dishId, it.stepId);
         const destLabel = s.practice ? 'Оценить' : step.dest === 'bowl' ? '🥣 В миску' : step.dest === 'pieces' ? '🍽 На поднос' : '✓ Готово';
-        return `<h2>${it.grater ? '🧀 Тёрка' : '🔪 Доска'} · ${esc(PRODUCTS[it.product].name)}${it.qty > 1 ? ' ×' + it.qty : ''}<span class="sub">${esc(s.recipes[it.dishId].name)}</span></h2>
+        return `<h2>${it.grater ? '🧀 Тёрка' : it.peel ? '🔪 Чистка' : '🔪 Доска'} · ${esc(PRODUCTS[it.product].name)}${it.qty > 1 ? ' ×' + it.qty : ''}<span class="sub">${esc(s.recipes[it.dishId].name)}</span></h2>
           <div class="dock">${backBtn}<div class="dock-items">${chips}</div>
             <div class="dock-main">
               ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
               ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
-              ${it.grater && !s.practice ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : ''), busy, block ?? '')}
+              ${(it.grater && !s.practice) || it.peel ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : ''), busy, block ?? '')}
             </div>
           </div>${it.missing.length ? bar : ''}<div class="dock-live" data-live></div>`;
       }
@@ -1104,19 +1116,23 @@ export class CampaignUI {
             return chip(PICON[t.product] ?? '🫙', esc(PRODUCTS[t.product].name) + (t.product === 'mayo' && done && s.dishes[t.dishId].mayo === 'light' ? ' · поменьше' : ''), 'bowlPick', [t.dishId, t.stepId], `${done ? 'done' : ''} ${hand === t.product && !done ? 'active' : ''} ${t.block && !done ? 'locked' : ''}`, busy || done, t.block ?? '');
           })
           .join('');
-        const seasonTask = tasks.find((t) => t.type === 'season' && t.state !== 'done' && t.dishId === s.bowl.owner);
+        const ss = s.bowl.owner ? s.seasonState(s.bowl.owner) : null;
         let season = '', main = '';
-        if (seasonTask) {
-          const ss = s.seasonState(seasonTask.dishId);
+        if (ss && ['spice', 'mixing', 'taste'].includes(ss.phase)) {
+          const id = s.bowl.owner;
           const dis = busy || !!ss.block;
-          season = chip('🧂', `Соль · ${ss.salt}`, 'seasonPick', [seasonTask.dishId, 'salt'], hand === 'salt' ? 'active' : '', dis, ss.block ?? '') + chip('🌶', `Перец · ${ss.pepper}`, 'seasonPick', [seasonTask.dishId, 'pepper'], hand === 'pepper' ? 'active' : '', dis, ss.block ?? '') + chip('👅', 'Попробовать', 'seasonTaste', [seasonTask.dishId], '', dis, ss.block ?? '') + (ss.salt || ss.pepper ? chip('💧', 'Разбавить', 'seasonDilute', [seasonTask.dishId], '', dis) : '');
-          main = this._btn('✓ Вкус готов', 'seasonDone', [seasonTask.dishId], 'primary big', dis);
+          const canTaste = ss.phase === 'taste' && !ss.unmixed;
+          const tasteWhy = ss.phase !== 'taste' ? 'Сначала перемешай — соль лежит сверху' : ss.unmixed ? 'Досолила — ещё оборот ложкой' : '';
+          season = chip('🧂', `Соль · ${ss.salt}`, 'seasonPick', [id, 'salt'], hand === 'salt' ? 'active' : '', dis, ss.block ?? '') + chip('🌶', `Перец · ${ss.pepper}`, 'seasonPick', [id, 'pepper'], hand === 'pepper' ? 'active' : '', dis, ss.block ?? '');
+          if (ss.phase === 'taste') season += chip('👅', 'Попробовать', 'seasonTaste', [id], canTaste ? '' : 'locked', dis, tasteWhy) + (ss.salt || ss.pepper ? chip('💧', 'Разбавить', 'seasonDilute', [id], canTaste ? '' : 'locked', dis, tasteWhy) : '');
+          if (ss.phase === 'spice') main = this._btn('🥄 Посолено — мешать', 'seasonDone', [id], 'primary big', dis);
+          if (ss.phase === 'taste') main = this._btn('✓ Вкус готов', 'seasonDone', [id], 'primary big ' + (canTaste ? '' : 'soft-disabled'), dis, tasteWhy);
         }
         const mt = s.mixTarget();
         const spoon = chip('🥄', 'Ложка', 'bowlSpoon', [], hand === 'spoon' ? 'active' : '', busy);
         const dirty = !s.equipment.bowl.clean ? '<p class="note warn">Миска грязная — помой её у раковины.</p>' : '';
         return `<h2>🥣 Миска${s.bowl.owner ? `<span class="sub">${esc(s.recipes[s.bowl.owner].name)}</span>` : ''}</h2>
-          <div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${adds}${season}${mt || hand !== 'spoon' ? spoon : ''}</div><div class="dock-main">${main}</div></div>
+          <div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${adds}${season}${mt || hand !== 'spoon' || ss?.phase === 'taste' ? spoon : ''}</div><div class="dock-main">${main}</div></div>
           <div class="row">${bar}</div><div class="dock-live" data-live></div>${dirty}`;
       }
       case 'tray':

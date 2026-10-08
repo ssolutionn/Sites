@@ -2,6 +2,7 @@
 import { PRODUCTS } from './data.js';
 import { initialBatch, cutLine, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
 import { Stroke, classifyCut, CUT_HINTS, CUT_RULES } from './gestures.js';
+import { CoverageMask } from './coverage.js';
 import { TEMPTING } from './st-extra.js';
 import { makeRoundLog, cutRound, roundSlices, roundQuality, cutQuality, Grater } from './mechanics.js';
 
@@ -13,7 +14,7 @@ export const boardMethods = {
     for (const [dishId, dish] of Object.entries(this.dishes)) {
       if (dish.done) continue;
       for (const s of dish.recipe.steps) {
-        if (s.type !== 'cut' && s.type !== 'grate') continue;
+        if (s.type !== 'cut' && s.type !== 'grate' && s.type !== 'peel') continue;
         const state = this.stepState(dishId, s.id);
         if (state === 'skipped') continue;
         const key = `${dishId}:${s.id}`;
@@ -29,6 +30,7 @@ export const boardMethods = {
 
   _boardHasMaterial(it) {
     if (it.grater) return !it.grater.complete;
+    if (it.peel) return !it.peeled;
     if (it.log) return it.log.segments.length > 0;
     return it.pieces?.length > 0;
   },
@@ -54,6 +56,11 @@ export const boardMethods = {
     const it = { key, dishId, stepId, product: step.product, qty, type: step.type, shape: step.shape, cuts: 0, missing: [], freshIds: new Set() };
     if (step.type === 'grate') {
       it.grater = new Grater(this.cfg.grate, this.cfg.grate.cyclesPerPortion * qty);
+    } else if (step.type === 'peel') {
+      // целые сваренные продукты рядом; кожура снимается там, где прошёл нож
+      it.pieces = initialBatch(prod.cut.w, prod.cut.d, () => this._id(), prod.cut.profile === 'rectangle' ? null : prod.cut.profile, qty, this.cfg.batchGap);
+      it.initVolume = totalVolume(it.pieces);
+      it.peel = this._peelMask(it.pieces);
     } else if (step.shape === 'round') {
       it.log = makeRoundLog(prod.round.length * qty);
       it.radius = prod.round.radius;
@@ -67,7 +74,7 @@ export const boardMethods = {
     this._emit('boardSwitch', { key, fresh: true });
     if (!this.tutorialSeen.has(step.type + (step.shape ?? ''))) {
       this.tutorialSeen.add(step.type + (step.shape ?? ''));
-      this._emit('tutorial', { topic: step.type === 'grate' ? 'grate' : step.shape === 'round' ? 'round' : 'cube' });
+      this._emit('tutorial', { topic: step.type === 'grate' ? 'grate' : step.type === 'peel' ? 'peel' : step.shape === 'round' ? 'round' : 'cube' });
     }
     return true;
   },
@@ -97,6 +104,7 @@ export const boardMethods = {
       }
       return 'idle';
     }
+    if (it.peel) return this._peelPointer(it, type, x, z);
     if (type === 'down') {
       if (this.action) return 'ignored';
       this.board.stroke = new Stroke();
@@ -116,6 +124,54 @@ export const boardMethods = {
       return this._strokeCut(it, stroke);
     }
     return 'hover';
+  },
+
+  // Маска чистки: по эллипсу на каждый продукт, в метрах от центра доски.
+  _peelMask(pieces) {
+    const c = this.cfg.peel;
+    const U = BOARD_UNIT;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of pieces) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x + p.w);
+      minZ = Math.min(minZ, p.z);
+      maxZ = Math.max(maxZ, p.z + p.d);
+    }
+    const half = (a, b) => Math.max(Math.abs(a), Math.abs(b)) * U + 0.01;
+    const zones = pieces.map((p) => ({ x: (p.x + p.w / 2) * U, z: (p.z + p.d / 2) * U, rx: (p.w / 2) * U, rz: (p.d / 2) * U }));
+    return new CoverageMask({ cols: c.cols, rows: c.rows, width: half(minX, maxX) * 2, depth: half(minZ, maxZ) * 2, brush: c.brush, zones });
+  },
+
+  // Чистка: зажми и веди ножом по продукту. Кожура снимается полосками; почистила — можно резать.
+  _peelPointer(it, type, x, z) {
+    if (this.action) return 'ignored';
+    if (type === 'up') {
+      this.board.peelLast = null;
+      return 'up';
+    }
+    if (type === 'down') this.board.peelLast = { x, z };
+    if (!this.pointerDown) return 'hover';
+    const last = this.board.peelLast ?? { x, z };
+    const gain = it.peel.strokeLine(last, { x, z }, this.cfg.peel.amount, { spread: false });
+    this.board.peelLast = { x, z };
+    if (gain > 0) this._emit('peel', { key: it.key, x, z, coverage: it.peel.coverage() });
+    if (it.peel.coverage() >= this.cfg.peel.complete) this._peelComplete(it);
+    return gain > 0 ? 'peel' : 'hover';
+  },
+
+  _peelComplete(it) {
+    if (it.peeled) return;
+    it.peeled = true;
+    this.board.peelLast = null;
+    this._completeStep(it.dishId, it.stepId, 1);
+    delete this.board.items[it.key];
+    this.board.current = null;
+    this._emit('peeled', { key: it.key, product: it.product });
+    this.setHint(`${PRODUCTS[it.product]?.peelDone?.[it.qty > 1 ? 1 : 0] ?? 'Почищено'} — теперь можно резать`, 2.5);
+    // очищенное остаётся на доске: следующий шаг с этим продуктом начинается сразу
+    const next = this.dishes[it.dishId].recipe.steps.find((st) => (st.requires ?? []).includes(it.stepId) && st.type !== 'peel' && this.stepState(it.dishId, st.id) === 'ready' && ['cut', 'grate'].includes(st.type));
+    if (next) this.boardSelect(`${it.dishId}:${next.id}`);
+    this._afterStepProgress(it.dishId);
   },
 
   _cutRules() {
@@ -188,6 +244,7 @@ export const boardMethods = {
 
   transferBlock(it = this.boardCur()) {
     if (!it) return 'На доске пусто';
+    if (it.peel) return `Почисти до конца: ${Math.round(it.peel.coverage() * 100)} из ${Math.round(this.cfg.peel.complete * 100)} %`;
     if (it.grater) return it.grater.complete ? this._destBlock(it) : `Натри до конца: ${it.grater.done} из ${it.grater.cycles} движений`;
     if (it.missing.length) return 'Кот утащил кусок — возьми замену';
     if (it.cuts < 1) return 'Сначала сделай хотя бы один разрез';

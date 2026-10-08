@@ -23,36 +23,67 @@ export const extraMethods = {
     dish.season = { salt: 0, pepper: 0, target: { salt: pick(c.salt), pepper: pick(c.pepper) }, tastes: 0, last: null };
   },
 
+  // Вкус как в жизни: посолить и поперчить → перемешать → попробовать. Пока не перемешано,
+  // соль лежит сверху и проба обманет; досолила после перемешивания — ещё оборот ложкой.
+  // phase: locked | spice | mixing | taste | done.
   seasonState(dishId) {
     const dish = this.dishes[dishId];
     if (!dish?.season) return null;
     const st = this.stepState(dishId, 'season');
+    const hasTaste = !!this.stepDef(dishId, 'taste');
+    let phase;
+    if (st === 'locked') phase = 'locked';
+    else if (st === 'ready') phase = 'spice';
+    else if (!this.stepDone(dishId, 'mix')) phase = 'mixing';
+    else if (hasTaste && !this.stepDone(dishId, 'taste')) phase = 'taste';
+    else phase = 'done';
     let block = null;
-    if (st === 'locked') block = this.stepBlock(dishId, 'season');
-    else if (st === 'ready' && this.bowl.owner !== dishId) block = 'Сначала собери всё в миске';
-    return { ...dish.season, state: st, block };
+    if (phase === 'locked') block = this.stepBlock(dishId, 'season');
+    else if (phase !== 'done' && this.bowl.owner !== dishId) block = 'Сначала собери всё в миске';
+    return { ...dish.season, state: st, phase, block, unmixed: dish.season.unmixed ?? 0 };
   },
 
+  // Можно ли сейчас солить и перчить (до, во время и после перемешивания, пока вкус не готов).
   _seasonReady(dishId) {
     const ss = this.seasonState(dishId);
-    if (!ss || ss.state !== 'ready' || ss.block) {
+    if (!ss || !['spice', 'mixing', 'taste'].includes(ss.phase) || ss.block) {
       if (ss?.block) this.setHint(ss.block, 2);
       return false;
     }
     return this._isIdleAt('bowl') && !this.action;
   },
 
+  // Пробовать — только перемешанное.
+  _tasteReady(dishId) {
+    if (!this._seasonReady(dishId)) return false;
+    const ss = this.seasonState(dishId);
+    if (ss.phase !== 'taste') {
+      this.setHint('Сначала перемешай — пока соль лежит сверху, проба обманет', 2.5);
+      return false;
+    }
+    if (ss.unmixed > 0) {
+      this.setHint('Досолила — перемешай ещё оборот ложкой, потом пробуй', 2.5);
+      return false;
+    }
+    return true;
+  },
+
+  // Щепотка соли или перца (кнопкой в тестах и симуляции; в игре — встряхиванием, st-bowl).
   seasonAdd(dishId, kind) {
     if (!['salt', 'pepper'].includes(kind) || !this._seasonReady(dishId)) return false;
-    return this._startAction('pinch', this.cfg.durations.pinch, () => {
-      this.dishes[dishId].season[kind]++;
-      this._emit('pinch', { dishId, kind, n: this.dishes[dishId].season[kind] });
-    }, { kind });
+    return this._startAction('pinch', this.cfg.durations.pinch, () => this._pinch(dishId, kind), { kind });
+  },
+
+  _pinch(dishId, kind, at = null) {
+    const se = this.dishes[dishId].season;
+    se[kind]++;
+    if (this.seasonState(dishId).phase === 'taste') se.unmixed = this.cfg.restir;
+    this._emit('pinch', { dishId, kind, n: se[kind], ...(at ?? {}) });
   },
 
   // Попробовать ложкой: честная обратная связь по соли и перцу.
   seasonTaste(dishId) {
-    if (!this._seasonReady(dishId)) return false;
+    if (!this._tasteReady(dishId)) return false;
     return this._startAction('taste', this.cfg.durations.taste, () => {
       const se = this.dishes[dishId].season;
       se.tastes++;
@@ -75,7 +106,7 @@ export const extraMethods = {
 
   // Пересолила — разбавить: добавить ещё немного основы. Дорого по времени.
   seasonDilute(dishId) {
-    if (!this._seasonReady(dishId)) return false;
+    if (!this._tasteReady(dishId)) return false;
     const se = this.dishes[dishId].season;
     if (se.salt === 0 && se.pepper === 0) {
       this.setHint('Разбавлять нечего', 1.5);
@@ -86,7 +117,7 @@ export const extraMethods = {
       se.pepper = Math.max(0, se.pepper - 1);
       se.diluted = (se.diluted ?? 0) + 1;
       this._emit('dilute', { dishId });
-      this.setHint('Добавила основы — вкус мягче. Попробуй снова', 2.5);
+      this.setHint('Добавила основы и перемешала — вкус мягче. Попробуй снова', 2.5);
     });
   },
 
@@ -97,13 +128,22 @@ export const extraMethods = {
     return 0.65 * SALT_Q[ds] + 0.35 * PEPPER_Q[dp];
   },
 
+  // «Готово» по фазе: посолено → можно мешать; вкус готов → блюдо готово (или начинка — на тарелку).
   seasonDone(dishId) {
-    if (!this._seasonReady(dishId)) return false;
+    const ss = this.seasonState(dishId);
+    if (ss?.phase === 'spice') {
+      if (!this._seasonReady(dishId)) return false;
+      this._completeStep(dishId, 'season', 1, { salt: ss.salt, pepper: ss.pepper });
+      this.bowl.shaker = null; // солонку отложила — в руке ложка
+      this.setHint(ss.salt + ss.pepper ? 'Теперь перемешай круговыми движениями — соль разойдётся' : 'Не посолила — после перемешивания попробуй и досоли', 2.5);
+      return true;
+    }
+    if (!this._tasteReady(dishId)) return false;
     const q = this.seasonQuality(dishId);
-    this._completeStep(dishId, 'season', q, { ...this.dishes[dishId].season });
+    this._completeStep(dishId, 'taste', q, { ...this.dishes[dishId].season });
     this._emit('seasoned', { dishId, q });
-    if (!this.dishes[dishId].season.tastes) this.setHint('Посолила на глаз, не пробуя. Теперь перемешай', 2.5);
-    else this.setHint('Теперь перемешай круговыми движениями', 2);
+    if (!this.dishes[dishId].season.tastes) this.setHint('Не попробовала — вкус на удачу', 2.5);
+    this._bowlFinish(dishId);
     return true;
   },
 

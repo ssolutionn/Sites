@@ -31,7 +31,7 @@ export const bowlMethods = {
     for (const [dishId, dish] of Object.entries(this.dishes)) {
       if (dish.done) continue;
       for (const s of dish.recipe.steps) {
-        if (s.type !== 'add' && s.type !== 'mix' && s.type !== 'season') continue;
+        if (s.type !== 'add' && s.type !== 'mix' && s.type !== 'season' && s.type !== 'taste') continue;
         const state = this.stepState(dishId, s.id);
         if (state === 'skipped') continue;
         out.push({ dishId, stepId: s.id, type: s.type, product: s.product, label: s.label, state, block: state === 'done' ? null : this.stepBlock(dishId, s.id) || this._bowlBlock(dishId) });
@@ -142,9 +142,7 @@ export const bowlMethods = {
     if (type !== 'move' || !this.pointerDown) return 'idle';
     if (Math.hypot(x, z) > BOWL.r * 1.1) return 'outside';
     if (sh.tracker.move(z, this.clock)) {
-      const se = this.dishes[sh.dishId].season;
-      se[sh.kind]++;
-      this._emit('pinch', { dishId: sh.dishId, kind: sh.kind, n: se[sh.kind], x, z });
+      this._pinch(sh.dishId, sh.kind, { x, z });
       return 'pinch';
     }
     return 'shake';
@@ -172,8 +170,21 @@ export const bowlMethods = {
     if (this.bowl.pouring) return this._bowlPour(type, x, z);
     if (this.bowl.shaker) return this._bowlShake(type, x, z);
     if (type === 'up') return 'up';
-    const tgt = this.mixTarget();
+    // досолила после перемешивания — короткое перемешивание, чтобы соль разошлась
+    const re = this._restirTarget();
+    if (re) return this._restir(type, x, z, re);
+    let tgt = this.mixTarget();
     if (type === 'down') {
+      // посолила и взялась за ложку — значит, «посолено», начинаем мешать
+      if (tgt && !tgt.ok && this.seasonState(tgt.dishId)?.phase === 'spice') {
+        const se = this.dishes[tgt.dishId].season;
+        if (!se.salt && !se.pepper) {
+          this.setHint('Сначала посоли и поперчи — потом мешай, чтобы соль разошлась', 2.5);
+          return 'blocked';
+        }
+        this.seasonDone(tgt.dishId);
+        tgt = this.mixTarget();
+      }
       if (!tgt) {
         this.setHint(this.bowl.contents.length ? 'Сначала добавь всё по рецепту' : 'Миска пуста', 2);
         return 'nothing';
@@ -194,9 +205,31 @@ export const bowlMethods = {
     return gain > 0 ? 'stir' : 'idle';
   },
 
+  _restirTarget() {
+    const id = this.bowl.owner;
+    const ss = id && this.seasonState(id);
+    return ss && ss.phase === 'taste' && ss.unmixed > 0 ? id : null;
+  },
+
+  _restir(type, x, z, dishId) {
+    if (type === 'down') {
+      this.bowl.restir = new Stirrer(this.cfg.mix);
+      return 'stir';
+    }
+    if (!this.pointerDown || !this.bowl.restir || this.action) return 'idle';
+    const gain = this.bowl.restir.move(x, z);
+    if (gain > 0) this._emit('stir', { turns: this.bowl.restir.turns, restir: true });
+    const se = this.dishes[dishId].season;
+    if (this.bowl.restir.turns >= se.unmixed) {
+      se.unmixed = 0;
+      this.bowl.restir = null;
+      this.setHint('Соль разошлась — можно пробовать', 2);
+      this._emit('restirred', { dishId });
+    }
+    return gain > 0 ? 'stir' : 'idle';
+  },
+
   _mixComplete(dishId, stepId) {
-    const dish = this.dishes[dishId];
-    const step = this.stepDef(dishId, stepId);
     if (this.practice) {
       this._emit('practiceResult', { q: 1, info: { turns: this.bowl.stirrer.turns } });
       this.bowl.stirrer = null;
@@ -204,9 +237,19 @@ export const bowlMethods = {
     }
     if (!this._completeStep(dishId, stepId, 1)) return;
     this.bowl.stirrer.release();
-    const hasFill = dish.recipe.steps.some((s) => s.type === 'fill');
-    if (hasFill) {
-      const fill = dish.recipe.steps.find((s) => s.type === 'fill');
+    if (this.stepDef(dishId, 'taste')) {
+      this.setHint('Перемешано! Теперь попробуй ложкой — и доведи до вкуса', 3);
+      this._emit('mixed', { dishId });
+      return;
+    }
+    this._bowlFinish(dishId);
+  },
+
+  // Блюдо из миски готово: салат — на оценку, начинка — на рабочую тарелку у подноса.
+  _bowlFinish(dishId) {
+    const dish = this.dishes[dishId];
+    const fill = dish.recipe.steps.find((s) => s.type === 'fill');
+    if (fill) {
       this.workPlate = { owner: dishId, amount: fill.items * 1.0 + 0.6 };
       this._dirtyBowl();
       this._emit('fillingReady', { dishId });

@@ -12,7 +12,8 @@ const FLESH = {
   carrot: 0xf39a3a,
   potato: 0xf4dfa2,
   egg: 0xfbf7ee,
-  cucumber: 0xb9cf7a,
+  cucumber: 0xc8e08c,
+  pickle: 0xa6b45c,
   sausage: 0xf2a9a6,
   crab: 0xf6f1ea,
   cheese: 0xf7d55b,
@@ -155,7 +156,8 @@ export class BowlView {
           const sz = THREE.MathUtils.clamp(Math.cbrt((p.w ?? 1) * (p.d ?? 1)) * 0.016, 0.01, 0.022);
           let col = FLESH[c.product] ?? PRODUCTS[c.product]?.color ?? 0xffffff;
           if (c.product === 'egg' && hash(seed + 0.4) < 0.33) col = 0xffc83a; // кубики с желтком
-          if (c.product === 'cucumber' && hash(seed + 0.6) < 0.4) col = 0x6f8f35; // с кожурой
+          if (c.product === 'cucumber' && hash(seed + 0.6) < 0.4) col = 0x3f7f2a; // с кожурой
+          if (c.product === 'pickle' && hash(seed + 0.6) < 0.4) col = 0x5f7a2a;
           push('cube', sz, col);
         }
       } else if (c.kind === 'grated') {
