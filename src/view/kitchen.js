@@ -396,12 +396,13 @@ export function buildKitchen(scene) {
     const grill=box(.009,.15,.010,toon(0x4b392c));grill.position.set(-.17+i*.019,0,.099);radio.add(grill);
   }
   const scale=box(.12,.047,.010,toon(0x486c5b));scale.position.set(.135,.07,.10);radio.add(scale);
-  for(let i=0;i<7;i++) {const tick=box(.002,.017,.003,toon(0xe0d89d));tick.position.set(.085+i*.015,.07,.107);radio.add(tick);}
+  const oldScale=[scale]; // в кампании шкалу заменяет RadioView (src/view/radio3d.js)
+  for(let i=0;i<7;i++) {const tick=box(.002,.017,.003,toon(0xe0d89d));tick.position.set(.085+i*.015,.07,.107);radio.add(tick);oldScale.push(tick);}
   const dial=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,.021,18),toon(0x4b392c));dial.rotation.x=Math.PI/2;dial.position.set(.15,-.035,.103);radio.add(dial);
   const led=new THREE.Mesh(new THREE.SphereGeometry(.010,10,8),new THREE.MeshStandardMaterial({color:0x62d48b,emissive:0x2faa64,emissiveIntensity:.8}));led.position.set(.075,-.035,.10);radio.add(led);
   const antenna=new THREE.Mesh(new THREE.CylinderGeometry(.004,.004,.28,8),metal);antenna.position.set(-.16,.24,-.035);antenna.rotation.z=.25;radio.add(antenna);
   radio.position.set(rp.x,rp.y,rp.z);scene.add(radio);tag(radio,'radio');
-  k.radio={group:radio,led,dial};k.stations.radio=[radio];
+  k.radio={group:radio,led,dial,oldScale};k.stations.radio=[radio];
   const ph = LAYOUT.stations.phone.anchor;
   const phone = new THREE.Group();
   const phBody = box(0.09, 0.012, 0.17, toon(0x222233));

@@ -463,3 +463,19 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 /* Карточка дня не вылезает за экран: прокрутка внутри, кнопки всегда видны */
 .dialog.intro { max-height: calc(100vh - 24px); overflow-y: auto; }
 .dialog.intro .actions { position: sticky; bottom: -1px; padding: 10px 0 2px; background: linear-gradient(180deg, rgba(253, 242, 222, 0), #fdf2de 35%); }
+/* ---------- радио: шкала-индикатор в доке («102,4 МГц · Ретро 102») ---------- */
+.dock .radio-tuner { align-items: center; justify-content: center; gap: 10px; }
+.radio-readout { flex: 0 1 440px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: var(--r-m); background: rgba(0, 0, 0, 0.3); box-shadow: inset 0 0 0 1px var(--glass-line); font-weight: 800; white-space: nowrap; }
+.radio-readout .rf { font-size: 20px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+.radio-readout .rdot { color: var(--on-glass-2); }
+.radio-readout .rs { flex: 1; min-width: 0; font-size: 15px; color: var(--on-glass); overflow: hidden; text-overflow: ellipsis; }
+.radio-readout .rs.weak, .radio-readout .rs.off { color: var(--on-glass-2); }
+.radio-readout .rs.bad { color: #ffd6cf; }
+.radio-readout .rbars { flex: none; display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.radio-readout .rbars i { width: 4px; border-radius: 1px; background: rgba(255, 255, 255, 0.18); }
+.radio-readout .rbars i:nth-child(1) { height: 5px; }
+.radio-readout .rbars i:nth-child(2) { height: 8px; }
+.radio-readout .rbars i:nth-child(3) { height: 12px; }
+.radio-readout .rbars i:nth-child(4) { height: 16px; }
+.radio-readout .rbars i.on { background: #4cc28a; }
+#panel.station-panel .radio-seek { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; font-size: 15px; }
