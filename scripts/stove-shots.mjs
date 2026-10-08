@@ -17,7 +17,7 @@ const sess = (expr) => S(new Function(`const s = window.__sueta.session; return 
 const tip = () => page.locator('#tip button').click({ timeout: 700 }).catch(() => {});
 async function turnKnob(i, heat) {
   const b = await page.locator(`[data-knob="${i}"]`).first().boundingBox();
-  const cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = b.width * 0.9;
+  const cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = b.width * 0.36;
   const cur = await sess(`s.burners[${i}].heat`);
   const a0 = -Math.PI / 2;
   await page.mouse.move(cx + r * Math.cos(a0), cy + r * Math.sin(a0)); await page.mouse.down();

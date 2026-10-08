@@ -215,7 +215,7 @@ async function peelProduct(stepId, name) {
 async function turnKnob(i, heat) {
   const k = page.locator(`[data-knob="${i}"]`).first();
   const b = await k.boundingBox();
-  const cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = b.width * 0.9;
+  const cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = b.width * 0.36;
   const cur = await sess(`s.burners[${i}].heat`);
   const a0 = -Math.PI / 2;
   await page.mouse.move(cx + r * Math.cos(a0), cy + r * Math.sin(a0));
