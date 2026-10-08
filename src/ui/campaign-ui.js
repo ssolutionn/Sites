@@ -531,9 +531,8 @@ export class CampaignUI {
     this.lastTip = topic;
     this.el.tip.innerHTML = `<div class="tip-text">💡 ${esc(TIPS[topic])}</div><button class="ghost" id="tip-ok">Понятно</button>`;
     this.el.tip.classList.remove('hidden');
-    // в крупном плане совет уходит в левую колонку и не закрывает продукт
-    const CLOSE = ['board', 'bowl', 'tray', 'sink', 'puddle', 'phone'];
-    this.el.tip.classList.toggle('side', CLOSE.includes(this.app.session?.panel));
+    // совет всегда в левой колонке: по центру он закрывал продукт в крупном плане и метки станций в обзоре
+    this.el.tip.classList.add('side');
     $('#tip-ok').addEventListener('click', () => this.el.tip.classList.add('hidden'));
     this.tipT = 14;
   }
