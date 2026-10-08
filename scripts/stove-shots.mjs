@@ -26,8 +26,8 @@ async function turnKnob(i, heat) {
   await page.mouse.up(); await wait(300);
 }
 try {
-  await page.goto(url); await wait(1500);
-  await S(() => localStorage.clear()); await page.goto(url); await wait(2500);
+  await page.goto(url, { timeout: 180000 }); await wait(1500);
+  await S(() => localStorage.clear()); await page.goto(url, { timeout: 180000 }); await wait(2500);
   await page.click('[data-ui=new]'); await wait(500); await page.click('[data-ui=enter]'); await wait(1500);
   log('loaded');
   await S(() => window.__sueta.session.goTo('stove'));
