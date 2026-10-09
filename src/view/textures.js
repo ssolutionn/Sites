@@ -3,7 +3,9 @@
 import * as THREE from 'three';
 
 // VITE_NEUTRAL=1 — сборка без бренда (для публичных ссылок и превью)
-export const NEUTRAL = !!import.meta.env?.VITE_NEUTRAL;
+// Сравнение со строкой-литералом: сборщик подставляет значение и выкидывает брендовые ветки целиком.
+const NV = import.meta.env?.VITE_NEUTRAL;
+export const NEUTRAL = NV === '1' || NV === 'true'; // VITE_NEUTRAL=0 — бренд остаётся
 export const LOGO_URL = NEUTRAL ? './assets/logo-neutral.svg' : './assets/logo-5.svg';
 
 let logoImage = null;
@@ -29,7 +31,8 @@ function drawLogo(ctx, cx, cy, r, texture) {
     ctx.drawImage(logoImage, cx - r, cy - r, r * 2, r * 2);
     return;
   }
-  ctx.fillStyle = '#e30613';
+  // пока файл грузится — временный знак: в нейтральной сборке без цифры «5» и фирменного красного
+  ctx.fillStyle = NEUTRAL ? '#2f7d4f' : '#e30613';
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
@@ -37,7 +40,7 @@ function drawLogo(ctx, cx, cy, r, texture) {
   ctx.font = `900 ${r * 1.3}px Arial Black, Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('5', cx, cy + r * 0.08);
+  ctx.fillText(NEUTRAL ? '★' : '5', cx, cy + r * 0.08);
   if (texture) logoWaiters.push(() => texture.userData.redraw?.());
 }
 

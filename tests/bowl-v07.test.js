@@ -69,3 +69,17 @@ test('пересолила — «досыпать картошки»: в мис�
   assert.equal(s.bowl.contents.length, before + 1);
   assert.equal(s.bowl.contents.at(-1).product, 'potato');
 });
+
+test('медаль «Идеальный вкус» — только если проба в самый раз, пересол её не даёт', () => {
+  const s = readyBowl();
+  s.seasonPick('olivier', 'salt');
+  for (let i = 0; i < 7; i++) tap(s, 0, 0);
+  s.seasonDone('olivier');
+  stir(s, 4.3);
+  s.seasonTaste('olivier');
+  waitAction(s);
+  assert.ok(s.dishes.olivier.season.last.ds > 0, 'пересолено');
+  s.seasonDone('olivier');
+  assert.ok(s.dishes.olivier.done);
+  assert.ok(!s._medals(s.t).includes('perfectTaste'), 'за пересол медали нет');
+});

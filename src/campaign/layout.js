@@ -86,8 +86,8 @@ export function eggHalfPos(egg, side) {
 }
 
 export const CANAPE_PILES = ['bread', 'cheese', 'sausage', 'cucumber'].map((p, i) => ({ product: p, x: -0.2 + i * 0.13, z: 0.115, r: 0.04 }));
-// стакан со шпажками — справа от блюда
-export const SKEWER_JAR = { x: 0.25, z: -0.06, r: 0.03 };
+// стакан со шпажками — справа от тарелочек (справа вверху его закрывают уведомления)
+export const SKEWER_JAR = { x: 0.27, z: 0.115, r: 0.03 };
 export const FRUIT_PILES = {
   mandarin: [{ x: -0.245, z: -0.11 }, { x: -0.245, z: 0 }, { x: -0.245, z: 0.11 }],
   apple: { x: 0.255, z: -0.085 },

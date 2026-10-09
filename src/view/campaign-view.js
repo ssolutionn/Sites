@@ -17,6 +17,7 @@ import { RADIO } from '../campaign/radio-data.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 const UNIT = BOARD_UNIT;
+const SKEWER_LEN = 0.42; // шпажка канапе ~8,5 см (модель F.skewer — 20 см)
 
 export class CampaignView {
   constructor(sv) {
@@ -1222,10 +1223,10 @@ export class CampaignView {
         jar.add(glass);
         for (let i = 0; i < 9; i++) {
           const sk = F.skewer();
-          sk.scale.set(1, 1, 0.5);
+          sk.scale.set(1, 1, SKEWER_LEN);
           sk.rotation.x = Math.PI / 2 + Math.cos(i * 2.1) * 0.12;
           sk.rotation.z = Math.sin(i * 1.7) * 0.12;
-          sk.position.set(Math.cos(i * 2.4) * 0.01, 0.055, Math.sin(i * 2.4) * 0.01);
+          sk.position.set(Math.cos(i * 2.4) * 0.01, 0.05, Math.sin(i * 2.4) * 0.01);
           jar.add(sk);
         }
         g.add(jar);
@@ -1234,7 +1235,7 @@ export class CampaignView {
         g.add(o.stackPieces);
         // шпажка в руке: идёт за мышью, при проколе входит в стопку сверху
         o.handSkewer = F.skewer();
-        o.handSkewer.scale.set(1, 1, 0.5);
+        o.handSkewer.scale.set(1, 1, SKEWER_LEN);
         o.handSkewer.visible = false;
         g.add(o.handSkewer);
         o.key = null;
@@ -1350,10 +1351,11 @@ export class CampaignView {
           sg.add(pm);
         }
         if (b.pierced) {
+          // шпажка ~8 см: над стопкой торчит ровно столько, чтобы взять
           const sk = F.skewer();
-          sk.scale.set(1, 1, 0.5);
+          sk.scale.set(1, 1, SKEWER_LEN);
           sk.rotation.x = Math.PI / 2;
-          sk.position.y = 0.004 + 0.0525;
+          sk.position.y = 0.004 + 0.105 * SKEWER_LEN;
           sg.add(sk);
         }
         b._top = y;
@@ -1377,14 +1379,14 @@ export class CampaignView {
     // шпажка в руке
     const pr = s.tray.pierce;
     const hs = o.handSkewer;
-    hs.visible = s.tool === 'skewer' && (!!pr || !!this.pointerLocal);
+    hs.visible = s.tool === 'skewer' && (!!pr || !!this.pointerLocal) && !w.stacks.every((b) => b.pierced);
     if (!hs.visible) return;
     hs.rotation.set(Math.PI / 2, 0, 0);
     if (pr) {
       const b = w.stacks[pr.stack];
       const top = 0.008 + (b._top ?? 0.05);
       const tip = top + 0.03 - pr.depth * (top + 0.03 - 0.012);
-      hs.position.set(b.x + THREE.MathUtils.clamp(pr.dx, -0.03, 0.03) * 0.4, tip + 0.0525, b.z);
+      hs.position.set(b.x + THREE.MathUtils.clamp(pr.dx, -0.03, 0.03) * 0.4, tip + 0.105 * SKEWER_LEN, b.z);
       hs.rotation.z = -THREE.MathUtils.clamp(pr.dx * 8, -0.5, 0.5);
     } else {
       const p = this.pointerLocal;

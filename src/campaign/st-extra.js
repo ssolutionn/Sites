@@ -284,7 +284,8 @@ export const extraMethods = {
         const dish = this.dishes[r];
         if (!dish || dish.done || used.has(r)) continue;
         if (w.shift || w.set) {
-          if (!dish.season || dish.steps.season.done) continue;
+          // вкус правят до конца пробы (шаг taste), а не только до «посолено»
+          if (!dish.season || (dish.steps.taste ?? dish.steps.season).done) continue;
         }
         if (kind === 'noOnion' && !RECIPES[r].onionOption) continue;
         out.push({ kind, recipe: r });
@@ -371,8 +372,10 @@ export const extraMethods = {
     for (const d of Object.values(this.dishes))
       for (const s of d.recipe.steps) if (s.type === 'cut' && d.steps[s.id].done && d.steps[s.id].q != null) cuts.push(d.steps[s.id].q);
     if (cuts.length && cuts.reduce((a, b) => a + b, 0) / cuts.length >= 0.9) out.push('sharpKnife');
-    const seasons = Object.values(this.dishes).filter((d) => d.season && d.steps.season?.done);
-    if (seasons.length && seasons.every((d) => d.steps.season.q >= 0.999)) out.push('perfectTaste');
+    // вкус оценивает проба (шаг taste); у шага «посолить» оценка всегда 1 — по нему медаль не считаем
+    const tasteRec = (d) => (d.steps.taste ? d.steps.taste : d.steps.season);
+    const seasons = Object.values(this.dishes).filter((d) => d.season && tasteRec(d)?.done);
+    if (seasons.length && seasons.every((d) => tasteRec(d).q >= 0.999)) out.push('perfectTaste');
     if (!this.stats.thefts && !this.glass.spilled) out.push('noTheft');
     if (!this.stats.puddlesMade) out.push('cleanFloor');
     if (this.wallet.budget > 0 && this.wallet.spent <= this.wallet.budget * this.cfg.money.thrifty) out.push('thrifty');
