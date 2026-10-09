@@ -53,8 +53,8 @@ Phase 8
 - **Status:** complete
 
 ### Phase 8: Проверка и выдача
-- [ ] npm test, темп, e2e дня 1 мышью, снимки, interaction-spec, CHANGELOG 0.7.0, ссылка, отчёт
-- **Status:** in_progress
+- [x] npm test 152/152, темп 45,2/59,1, e2e дня 1 мышью 68/0, снимки, interaction-spec, CHANGELOG 0.7.0, ссылка v6, отчёт
+- **Status:** complete
 
 ## Decisions Made
 | Decision | Rationale |
