@@ -36,8 +36,9 @@ export function knife(s, axis, pos, from, to, steps = 8) {
 }
 
 // Нарезка кубиком step см: полоски сверху вниз, затем поперёк каждой штуки (доска не повёрнута).
-export function cutCubes(s, step = 1) {
+export function cutCubes(s, step = null) {
   const it = s.boardCur();
+  step ??= it.size ?? 1;
   if (it.body) {
     const { w, d } = it.body.shape;
     const zs = it.body.copies.map((c) => c.cz);

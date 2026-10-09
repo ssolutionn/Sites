@@ -93,7 +93,7 @@ function boot() {
     phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed',
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
-    grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny',
+    grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
     pinch: 'salt', taste: 'taste', dilute: 'pour', seasoned: 'ready', catFed: 'feed', catPlay: 'ball', catHungry: 'meow', catSleep: 'purr', cooled: 'fizz', heat: 'select', potBoils: 'boil', coolStart: 'select',
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
     unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', peel: 'select', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',

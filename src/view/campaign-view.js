@@ -1,7 +1,7 @@
 // Отображение дня кампании поверх общей сцены (кухня, героиня, кот, доска).
 // Только читает KitchenSession; ничего не начисляет.
 import * as THREE from 'three';
-import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL } from '../campaign/layout.js';
+import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL } from '../campaign/layout.js';
 import { PRODUCTS, DISH_ORDER } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
@@ -1194,12 +1194,17 @@ export class CampaignView {
         break;
       }
       case 'canape': {
-        o.skewers = w.skewers.map((sk) => {
-          const sm = F.skewer();
-          sm.position.set(sk.x, 0.012, sk.z0 + 0.075);
-          sm.scale.z = 0.85;
-          g.add(sm);
-          return sm;
+        // блюдо с местами под хлеб: собирают снизу вверх, сверху — шпажка
+        const dish = new THREE.Mesh(F.rbox(0.48, 0.008, 0.21, 0.03), F.m(0xf7f3ea, 0.35));
+        dish.position.set(0.0, 0.004, -0.0525);
+        dish.receiveShadow = true;
+        g.add(dish);
+        o.spots = w.stacks.map((b) => {
+          const ring = new THREE.Mesh(new THREE.RingGeometry(b.r * 0.82, b.r, 28), new THREE.MeshBasicMaterial({ color: 0xc9a46a, transparent: true, opacity: 0.55, depthWrite: false }));
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.set(b.x, 0.0085, b.z);
+          g.add(ring);
+          return ring;
         });
         o.piles = CANAPE_PILES.map((p) => {
           const pg = new THREE.Group();
@@ -1209,8 +1214,29 @@ export class CampaignView {
           g.add(pg);
           return pg;
         });
-        o.slotPieces = new THREE.Group();
-        g.add(o.slotPieces);
+        // стакан со шпажками
+        const jar = new THREE.Group();
+        jar.position.set(SKEWER_JAR.x, 0, SKEWER_JAR.z);
+        const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.019, 0.06, 20, 1, true), new THREE.MeshStandardMaterial({ color: 0xdff1ff, transparent: true, opacity: 0.45, roughness: 0.08, side: THREE.DoubleSide }));
+        glass.position.y = 0.03;
+        jar.add(glass);
+        for (let i = 0; i < 9; i++) {
+          const sk = F.skewer();
+          sk.scale.set(1, 1, 0.5);
+          sk.rotation.x = Math.PI / 2 + Math.cos(i * 2.1) * 0.12;
+          sk.rotation.z = Math.sin(i * 1.7) * 0.12;
+          sk.position.set(Math.cos(i * 2.4) * 0.01, 0.055, Math.sin(i * 2.4) * 0.01);
+          jar.add(sk);
+        }
+        g.add(jar);
+        o.jar = jar;
+        o.stackPieces = new THREE.Group();
+        g.add(o.stackPieces);
+        // шпажка в руке: идёт за мышью, при проколе входит в стопку сверху
+        o.handSkewer = F.skewer();
+        o.handSkewer.scale.set(1, 1, 0.5);
+        o.handSkewer.visible = false;
+        g.add(o.handSkewer);
         o.key = null;
         break;
       }
@@ -1296,32 +1322,74 @@ export class CampaignView {
     o.curTex?.update();
   }
 
+  // Высота кусочка канапе на стопке: кубик хлеба и сыра — 2 см, кружок колбасы и огурца — 0,7 см.
+  _canapeH(product) {
+    return product === 'sausage' || product === 'cucumber' ? 0.007 : 0.02;
+  }
+
   _syncCanape(s, w, o) {
     const sup = s.canapeSupply('canape');
-    const key = w.skewers.map((sk) => sk.pieces.map((p) => p?.product?.[0] ?? '-').join('')).join('|') + JSON.stringify(sup);
-    if (key === o.key) return;
-    o.key = key;
-    for (const c of o.slotPieces.children.slice()) F.disposeGroup(c);
-    w.skewers.forEach((sk) =>
-      sk.pieces.forEach((p, k) => {
-        if (!p) return;
-        const pm = F.canapePiece(p.product);
-        pm.position.set(sk.slots[k].x, 0.024, sk.slots[k].z);
-        o.slotPieces.add(pm);
-      }),
-    );
-    CANAPE_PILES.forEach((p, i) => {
-      const pg = o.piles[i];
-      for (const c of pg.children.slice(1)) F.disposeGroup(c);
-      const n = Math.min(8, sup[p.product] ?? 0);
-      for (let k = 0; k < n; k++) {
-        const pm = F.canapePiece(p.product);
-        const a = k * 2.4, r = Math.sqrt(k / 8) * 0.025;
-        pm.position.set(Math.cos(a) * r, 0.02 + (k % 2) * 0.006, Math.sin(a) * r);
-        pm.scale.setScalar(0.85);
-        pg.add(pm);
+    const key = w.stacks.map((b) => b.pieces.map((p) => p.product[0]).join('') + (b.pierced ? '*' + b.tilt.toFixed(1) : '')).join('|') + JSON.stringify(sup);
+    if (key !== o.key) {
+      o.key = key;
+      for (const c of o.stackPieces.children.slice()) F.disposeGroup(c);
+      for (const b of w.stacks) {
+        const sg = new THREE.Group();
+        sg.position.set(b.x, 0.008, b.z);
+        let y = 0;
+        // проколотое канапе чуть кренится, если шпажка вошла вкось
+        if (b.pierced) sg.rotation.z = -(b.tilt * Math.PI) / 180 * 0.35;
+        for (const p of b.pieces) {
+          const pm = F.canapePiece(p.product);
+          const h = this._canapeH(p.product);
+          if (h < 0.01) {
+            pm.rotation.x = Math.PI / 2;
+            pm.position.y = y + h / 2;
+          } else pm.position.y = y + h;
+          y += h;
+          sg.add(pm);
+        }
+        if (b.pierced) {
+          const sk = F.skewer();
+          sk.scale.set(1, 1, 0.5);
+          sk.rotation.x = Math.PI / 2;
+          sk.position.y = 0.004 + 0.0525;
+          sg.add(sk);
+        }
+        b._top = y;
+        o.stackPieces.add(sg);
       }
-    });
+      CANAPE_PILES.forEach((p, i) => {
+        const pg = o.piles[i];
+        for (const c of pg.children.slice(1)) F.disposeGroup(c);
+        const n = Math.min(8, sup[p.product] ?? 0);
+        for (let k = 0; k < n; k++) {
+          const pm = F.canapePiece(p.product);
+          const a = k * 2.4, r = Math.sqrt(k / 8) * 0.025;
+          pm.position.set(Math.cos(a) * r, 0.02 + (k % 2) * 0.006, Math.sin(a) * r);
+          pm.scale.setScalar(0.85);
+          pg.add(pm);
+        }
+      });
+    }
+    // места без хлеба подсвечены, пока стопка не начата
+    w.stacks.forEach((b, i) => (o.spots[i].visible = !b.pieces.length));
+    // шпажка в руке
+    const pr = s.tray.pierce;
+    const hs = o.handSkewer;
+    hs.visible = s.tool === 'skewer' && (!!pr || !!this.pointerLocal);
+    if (!hs.visible) return;
+    hs.rotation.set(Math.PI / 2, 0, 0);
+    if (pr) {
+      const b = w.stacks[pr.stack];
+      const top = 0.008 + (b._top ?? 0.05);
+      const tip = top + 0.03 - pr.depth * (top + 0.03 - 0.012);
+      hs.position.set(b.x + THREE.MathUtils.clamp(pr.dx, -0.03, 0.03) * 0.4, tip + 0.0525, b.z);
+      hs.rotation.z = -THREE.MathUtils.clamp(pr.dx * 8, -0.5, 0.5);
+    } else {
+      const p = this.pointerLocal;
+      hs.position.set(p.x, 0.12, p.z);
+    }
   }
 
   _syncFruit(s, w, o) {

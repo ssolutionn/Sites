@@ -66,7 +66,8 @@ export const trayMethods = {
       case 'shuba':
         return { dish: items[0], layers: [], current: null };
       case 'canape':
-        return { skewers: items.map((s) => ({ ...s, pieces: [null, null, null, null] })) };
+        // стопки на хлебе: собираешь снизу вверх, потом прокалываешь шпажкой сверху
+        return { stacks: items.map((b) => ({ ...b, pieces: [], pierced: false, tilt: 0 })) };
       case 'fruit':
         return { plate: items[0], mandarins: FRUIT_PILES.mandarin.map((p) => ({ ...p, peel: 0, split: false, left: 0 })), apple: 8, grapes: 6, placed: [] };
       case 'chicken':
@@ -77,7 +78,8 @@ export const trayMethods = {
   },
 
   setTool(tool) {
-    if (!['knife', 'spoon', 'spatula', 'brush', 'hand'].includes(tool)) return false;
+    if (!['knife', 'spoon', 'spatula', 'brush', 'hand', 'skewer'].includes(tool)) return false;
+    this.tray.pierce = null;
     if (this.tool !== 'spoon' && tool !== 'spoon') this.spoon.load = 0;
     this.tool = tool;
     this._emit('tool', { tool });
@@ -480,7 +482,7 @@ export const trayMethods = {
     return true;
   },
 
-  // ---------- канапе: перетаскивание на шпажки ----------
+  // ---------- канапе как в жизни: стопка на хлебе, потом шпажка сверху ----------
   canapeSupply(dishId = 'canape') {
     const dish = this.dishes[dishId];
     const out = {};
@@ -488,7 +490,12 @@ export const trayMethods = {
     return out;
   },
 
+  _stackAt(w, x, z, pad = 0.008) {
+    return w.stacks.find((b) => Math.hypot(x - b.x, z - b.z) <= b.r + pad) ?? null;
+  },
+
   _canapePointer(id, w, type, x, z) {
+    if (this.tool === 'skewer') return this._piercePointer(id, w, type, x, z);
     const dish = this.dishes[id];
     if (type === 'down') {
       if (this.stepState(id, 'skewers') === 'locked') {
@@ -508,17 +515,18 @@ export const trayMethods = {
         this._emit('grab', { product: pile.product });
         return 'grab';
       }
-      for (const s of w.skewers)
-        for (let k = 0; k < 4; k++) {
-          const slot = s.slots[k];
-          if (s.pieces[k] && Math.hypot(x - slot.x, z - slot.z) < 0.02) {
-            const pc = s.pieces[k];
-            s.pieces[k] = null;
-            this.tray.drag = { kind: 'canape', product: pc.product, piece: pc, x, z, from: { skewer: s.i, slot: k } };
-            this._unconfirmSkewers(id);
-            return 'grab';
-          }
+      // снять можно только верхний кусочек и только пока стопка не проколота
+      const st = this._stackAt(w, x, z);
+      if (st && st.pieces.length) {
+        if (st.pierced) {
+          this.setHint('Канапе уже на шпажке — разбирать не нужно', 1.8);
+          return 'blocked';
         }
+        const pc = st.pieces.pop();
+        this.tray.drag = { kind: 'canape', product: pc.product, piece: pc, x, z, from: { stack: st.i } };
+        this._unconfirmSkewers(id);
+        return 'grab';
+      }
       return 'miss';
     }
     if (type === 'move' && this.tray.drag) {
@@ -531,6 +539,62 @@ export const trayMethods = {
       return 'drop';
     }
     return 'hover';
+  },
+
+  // Шпажка: зажми над стопкой и протяни вниз — шпажка входит сверху до хлеба. Вбок — не проткнёт.
+  _piercePointer(id, w, type, x, z) {
+    const c = this.cfg.canape;
+    const pr = this.tray.pierce;
+    if (type === 'down') {
+      if (this.stepState(id, 'skewers') === 'locked') {
+        this.setHint('Сначала нарежь все продукты на доске', 2);
+        return 'blocked';
+      }
+      const st = this._stackAt(w, x, z, 0.012);
+      if (!st) return 'miss';
+      if (st.pierced) {
+        this.setHint('Эта уже на шпажке', 1.5);
+        return 'blocked';
+      }
+      if (st.pieces.length < c.minStack) {
+        this.setHint(st.pieces.length ? `Мало для канапе — добавь ещё ${c.minStack - st.pieces.length}` : 'Сначала собери стопку: хлеб, сыр, колбаса, огурец', 2.2);
+        return 'blocked';
+      }
+      this.tray.pierce = { stack: st.i, x0: x, z0: z, depth: 0, angle: 0, dx: 0 };
+      this._emit('pierceStart', { stack: st.i });
+      return 'pierce';
+    }
+    if (!pr) return 'hover';
+    if (type === 'move') {
+      const dx = x - pr.x0, dz = z - pr.z0;
+      pr.depth = Math.max(0, Math.min(1, dz / c.pierceDepth));
+      pr.dx = dx;
+      pr.angle = Math.hypot(dx, dz) > 0.006 ? (Math.atan2(Math.abs(dx), Math.max(1e-6, dz)) * 180) / Math.PI : 0;
+      if (pr.depth >= 1) return this._pierceFinish(id, w, pr);
+      return 'pierce';
+    }
+    if (type === 'up') {
+      this.tray.pierce = null;
+      if (pr.depth > 0.2) this.setHint('Дожми шпажку до хлеба — протяни ниже', 1.8);
+      return 'up';
+    }
+    return 'hover';
+  },
+
+  _pierceFinish(id, w, pr) {
+    const c = this.cfg.canape;
+    const st = w.stacks[pr.stack];
+    this.tray.pierce = null;
+    if (pr.angle > c.pierceAngle) {
+      this.setHint('Шпажка пошла вбок — веди ровно вниз', 2);
+      this._emit('dropReject', {});
+      return 'crooked';
+    }
+    st.pierced = true;
+    st.tilt = Math.sign(pr.dx) * pr.angle;
+    this._emit('pierced', { stack: st.i });
+    if (w.stacks.every((b) => b.pierced) && !this.stepDone(id, 'skewers')) this._completeStep(id, 'skewers', 1);
+    return 'pierced';
   },
 
   _unconfirmSkewers(id) {
@@ -546,27 +610,25 @@ export const trayMethods = {
     const id = this.tray.owner;
     const w = id && this.dishes[id]?.work;
     if (d.kind === 'canape') {
-      let placed = false;
-      if (point && w?.skewers) {
-        for (const s of w.skewers) {
-          for (let k = 0; k < 4 && !placed; k++) {
-            const slot = s.slots[k];
-            if (!s.pieces[k] && Math.hypot(point.x - slot.x, point.z - slot.z) < 0.024) {
-              s.pieces[k] = d.piece;
-              placed = true;
-            }
-          }
-          if (placed) break;
+      // кусочек ложится на верх стопки; первым — только хлеб
+      let placed = false, why = null;
+      const st = point && w?.stacks ? this._stackAt(w, point.x, point.z, 0.012) : null;
+      if (st) {
+        if (st.pierced) why = 'Канапе уже на шпажке';
+        else if (st.pieces.length >= this.cfg.canape.stackMax) why = 'Стопка готова — возьми шпажку и проткни сверху';
+        else if (!st.pieces.length && d.product !== 'bread') why = 'Сначала хлеб — на нём канапе стоит';
+        else {
+          st.pieces.push(d.piece);
+          placed = true;
         }
       }
       if (!placed) {
-        if (d.from.skewer != null && w) w.skewers[d.from.skewer].pieces[d.from.slot] = d.piece;
+        // отказ стопки — кусочек туда, откуда взяли; унесла мимо блюда — обратно в тарелочку
+        if (st && d.from.stack != null && w) w.stacks[d.from.stack].pieces.push(d.piece);
         else d.piece.used = false;
+        if (why) this.setHint(why, 2);
         if (point) this._emit('dropReject', {});
-      } else {
-        this._emit('dropOk', { product: d.product });
-        if (w.skewers.every((s) => s.pieces.filter(Boolean).length >= 3) && !this.stepDone(id, 'skewers')) this._completeStep(id, 'skewers', 1);
-      }
+      } else this._emit('dropOk', { product: d.product });
       return;
     }
     if (d.kind === 'fruit') {
@@ -737,13 +799,20 @@ export const trayMethods = {
       notes.push(match === exp.length && got.length === exp.length ? 'Слои в правильном порядке' : 'Порядок слоёв нарушен');
       notes.push(asm >= 85 ? 'Слои распределены ровно' : 'Местами слой лежит неровно');
     } else if (lay === 'canape') {
-      const full = w.skewers.filter((s) => s.pieces.filter(Boolean).length === 4).length;
-      const complete = w.skewers.filter((s) => new Set(s.pieces.filter(Boolean).map((p) => p.product)).size === 4).length;
-      const orders = new Set(w.skewers.map((s) => s.pieces.map((p) => p?.product ?? '-').join(','))).size;
+      const n = w.stacks.length;
+      const complete = w.stacks.filter((b) => new Set(b.pieces.map((p) => p.product)).size === 4).length;
+      // устойчивость: хлеб внизу, тяжёлое ниже лёгкого (огурец сверху), шпажка ровно
+      const heavy = { bread: 0, cheese: 1, sausage: 2, cucumber: 3 };
+      const steady = w.stacks.reduce((sum, b) => {
+        if (!b.pierced) return sum;
+        let inv = 0;
+        for (let k = 1; k < b.pieces.length; k++) if ((heavy[b.pieces[k].product] ?? 2) < (heavy[b.pieces[k - 1].product] ?? 2)) inv++;
+        return sum + Math.max(0.4, 1 - inv * 0.15 - (Math.abs(b.tilt) / this.cfg.canape.pierceAngle) * 0.25);
+      }, 0);
       const prep = this.avgQ(dish, ['cut']);
-      parts = { prep, comp: (complete / w.skewers.length) * 100, asm: (full / w.skewers.length) * 100 };
-      notes.push(complete === w.skewers.length ? 'На каждой шпажке весь состав' : `Полный состав на ${complete} из 8`);
-      notes.push(orders > 1 ? `Разных вариантов сборки: ${orders}` : 'Все шпажки собраны одинаково');
+      parts = { prep, comp: (complete / n) * 100, asm: (steady / n) * 100 };
+      notes.push(complete === n ? 'В каждом канапе весь состав' : `Полный состав в ${complete} из ${n}`);
+      notes.push(steady / n >= 0.9 ? 'Шпажки ровные, канапе стоят' : 'Кое-где канапе кренится — тяжёлое сверху или шпажка вкось');
     } else if (lay === 'fruit') {
       const kinds = new Set(w.placed.map((p) => p.fruit)).size;
       let crowd = 0;

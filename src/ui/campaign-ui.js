@@ -20,7 +20,7 @@ const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
 const PICON = { potato: '🥔', carrot: '🥕', sausage: '🌭', cucumber: '🥒', pickle: '🫙', egg: '🥚', peas: '🫛', mayo: '🫙', crab: '🦀', corn: '🌽', bread: '🍞', butter: '🧈', caviar: '🔴', tartlet: '🧁', cheese: '🧀', greens: '🌿', tomato: '🍅', onion: '🧅', herring: '🐟', beet: '🟣', skewer: '🍡', mandarin: '🍊', apple: '🍏', grapes: '🍇', chicken: '🍗', marinade: '🥣' };
 const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', fridge: '🧊', bag: '🛍', table: '🎄', puddle: '🧽' };
-const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука' };
+const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука', skewer: '🍡 Шпажка' };
 
 // Шкала пробы: где вкус относительно «в самый раз» — понятнее, чем слово «пресно».
 function tasteScale(last) {
@@ -59,7 +59,7 @@ export const TIPS = {
   'tray:tartlets': 'Наполнение: ложкой кликни по рабочей тарелке — набрать начинку, по корзинке — положить. Пустой ложкой можно снять лишнее. Затем рукой — веточки зелени.',
   'tray:tomatoes': 'Помидоры: ножом кликни по верхушке — срежешь крышечку. Ложкой проведи внутри — вынешь сердцевину. Потом наполняй, как тарталетки.',
   'tray:shuba': 'Шуба: выбери компонент снизу, кликни по блюду, разровняй лопаткой (зажми кнопку) и подтверди слой. Последний слой можно отменить.',
-  'tray:canape': 'Канапе: перетаскивай кусочки из тарелочек на шпажки. Лучше по одному каждого вида — порядок можно менять.',
+  'tray:canape': 'Канапе как в жизни: положи кубик хлеба на место на блюде, сверху — сыр, колбасу, огурец (тяжёлое ниже). Потом возьми шпажку, зажми над стопкой и протяни вниз — она войдёт до хлеба. Вбок — не проткнёт.',
   'tray:fruit': 'Фрукты: кликай по мандарину — снимешь кожуру и разделишь на дольки. Перетаскивай дольки, яблоко и виноград на тарелку: 12–18 кусочков.',
   catTheft: 'Кот тянется к колбасе! Нажми «Прогнать» в уведомлении, пока не кончилась красная полоска. Если не успеть — он унесёт кусок, и понадобится замена.',
   catSpill: 'Кот подбирается к стакану компота. Прогони его — иначе на полу будет лужа, которую придётся вытирать.',
@@ -213,7 +213,7 @@ export class CampaignUI {
       <tr><td>Зажать и провести у доски</td><td>Росчерк ножом: сверху вниз или слева направо</td></tr>
 
       <tr><td>Удержание и движение</td><td>Намазывание, перемешивание, тёрка, мытьё, уборка, маринад</td></tr>
-      <tr><td>Перетаскивание</td><td>Шпажки, фрукты, сервировка стола</td></tr>
+      <tr><td>Перетаскивание</td><td>Стопки канапе, фрукты, сервировка стола</td></tr>
       <tr><td><kbd>Q</kbd></td><td>Рецепт</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Закрыть телефон/рецепт, иначе пауза</td></tr>
       <tr><td><kbd>M</kbd></td><td>Звук</td></tr>
@@ -1122,6 +1122,7 @@ export class CampaignUI {
         if (lay === 'shuba' && w.current) return `Слой «${w.current.comp === 'mayo' ? 'майонез' : PRODUCTS[w.current.product].name.toLowerCase()}»: ${w.current.placed ? Math.round(w.current.mask.coverage() * 100) + ' % покрыто' : 'кликни по блюду'}`;
         if (lay === 'chicken') return 'Маринад: ' + w.mask.zoneCoverage().map((v) => Math.round(v * 100) + '%').join(' · ');
         if (lay === 'fruit') return `На тарелке: ${w.placed.length} (нужно 12–18)`;
+        if (lay === 'canape') return `Стопок: ${w.stacks.filter((b) => b.pieces.length >= CAMPAIGN.canape.minStack).length} из ${w.stacks.length} · на шпажке: ${w.stacks.filter((b) => b.pierced).length} · ${s.tool === 'skewer' ? 'зажми над стопкой и протяни вниз' : 'хлеб — первым, сверху остальное'}`;
         if (s.workPlate.owner === id) return `Начинка на тарелке: ${Math.round(s.workPlate.amount * 100) / 100} · в ложке: ${s.spoon.load ? 'да' : 'нет'}`;
         return '';
       }
@@ -1315,7 +1316,7 @@ export class CampaignUI {
       return `<h2>🍽 Поднос</h2><div class="row tabs">${tabs || '<span class="small">Сегодня здесь собирать нечего.</span>'}</div><div class="row">${back}</div>${dirty}<p class="note">Выбери блюдо для сборки.</p>`;
     }
     const lay = s.trayLayoutId(id);
-    const tools = { sandwiches: ['spatula', 'spoon'], eggs: ['knife', 'spoon'], tartlets: ['spoon', 'hand'], tomatoes: ['knife', 'spoon', 'hand'], shuba: ['spatula'], canape: ['hand'], fruit: ['hand'], chicken: ['brush'] }[lay] ?? [];
+    const tools = { sandwiches: ['spatula', 'spoon'], eggs: ['knife', 'spoon'], tartlets: ['spoon', 'hand'], tomatoes: ['knife', 'spoon', 'hand'], shuba: ['spatula'], canape: ['hand', 'skewer'], fruit: ['hand'], chicken: ['brush'] }[lay] ?? [];
     const toolBtns = tools.map((t) => this._btn(TOOL[t], 'setTool', [t], s.tool === t ? 'active' : '', busy)).join('');
     let extra = '';
     if (lay === 'shuba') {

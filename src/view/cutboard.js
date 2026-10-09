@@ -579,8 +579,8 @@ export class CutBoardView {
     this.crumbMesh.count = 0;
   }
 
-  _setSample(product, round) {
-    const key = product + (round ? ':r' : '');
+  _setSample(product, round, size = 1) {
+    const key = product + (round ? ':r' : '') + ':' + size;
     if (this.sampleProduct === key) return;
     this.sampleProduct = key;
     if (this.sampleCube) {
@@ -591,8 +591,8 @@ export class CutBoardView {
     if (!product || !PRODUCTS[product]?.cut) return;
     const sh = shapeOf(product);
     // кусочек из середины продукта: те же купол, мякоть и кожура, что получатся при нарезке
-    const w = round ? 0.5 : 1;
-    const piece = { id: -1, x: sh.W * 0.25, z: -0.5, w, d: 1, m: { cx: 0, cz: 0 }, hmax: round ? undefined : CUBE_H };
+    const w = round ? 0.5 : size;
+    const piece = { id: -1, x: sh.W * 0.25, z: -size / 2, w, d: size, m: { cx: 0, cz: 0 }, hmax: round ? undefined : CUBE_H * size };
     const g = pieceGeometry(piece, product);
     g.translate(-(piece.x + w / 2) * UNIT, 0.005, 0);
     this.sampleCube = new THREE.Mesh(g, productMaterial(product));
@@ -632,7 +632,7 @@ export class CutBoardView {
     this.lastCuts = it?.cuts ?? 0;
     this._updateCrumbs(dt);
 
-    this._setSample(it && !it.grater && !it.peel ? it.product : null, !!it?.log);
+    this._setSample(it && !it.grater && !it.peel ? it.product : null, !!it?.log, it?.size ?? 1);
     this.sample.visible = !!it && !it.grater && !it.peel;
     if (body && it.peel) this._syncPeel(it, pointer);
 
@@ -722,7 +722,7 @@ export class CutBoardView {
     // подсказка: куда вести нож дальше (первый день или если замешкалась) — в системе продукта
     const wantGuide = body && !it.peel && !s.pointerDown && (s.dayIndex === 0 || this.idleT > 4) && this.idleT > 0.6;
     if (wantGuide) {
-      const g = suggestCut(pieces);
+      const g = suggestCut(pieces, it.size ?? 1);
       if (g) {
         this._showLine(this.guide, g.axis, g.pos, g.from, g.to, 0xffffff, 0.45 + Math.sin(this.idleT * 4) * 0.2, it);
         const u = (this.idleT * 0.6) % 1;
@@ -942,17 +942,17 @@ export class CutBoardView {
 }
 
 /** Следующий разумный разрез: сначала полоски сверху вниз, потом поперёк. */
-export function suggestCut(pieces) {
-  const wideX = pieces.filter((p) => p.w > 1.3).sort((a, b) => a.x - b.x)[0];
+export function suggestCut(pieces, size = 1) {
+  const wideX = pieces.filter((p) => p.w > 1.3 * size).sort((a, b) => a.x - b.x)[0];
   if (wideX) {
-    const pos = wideX.x + 1;
+    const pos = wideX.x + size;
     const under = pieces.filter((p) => pos > p.x && pos < p.x + p.w);
     const b = bounds(under);
     return { axis: 'x', pos, from: b.minZ - 0.5, to: b.maxZ + 0.5 };
   }
-  const wideZ = pieces.filter((p) => p.d > 1.3).sort((a, b) => a.z - b.z)[0];
+  const wideZ = pieces.filter((p) => p.d > 1.3 * size).sort((a, b) => a.z - b.z)[0];
   if (wideZ) {
-    const pos = wideZ.z + 1;
+    const pos = wideZ.z + size;
     const under = pieces.filter((p) => pos > p.z && pos < p.z + p.d);
     const b = bounds(under);
     return { axis: 'z', pos, from: b.minX - 0.5, to: b.maxX + 0.5 };

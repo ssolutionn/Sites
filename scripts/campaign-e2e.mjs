@@ -682,13 +682,20 @@ try {
   await btn('На поднос'); await wait(300);
   await boardDo('Огурец', 'round');
   await trayItem('canape');
-  const sk = await sess('s.dishes.canape.work.skewers.map(s => s.slots)');
-    const P = [{ x: -0.2, z: 0.115 }, { x: -0.07, z: 0.115 }, { x: 0.06, z: 0.115 }, { x: 0.19, z: 0.115 }];
+  // как в жизни: хлеб на место, сверху сыр, колбаса, огурец; потом шпажка сверху вниз
+  const st = await sess('s.dishes.canape.work.stacks.map(b => ({ x: b.x, z: b.z }))');
+  const P = { bread: { x: -0.2, z: 0.115 }, cheese: { x: -0.07, z: 0.115 }, sausage: { x: 0.06, z: 0.115 }, cucumber: { x: 0.19, z: 0.115 } };
   const breadBefore = await sess('s.canapeSupply().bread');
-  await drag([[P[0].x, P[0].z], [0.3, 0.12]], 5);
+  await drag([[P.bread.x, P.bread.z], [0.3, 0.12]], 5);
   const breadAfter = await sess('s.canapeSupply().bread');
-  check('мимо шпажки — кусочек вернулся', breadBefore > 0 && breadAfter === breadBefore && !(await sess('s.tray.drag')), `${breadBefore} → ${breadAfter}`);
-  for (let i = 0; i < 8; i++) for (let k = 0; k < 4; k++) { const pr = (k + i) % 4; await drag([[P[pr].x, P[pr].z], [sk[i][k].x, sk[i][k].z]], 5); }
+  check('мимо блюда — кусочек вернулся в тарелочку', breadBefore > 0 && breadAfter === breadBefore && !(await sess('s.tray.drag')), `${breadBefore} → ${breadAfter}`);
+  await drag([[P.cheese.x, P.cheese.z], [st[0].x, st[0].z]], 5);
+  check('без хлеба основание не начать', (await sess('s.dishes.canape.work.stacks[0].pieces.length')) === 0 && /хлеб/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
+  for (let i = 0; i < 8; i++) for (const p of ['bread', 'cheese', 'sausage', 'cucumber']) await drag([[P[p].x, P[p].z], [st[i].x, st[i].z]], 5);
+  check('восемь стопок по четыре кусочка, хлеб внизу', await sess("s.dishes.canape.work.stacks.every(b => b.pieces.length === 4 && b.pieces[0].product === 'bread')"));
+  await tool('Шпажка');
+  for (let i = 0; i < 8; i++) await drag([[st[i].x, st[i].z - 0.005], [st[i].x, st[i].z + 0.02], [st[i].x, st[i].z + 0.04], [st[i].x, st[i].z + 0.06]], 4);
+  check('шпажки вошли сверху во все восемь', await sess('s.dishes.canape.work.stacks.every(b => b.pierced)'));
   await shot('d6_canape');
   await btn('Готово — на стол'); await wait(300);
   check('канапе готовы', await sess('s.dishes.canape.done'), JSON.stringify(await sess('s.dishes.canape.parts')));

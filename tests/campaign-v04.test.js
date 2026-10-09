@@ -232,7 +232,7 @@ test('ручные: тёрка засчитывает только полные 
   assert.ok(g.complete);
 });
 
-test('ручные: перетаскивание на шпажку — подходящий слот принимает, мимо — возврат', () => {
+test('канапе как в жизни: хлеб основанием, стопка снизу вверх, мимо — возврат', () => {
   const s = new KitchenSession({ dayIndex: 5, seed: 1 });
   const d = s.dishes.canape;
   for (const id of ['bread', 'cheese', 'sausage', 'cucumber']) {
@@ -241,17 +241,86 @@ test('ручные: перетаскивание на шпажку — подх�
   }
   arrive(s, 'tray');
   s.traySelect('canape');
-  const pile = CANAPE_PILES[0];
-  const slot = d.work.skewers[0].slots[0];
-  s.pointer('down', pile.x, pile.z);
-  s.pointer('move', 0.9, 0.9);
-  s.pointer('up', 0.9, 0.9);
-  assert.equal(s.canapeSupply().bread, 8);
-  s.pointer('down', pile.x, pile.z);
-  s.pointer('move', slot.x, slot.z);
-  s.pointer('up', slot.x, slot.z);
-  assert.equal(s.canapeSupply().bread, 7);
-  assert.ok(d.work.skewers[0].pieces[0]);
+  const pile = (p) => CANAPE_PILES.find((q) => q.product === p);
+  const st = d.work.stacks[0];
+  const drag = (a, b) => {
+    s.pointer('down', a.x, a.z);
+    s.pointer('move', b.x, b.z);
+    s.pointer('up', b.x, b.z);
+  };
+  drag(pile('bread'), { x: 0.9, z: 0.9 });
+  assert.equal(s.canapeSupply().bread, 8, 'мимо блюда — кусочек вернулся');
+  drag(pile('cheese'), st);
+  assert.equal(st.pieces.length, 0, 'без хлеба основание не начать');
+  assert.match(s.hint.text, /Сначала хлеб/);
+  assert.equal(s.canapeSupply().cheese, 8);
+  for (const p of ['bread', 'cheese', 'sausage', 'cucumber']) drag(pile(p), st);
+  assert.deepEqual(st.pieces.map((p) => p.product), ['bread', 'cheese', 'sausage', 'cucumber']);
+  drag(pile('cheese'), st);
+  assert.equal(st.pieces.length, 4, 'больше четырёх не влезает');
+  // снять можно только верхний
+  drag(st, { x: 0.9, z: 0.9 });
+  assert.deepEqual(st.pieces.map((p) => p.product), ['bread', 'cheese', 'sausage']);
+  assert.equal(s.canapeSupply().cucumber, 8, 'унесла мимо блюда — огурец вернулся в тарелочку');
+});
+
+test('канапе: шпажка сверху — протянуть вниз ровно; вбок не прокалывает; проколотую не разобрать', () => {
+  const s = new KitchenSession({ dayIndex: 5, seed: 1 });
+  const d = s.dishes.canape;
+  for (const id of ['bread', 'cheese', 'sausage', 'cucumber']) {
+    d.steps[id].done = true;
+    d.pieces[id] = Array.from({ length: 10 }, (_, i) => ({ id: i, product: id, used: false }));
+  }
+  arrive(s, 'tray');
+  s.traySelect('canape');
+  const stacks = d.work.stacks;
+  for (const st of stacks) for (const p of ['bread', 'cheese', 'sausage', 'cucumber']) st.pieces.push(d.pieces[p].find((q) => !q.used && (q.used = true)));
+  assert.ok(s.setTool('skewer'));
+  const st = stacks[0];
+  // вбок — не проткнула
+  s.pointer('down', st.x, st.z);
+  s.pointer('move', st.x + 0.04, st.z + 0.03);
+  s.pointer('move', st.x + 0.06, st.z + 0.05);
+  s.pointer('up', st.x + 0.06, st.z + 0.05);
+  assert.equal(st.pierced, false);
+  assert.match(s.hint.text, /вбок/);
+  // недотянула — не проткнула
+  s.pointer('down', st.x, st.z);
+  s.pointer('move', st.x, st.z + 0.02);
+  s.pointer('up', st.x, st.z + 0.02);
+  assert.equal(st.pierced, false);
+  // ровно вниз — готово
+  for (const b of stacks) {
+    s.pointer('down', b.x, b.z);
+    for (let k = 1; k <= 6; k++) s.pointer('move', b.x + 0.002, b.z + k * 0.01);
+    s.pointer('up', b.x, b.z + 0.06);
+  }
+  assert.ok(stacks.every((b) => b.pierced));
+  assert.ok(s.stepDone('canape', 'skewers'));
+  s.setTool('hand');
+  s.pointer('down', st.x, st.z);
+  s.pointer('up', st.x, st.z);
+  assert.equal(st.pieces.length, 4, 'проколотое канапе не разбирается');
+  assert.ok(s.confirmDish('canape'));
+  const parts = s.dishes.canape.parts;
+  assert.equal(parts.comp, 100);
+  assert.ok(parts.asm > 90, `ровные шпажки, тяжёлое внизу: ${parts.asm}`);
+});
+
+test('канапе: стопку меньше трёх кусочков шпажкой не проколоть', () => {
+  const s = new KitchenSession({ dayIndex: 5, seed: 1 });
+  const d = s.dishes.canape;
+  for (const id of ['bread', 'cheese', 'sausage', 'cucumber']) {
+    d.steps[id].done = true;
+    d.pieces[id] = Array.from({ length: 8 }, (_, i) => ({ id: i, product: id, used: false }));
+  }
+  arrive(s, 'tray');
+  s.traySelect('canape');
+  const st = d.work.stacks[0];
+  st.pieces.push({ product: 'bread' });
+  s.setTool('skewer');
+  assert.equal(s.pointer('down', st.x, st.z), 'blocked');
+  assert.match(s.hint.text, /добавь ещё 2/);
 });
 
 // ---------- 5. Помехи ----------

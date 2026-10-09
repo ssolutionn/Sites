@@ -89,23 +89,24 @@ function rounds(it) {
 function cubes(it) {
   if (it.body) {
     const { w, d } = it.body.shape;
+    const k = it.size ?? 1; // сторона кубика по рецепту
     const zs = it.body.copies.map((c) => c.cz);
     const z0 = Math.min(...zs) - d / 2 - 0.8, z1 = Math.max(...zs) + d / 2 + 0.8;
     const U = BOARD_UNIT;
     if (PACE.chop) {
       think(PACE.aimClick);
       const pts = [[(-w / 2 + 0.4) * U, z0 * U]];
-      for (let x = -w / 2 + 1; x < w / 2 - 0.3; x += 1) pts.push([x * U, z1 * U], [(x + 0.5) * U, z0 * U]);
+      for (let x = -w / 2 + k; x < w / 2 - 0.3; x += k) pts.push([x * U, z1 * U], [(x + k / 2) * U, z0 * U]);
       dragPath(pts, PACE.mouseSpeed * 2.5);
     } else
-      for (let x = -w / 2 + 1; x < w / 2 - 0.3; x += 1) {
+      for (let x = -w / 2 + k; x < w / 2 - 0.3; x += k) {
         think(PACE.strokeAim);
         dragPath([[x * U, z0 * U], [x * U, z1 * U]], PACE.mouseSpeed * 2);
       }
     ui(() => s.boardTurn(-1));
     tick(0.3);
     for (const cz of zs)
-      for (let z = cz - d / 2 + 1; z < cz + d / 2 - 0.3; z += 1) {
+      for (let z = cz - d / 2 + k; z < cz + d / 2 - 0.3; z += k) {
         think(PACE.strokeAim);
         dragPath([[-z * U, (-w / 2 - 0.8) * U], [-z * U, (w / 2 + 0.8) * U]], PACE.mouseSpeed * 2);
       }
@@ -535,13 +536,19 @@ const days = [
     board('canape:sausage');
     board('canape:cucumber');
     tray('canape');
-    const sk = s.dishes.canape.work.skewers;
+    // как в жизни: стопка на хлебе снизу вверх, потом шпажка сверху
+    const st = s.dishes.canape.work.stacks;
     for (let i = 0; i < 8; i++)
-      for (let k = 0; k < 4; k++) {
-        const p = CANAPE_PILES[(k + i) % 4];
+      for (const prod of ['bread', 'cheese', 'sausage', 'cucumber']) {
+        const p = CANAPE_PILES.find((q) => q.product === prod);
         think(PACE.aimClick * 0.8);
-        dragPath([[p.x, p.z], [sk[i].slots[k].x, sk[i].slots[k].z]], 0.3);
+        dragPath([[p.x, p.z], [st[i].x, st[i].z]], 0.3);
       }
+    ui(() => s.setTool('skewer'));
+    for (let i = 0; i < 8; i++) {
+      think(PACE.aimClick * 0.8);
+      dragPath([[st[i].x, st[i].z - 0.01], [st[i].x, st[i].z + 0.055]], 0.2);
+    }
     think(PACE.inspect);
     ui(() => s.confirmDish('canape'));
     collect();

@@ -66,8 +66,9 @@ export function trayItems(dishId) {
     case 'shuba':
       return [{ i: 0, x: 0.02, z: 0, r: 0.13 }];
     case 'canape': {
+      // 8 мест на блюде: 2 ряда по 4; на каждое кладут хлеб, сверху — остальное
       const out = [];
-      for (let i = 0; i < 8; i++) out.push({ i, x: -0.21 + i * 0.06, z0: -0.16, slots: [-0.115, -0.07, -0.025, 0.02].map((z) => ({ x: -0.21 + i * 0.06, z })) });
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) out.push({ i: out.length, x: -0.165 + c * 0.11, z: -0.1 + r * 0.095, r: 0.024 });
       return out;
     }
     case 'fruit':
@@ -85,6 +86,8 @@ export function eggHalfPos(egg, side) {
 }
 
 export const CANAPE_PILES = ['bread', 'cheese', 'sausage', 'cucumber'].map((p, i) => ({ product: p, x: -0.2 + i * 0.13, z: 0.115, r: 0.04 }));
+// стакан со шпажками — справа от блюда
+export const SKEWER_JAR = { x: 0.25, z: -0.06, r: 0.03 };
 export const FRUIT_PILES = {
   mandarin: [{ x: -0.245, z: -0.11 }, { x: -0.245, z: 0 }, { x: -0.245, z: 0.11 }],
   apple: { x: 0.255, z: -0.085 },

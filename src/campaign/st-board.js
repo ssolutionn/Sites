@@ -54,7 +54,8 @@ export const boardMethods = {
     if (!this._reserveStep(dishId, stepId)) return false;
     const prod = PRODUCTS[step.product];
     const qty = step.qty ?? 1; // один заход — вся порция рецепта: копии лежат рядом
-    const it = { key, dishId, stepId, product: step.product, qty, type: step.type, shape: step.shape, cuts: 0, missing: [], freshIds: new Set() };
+    // size — сторона кубика по рецепту, см (оливье 1, канапе 2,5)
+    const it = { key, dishId, stepId, product: step.product, qty, type: step.type, shape: step.shape, size: step.size ?? 1, cuts: 0, missing: [], freshIds: new Set() };
     if (step.type === 'grate') {
       it.grater = new Grater(this.cfg.grate, this.cfg.grate.cyclesPerPortion * qty);
     } else if (step.shape === 'round' && step.type !== 'peel') {
@@ -324,7 +325,10 @@ export const boardMethods = {
 
   boardQuality(it) {
     if (it.log) return roundQuality(it.log, this.cfg.roundTarget, this.cfg.edgeTrimAllowance);
-    if (it.body) return rasterQuality(it.pieces, it.initVolume, this.cfg.tolerance, PRODUCTS[it.product].cut?.trim ?? this.cfg.edgeTrimAllowance);
+    if (it.body) {
+      const t = this.cfg.tolerance, k = it.size ?? 1;
+      return rasterQuality(it.pieces, it.initVolume, { min: t.min * k, max: t.max * k, elong: t.elong }, PRODUCTS[it.product].cut?.trim ?? this.cfg.edgeTrimAllowance);
+    }
     return cutQuality(it.pieces, it.initVolume, this.cfg.tolerance, PRODUCTS[it.product].cut?.trim ?? this.cfg.edgeTrimAllowance);
   },
 

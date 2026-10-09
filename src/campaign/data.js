@@ -2,7 +2,7 @@
 // Это стартовые проектные параметры (раздел 2.2 ТЗ): меняются здесь, без правки логики.
 
 export const CAMPAIGN = {
-  version: '0.7.0',
+  version: '0.7.1',
   saveVersion: 1,
 
   // --- Время и общие параметры ---
@@ -58,6 +58,8 @@ export const CAMPAIGN = {
   pour: { default: { rate: 5, max: 1, need: 1 }, mayo: { rate: 2.4, max: 1.6, need: 0.45, light: 0.8, squeeze: true } },
   shake: { amplitude: 0.03, minInterval: 0.22, tapTime: 0.45 }, // солонка: взмах не меньше 3 см, не чаще ~4 раз в секунду; клик над миской короче tapTime — тоже щепотка
   restir: 1, // досолила после перемешивания — ещё оборот ложкой, иначе проба обманет
+  // Канапе: стопка 3–4 кусочка на хлебе; шпажку протягивают вниз на pierceDepth (м), не круче pierceAngle (°) вбок
+  canape: { minStack: 3, stackMax: 4, pierceDepth: 0.05, pierceAngle: 25 },
   // Чистка ножом: кисть — ширина снятой полоски кожуры (м), complete — сколько поверхности очистить
   peel: { cols: 26, rows: 22, brush: 0.017, amount: 0.7, complete: 0.86 },
   grate: { cyclesPerPortion: 8, zoneTop: -0.035, zoneBottom: 0.035, maxJump: 0.12 },
@@ -120,11 +122,11 @@ export const PRODUCTS = {
   mayo: { name: 'Майонез', price: 110, unit: 'порц.', storage: 'fridge', color: 0xfffbea },
   crab: { name: 'Крабовые палочки', price: 150, unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 10, d: 4, profile: 'rectangle' } },
   corn: { name: 'Кукуруза', price: 90, unit: 'банка', storage: 'pantry', color: 0xf4c430 },
-  bread: { name: 'Хлеб', price: 10, unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 8, d: 4, profile: 'rectangle' } },
+  bread: { name: 'Хлеб', price: 10, unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 12.5, d: 5, profile: 'rectangle' } },
   butter: { name: 'Сливочное масло', price: 160, unit: 'пачка', storage: 'fridge', color: 0xfff1a8 },
   caviar: { name: 'Красная икра', price: 350, unit: 'банка', storage: 'fridge', color: 0xe8461f },
   tartlet: { name: 'Корзинки', price: 20, unit: 'шт.', storage: 'pantry', color: 0xd9a35a },
-  cheese: { name: 'Сыр', price: 170, unit: 'порц.', storage: 'fridge', color: 0xf7d55b, cut: { w: 8, d: 4, profile: 'rectangle' }, grate: true },
+  cheese: { name: 'Сыр', price: 170, unit: 'порц.', storage: 'fridge', color: 0xf7d55b, cut: { w: 12.5, d: 5, profile: 'rectangle' }, grate: true },
   greens: { name: 'Зелень', price: 60, unit: 'пучок', storage: 'fridge', color: 0x3f9b3a },
   tomato: { name: 'Помидор', price: 35, unit: 'шт.', storage: 'fridge', color: 0xe23b2e },
   onion: { name: 'Лук', price: 15, unit: 'шт.', storage: 'pantry', color: 0xf3ecd6, cut: { w: 6, d: 4, profile: 'oval' } },
@@ -316,11 +318,11 @@ export const RECIPES = {
     look: 'Разноцветные устойчивые шпажки',
     count: 8,
     steps: [
-      { id: 'bread', type: 'cut', product: 'bread', shape: 'cube', dest: 'pieces', label: 'Нарезать хлеб кубиками' },
-      { id: 'cheese', type: 'cut', product: 'cheese', shape: 'cube', dest: 'pieces', label: 'Нарезать сыр кубиками' },
+      { id: 'bread', type: 'cut', product: 'bread', shape: 'cube', size: 2.5, dest: 'pieces', label: 'Нарезать хлеб кубиками по 2,5 см' },
+      { id: 'cheese', type: 'cut', product: 'cheese', shape: 'cube', size: 2.5, dest: 'pieces', label: 'Нарезать сыр кубиками по 2,5 см' },
       { id: 'sausage', type: 'cut', product: 'sausage', shape: 'round', dest: 'pieces', label: 'Нарезать колбасу кружочками' },
       { id: 'cucumber', type: 'cut', product: 'cucumber', shape: 'round', dest: 'pieces', label: 'Нарезать огурец кружочками' },
-      { id: 'skewers', type: 'skewers', items: 8, requires: ['bread', 'cheese', 'sausage', 'cucumber'], label: 'Собрать 8 шпажек' },
+      { id: 'skewers', type: 'skewers', items: 8, requires: ['bread', 'cheese', 'sausage', 'cucumber'], label: 'Собрать 8 канапе: стопка на хлебе, шпажка сверху' },
     ],
     skewerSlots: 4,
     sample: ['bread', 'cheese', 'sausage', 'cucumber'],
@@ -497,7 +499,7 @@ export const DAYS = [
     id: 6,
     title: 'Красиво разложить',
     dishes: ['canape', 'fruit'],
-    intro: 'Канапе на шпажках и фруктовая тарелка. Режем кружочки, перетаскиваем кусочки на шпажки. Винограда нет — закажи. Осторожно со стаканом компота — кот рядом.',
+    intro: 'Канапе и фруктовая тарелка. Хлеб и сыр — кубиками по 2,5 см, колбаса и огурец — кружочками. Канапе собирают как в жизни: хлеб на блюдо, сверху остальное, потом шпажка сверху вниз. Винограда нет — закажи. Осторожно со стаканом компота — кот рядом.',
     newSkills: ['Кружочки', 'Сборка шпажек', 'Выкладка', 'Уборка лужи'],
     targetMinutes: 6,
     budget: 600,
