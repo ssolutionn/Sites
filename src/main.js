@@ -113,7 +113,8 @@ function boot() {
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
     pinch: 'salt', taste: 'taste', dilute: 'pour', seasoned: 'ready', catFed: 'feed', catPlay: 'ball', catHungry: 'meow', catSleep: 'purr', cooled: 'fizz', heat: 'select', potBoils: 'boil', coolStart: 'select',
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
-    unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', peel: 'select', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
+    unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
+    stir: 'stir', peel: 'peelSkin', cutDenied: 'scuff', // перемешивание, чистка и отказ ножа раньше молчали
     feedLike: 'select', // лайк в ленте «Андрея»; новые посты приходят без звука — только значок
   };
 
@@ -129,7 +130,7 @@ function boot() {
     ui.onEvent(e, session);
     if (e.type === 'speedDone') speedFinished(e.time);
     if (e.type === 'actionStart' && !['cut', 'shoo', 'cutEgg', 'cap', 'peel', 'split', 'pinch', 'taste', 'dilute', 'feedCat', 'playCat'].includes(e.action)) sound.play('work');
-    else if (SOUND_OF[e.type]) sound.play(SOUND_OF[e.type]);
+    else if (SOUND_OF[e.type]) sound.play(SOUND_OF[e.type], e);
   }
 
   function completedDishes(upTo = 7) {

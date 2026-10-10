@@ -4,6 +4,7 @@
 import { Stirrer } from './mechanics.js';
 import { PourTracker, ShakeTracker } from './gestures.js';
 import { BOWL } from './layout.js';
+import { pickObservations } from './observations.js';
 
 export const bowlMethods = {
   _bowlBlock(dishId) {
@@ -277,7 +278,14 @@ export const bowlMethods = {
     const prep = this.avgQ(dish, ['cut', 'grate']);
     const parts = { prep, comp: 100, asm: 100 };
     const notes = [];
-    if (prep >= 85) notes.push('Кубики ровные');
+    // два конкретных замечания по фактическим кускам; нет данных (кружочки, тёрка) — общая фраза
+    const observed = pickObservations(
+      dish.recipe.steps.filter((st) => st.type === 'cut').map((st) => ({ product: st.product, size: dish.steps[st.id].info?.stats?.size ?? 1, stats: dish.steps[st.id].info?.stats })),
+      2,
+      this.cfg.observe,
+    );
+    if (observed.length) notes.push(...observed);
+    else if (prep >= 85) notes.push('Кубики ровные');
     else if (prep >= 60) notes.push('Кубики в целом ровные, есть крупные кусочки');
     else notes.push('Кусочки очень разные по размеру');
     notes.push('Перемешано до однородности');

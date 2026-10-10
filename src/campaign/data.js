@@ -2,7 +2,7 @@
 // Это стартовые проектные параметры (раздел 2.2 ТЗ): меняются здесь, без правки логики.
 
 export const CAMPAIGN = {
-  version: '0.7.1',
+  version: '0.8.0',
   saveVersion: 1,
 
   // --- Время и общие параметры ---
@@ -28,6 +28,8 @@ export const CAMPAIGN = {
   // для профилей, где эталонной нарезке этого мало, допуск задан в PRODUCTS[*].cut.trim (scripts/calibrate-trims.mjs)
   // Кубик: √площади куска в [min, max] см и вытянутость не больше elong (полоска 1×3 — уже не кубик)
   tolerance: { min: 0.65, max: 1.45, elong: 2 },
+  // замечания после блюда о нарезке (observations.js): с каких долей по площади кусок считается «много»
+  observe: { crumb: 0.25, big: 0.25, bigMean: 1.3, long: 0.2, small: 0.35, smallMean: 0.75, rulerSpread: 0.15 },
   roundTarget: { thickness: 1, min: 0.64, max: 1.44, minCut: 0.36 }, // кружочки, см
 
   durations: {

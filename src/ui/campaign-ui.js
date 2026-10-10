@@ -2,7 +2,7 @@
 import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER } from '../campaign/data.js';
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
-import { CLAYOUT, TABLE_SLOTS } from '../campaign/layout.js';
+import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
@@ -113,6 +113,7 @@ export class CampaignUI {
     this.alertEls = new Map();
     this.toasts = [];
     this.tipShown = new Set();
+    this.pendingTips = []; // советы про другое место кухни: ждут, пока игрок не выйдет из крупного плана
     this.recipeOpen = false;
     this.phoneTab = 'messages';
     this.labelEls = {};
@@ -591,6 +592,16 @@ export class CampaignUI {
     this.tipT = 14;
   }
 
+  /** Совет о происшествии вне станции, где игрок сейчас работает, не перекрывает работу — ждёт выхода из крупного плана. */
+  tipWhenFree(topic) {
+    const s = this.app.session;
+    if (s?.panel && CLOSEUP_STATIONS.has(s.panel) && !this.tipShown.has(topic)) {
+      if (!this.pendingTips.includes(topic)) this.pendingTips.push(topic);
+      return;
+    }
+    this.tip(topic);
+  }
+
   repeatTip() {
     const s = this.app.session;
     let topic = this.lastTip;
@@ -611,13 +622,18 @@ export class CampaignUI {
       case 'open':
         if (['bowl', 'sink', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
         if (e.station === 'phone') this.tip('money');
-        if (e.station === 'radio') this.tip('radioTune');
+        if (e.station === 'radio') {
+          this.pendingTips = this.pendingTips.filter((t) => t !== 'radio');
+          this.tip('radioTune');
+        }
         if (e.station === 'phone') {
           this.openPhone();
         }
         break;
       case 'close':
         if (e.station === 'phone') this.el.phone.classList.add('hidden');
+        // отложенный совет — через мгновение после выхода из станции
+        if (this.pendingTips.length) this.tip(this.pendingTips.shift());
         break;
       case 'dishDone': {
         const d = s.dishes[e.dishId];
@@ -635,20 +651,20 @@ export class CampaignUI {
         this.tip('pot');
         break;
       case 'orderPlaced':
-        this.tip('delivery');
+        this.tipWhenFree('delivery');
         break;
       case 'radioBroken':
-        this.tip('radio');
+        this.tipWhenFree('radio');
         break;
       case 'garlandOff':
-        this.tip('garland');
+        this.tipWhenFree('garland');
         break;
       case 'catStole':
         this.toast(`Кот утащил кусок (${esc(PRODUCTS[e.product ?? 'sausage'].name.toLowerCase())})! На доске — «Взять замену»`, 'bad', 3.5);
         this.popup('🐈 Утащил!', 'bad');
         break;
       case 'catHungry':
-        this.tip('catHungry');
+        this.tipWhenFree('catHungry');
         break;
       case 'catFed':
         this.toast('Кот сыт и доволен 🐟', 'good');
@@ -900,6 +916,8 @@ export class CampaignUI {
   }
 
   _renderAlerts(s) {
+    // в крупном плане срочное остаётся карточкой, остальное — значками: руки и продукт важнее
+    this.el.alerts.classList.toggle('compact', !!s.panel && CLOSEUP_STATIONS.has(s.panel));
     const ids = new Set();
     for (const a of s.alerts) {
       ids.add(a.id);
@@ -913,6 +931,7 @@ export class CampaignUI {
         else if (a.action === 'collect') acts = `<button class="primary" data-a="collect">Забрать заказ</button>`;
         else if (a.station) acts = `<button class="${a.urgent ? 'danger' : 'primary'}" data-a="go" data-s="${a.station}">${a.phone ? 'Открыть' : 'Подойти'}</button>`;
         if (!a.urgent && a.dismissable !== false) acts += `<button class="ghost" data-a="dismiss">×</button>`;
+        el.title = a.text;
         el.innerHTML = `<div class="ico">${icon}</div><div class="txt">${esc(a.text)}</div><div class="acts">${acts}</div>${a.deadline != null ? '<div class="timer"><i></i></div>' : ''}`;
         el.querySelectorAll('button').forEach((b) =>
           b.addEventListener('click', () => {
@@ -923,6 +942,8 @@ export class CampaignUI {
             else this.act('dismissAlert', a.id);
           }),
         );
+        // в сжатом виде значок — сама кнопка: клик по нему делает главное действие карточки
+        el.querySelector('.ico').addEventListener('click', () => el.classList.contains('urgent') || el.querySelector('.acts button')?.click());
         this.el.alerts.appendChild(el);
         this.alertEls.set(a.id, el);
       }

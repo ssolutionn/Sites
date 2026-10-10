@@ -567,7 +567,11 @@ export class CutBoardView {
     tag.position.set(0, 0.07, 0);
     tag.renderOrder = 8;
     this.sample.add(tag);
+    this.sampleTag = tag;
     this.sampleCube = null;
+    this.sampleCube2 = null; // второй кубик рядом: на блюдце «пара», так размер легче сравнить с продуктом
+    this.neatVer = -1;
+    this.neatCount = 0;
     this.sampleProduct = null;
     this.group.add(this.sample);
   }
@@ -588,6 +592,10 @@ export class CutBoardView {
       this.sampleCube.geometry.dispose();
       this.sampleCube = null;
     }
+    if (this.sampleCube2) {
+      this.sample.remove(this.sampleCube2); // геометрия общая с первым кубиком, уже освобождена
+      this.sampleCube2 = null;
+    }
     if (!product || !PRODUCTS[product]?.cut) return;
     const sh = shapeOf(product);
     // кусочек из середины продукта: те же купол, мякоть и кожура, что получатся при нарезке
@@ -598,6 +606,14 @@ export class CutBoardView {
     this.sampleCube = new THREE.Mesh(g, productMaterial(product));
     this.sampleCube.castShadow = true;
     this.sample.add(this.sampleCube);
+    // мелкий кубик — пара на блюдце (крупные, как у канапе, не помещаются)
+    if (!round && size <= 1.5) {
+      const dx = size * UNIT * 0.7;
+      this.sampleCube.position.x = -dx;
+      this.sampleCube2 = this.sampleCube.clone();
+      this.sampleCube2.position.x = dx;
+      this.sample.add(this.sampleCube2);
+    }
   }
 
   /**
@@ -612,6 +628,8 @@ export class CutBoardView {
       this._clearBody();
       this.itemKey = key;
       this.lastCuts = it?.cuts ?? 0;
+      this.neatVer = -1;
+      this.neatCount = 0;
     }
     // продукт на доске — одна геометрия из контуров кусков; доска поворачивается вместе с ним (A/D)
     const ang = body ? it.angle ?? 0 : 0;
@@ -634,6 +652,12 @@ export class CutBoardView {
 
     this._setSample(it && !it.grater && !it.peel ? it.product : null, !!it?.log, it?.size ?? 1);
     this.sample.visible = !!it && !it.grater && !it.peel;
+    // подпись образца нужна, пока кубики не получаются: пять ровных — игрок понял, что нужно, подпись убираем
+    if (body && body.version !== this.neatVer) {
+      this.neatVer = body.version;
+      this.neatCount = it.peel ? 0 : s.boardQuality(it).neat ?? 0;
+    }
+    this.sampleTag.visible = this.neatCount < 5;
     if (body && it.peel) this._syncPeel(it, pointer);
 
     // нож, рука, подсказка

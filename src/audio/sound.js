@@ -1,9 +1,20 @@
 // Временные синтезированные эффекты через WebAudio — внешних файлов нет.
 // AudioContext создаётся только после первого действия пользователя.
 
+// Нож звучит по продукту: твёрдое глухо, хрусткое — шипением высоких, сыр звенит, мягкое — приглушённо.
+const CHOP_KIND = {
+  potato: 'hard', carrot: 'hard', beet: 'hard',
+  cucumber: 'crisp', pickle: 'crisp', onion: 'crisp', apple: 'crisp', tomato: 'crisp',
+  cheese: 'ring',
+  egg: 'soft', bread: 'soft', crab: 'soft', herring: 'soft',
+};
+// Частые события не должны сливаться в «кашу»: минимальный промежуток между одинаковыми звуками, с.
+const MIN_GAP = { chop: 0.04, stir: 0.3, peelSkin: 0.14, grate: 0.05, scuff: 0.25 };
+
 export class Sound {
   constructor() {
     this.ctx = null;
+    this.lastAt = {};
     this.muted = false;
     this.radioNodes = new Set();
     this.radioStep = -1;
@@ -97,12 +108,47 @@ export class Sound {
     src.start(t0);
   }
 
-  play(name) {
+  /** name — звук; info — событие игры (нужен продукт для ножа). */
+  play(name, info = null) {
     if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const gap = MIN_GAP[name];
+    if (gap) {
+      const now = this.ctx.currentTime;
+      if (now - (this.lastAt[name] ?? -9) < gap) return;
+      this.lastAt[name] = now;
+    }
+    const j = 0.93 + Math.random() * 0.14; // разброс высоты: повтор не звучит «как из автомата»
     switch (name) {
-      case 'chop':
-        this._noise(0.06, { vol: 0.5, freq: 3500, q: 0.8 });
-        this._tone(180, 0.08, { type: 'triangle', vol: 0.25, slideTo: 90 });
+      case 'chop': {
+        const kind = CHOP_KIND[String(info?.key ?? '').split(':').pop()];
+        if (kind === 'hard') {
+          this._noise(0.06, { vol: 0.5, freq: 2600 * j, q: 0.8 });
+          this._tone(140 * j, 0.09, { type: 'triangle', vol: 0.3, slideTo: 70 });
+        } else if (kind === 'crisp') {
+          this._noise(0.09, { vol: 0.4, freq: 5200 * j, q: 0.9, type: 'highpass' });
+          this._tone(260 * j, 0.05, { type: 'triangle', vol: 0.12, slideTo: 150 });
+        } else if (kind === 'ring') {
+          this._noise(0.05, { vol: 0.4, freq: 3800 * j, q: 0.8 });
+          this._tone(620 * j, 0.12, { vol: 0.1, slideTo: 480 * j });
+        } else if (kind === 'soft') {
+          this._noise(0.08, { vol: 0.3, freq: 1500 * j, q: 0.6 });
+          this._tone(110 * j, 0.08, { type: 'triangle', vol: 0.18, slideTo: 70 });
+        } else {
+          this._noise(0.06, { vol: 0.5, freq: 3500 * j, q: 0.8 });
+          this._tone(180 * j, 0.08, { type: 'triangle', vol: 0.25, slideTo: 90 });
+        }
+        break;
+      }
+      case 'stir':
+        this._noise(0.22, { vol: 0.09, freq: 900 * j, q: 0.5, type: 'lowpass' });
+        this._tone(200 * j, 0.2, { vol: 0.03, slideTo: 260 * j, attack: 0.05 });
+        break;
+      case 'peelSkin':
+        this._noise(0.12, { vol: 0.1, freq: 3000 * j, q: 0.7 });
+        break;
+      case 'scuff':
+        this._noise(0.08, { vol: 0.12, freq: 700, q: 0.8 });
+        this._tone(150, 0.08, { type: 'triangle', vol: 0.08, slideTo: 110 });
         break;
       case 'select':
         this._tone(900, 0.05, { vol: 0.12 });

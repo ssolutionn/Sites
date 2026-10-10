@@ -4,6 +4,7 @@ import { initialBatch, cutLine, totalVolume, largestPiece, pieceVolume, placeBes
 import { Stroke, classifyCut, CUT_HINTS, CUT_RULES } from './gestures.js';
 import { CoverageMask } from './coverage.js';
 import { CutBody, rasterQuality } from '../game/raster-cut.js';
+import { pieceStats } from './observations.js';
 import { TEMPTING } from './st-extra.js';
 import { makeRoundLog, cutRound, roundSlices, roundQuality, cutQuality, Grater } from './mechanics.js';
 
@@ -364,6 +365,7 @@ export const boardMethods = {
       const quality = this.boardQuality(it);
       q = quality.score;
       info = { neat: quality.neat ?? quality.good, pieces: it.pieces?.length ?? roundSlices(it.log).length };
+      if (it.body) info.stats = pieceStats(it.pieces, it.size ?? 1, this.cfg.tolerance, this.cfg.observe); // для замечаний после блюда
     }
     const moved = it.grater ? null : it.log ? roundSlices(it.log) : it.pieces.map((p) => ({ ...p }));
     if (step.dest === 'bowl') this._bowlReceive(it.dishId, { product: it.product, kind: it.grater ? 'grated' : 'pieces', pieces: moved });
