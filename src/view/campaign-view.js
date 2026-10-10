@@ -706,7 +706,7 @@ export class CampaignView {
     } else if (kind === 'mischief:star' || kind === 'mischief:toys') {
       // к ёлке: на звезду — лезет в ветки, за игрушками — встаёт на задние лапы у ёлки
       floor = new THREE.Vector3(-2.25, 0, -1.25);
-      top = kind === 'mischief:star' ? new THREE.Vector3(-2.72, 0.75, -1.62) : new THREE.Vector3(-2.5, 0, -1.45);
+      top = kind === 'mischief:star' ? new THREE.Vector3(-2.58, 0.6, -1.5) : new THREE.Vector3(-2.45, 0, -1.4); // снаружи веток — кота видно
       face = -2.2;
     } else {
       floor = new THREE.Vector3(0.6, 0, 1.4);

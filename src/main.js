@@ -526,8 +526,9 @@ function boot() {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (e.key === 'Escape') {
       if (mode === 'kitchen') {
+        // Esc — «назад»: закрыть рецепт, выйти со станции (крупный план → обзор, как подписано на «←»), в обзоре — пауза
         if (ui.recipeOpen) ui.toggleRecipe(false);
-        else if (session?.panel === 'phone') session.closePanel();
+        else if (session?.panel) act('closePanel');
         else app.pause();
       } else if (mode === 'paused') app.resume();
     } else if (e.code === 'KeyR') {

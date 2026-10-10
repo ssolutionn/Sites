@@ -241,6 +241,7 @@ try {
     check('в нарезке махать бесполезно — подсказка выйти', (await sess('s.cat.state')) === 'theft' && /Выйди/.test(await sess("s.hint?.text ?? ''")));
     await shot('cat_theft_closeup');
     await page.keyboard.press('Escape'); await waitFor(() => window.__sueta.session.panel === null && window.__sueta.sv.camT >= 1, 10000);
+    check('Esc в нарезке — выход в обзор, а не пауза', (await sess('s.panel')) === null && (await S(() => window.__sueta.mode)) === 'kitchen');
     await wait(600);
     await shot('cat_theft_overview');
     await waveAt();
