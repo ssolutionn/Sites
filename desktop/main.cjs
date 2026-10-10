@@ -22,7 +22,8 @@ function createWindow() {
     title: 'Симулятор новогодней суеты',
     backgroundColor: '#f3e6cf',
     show: false,
-    webPreferences: { contextIsolation: true, sandbox: true, autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false },
+    // в собранной игре консоль разработчика выключена: через неё правятся баллы и сохранение (в запуске из исходников она нужна)
+    webPreferences: { contextIsolation: true, sandbox: true, autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false, devTools: !app.isPackaged },
   });
   win.once('ready-to-show', () => win.show());
   // внешние ссылки — в системный браузер
@@ -56,7 +57,7 @@ function buildMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       ...(isMac ? [{ label: app.name, submenu: [{ role: 'about', label: 'О игре' }, { type: 'separator' }, { role: 'hide', label: 'Скрыть' }, { role: 'quit', label: 'Выйти' }] }] : []),
-      { label: 'Вид', submenu: [{ role: 'togglefullscreen', label: 'Полный экран' }, { role: 'reload', label: 'Перезапустить' }, { type: 'separator' }, { role: 'toggleDevTools', label: 'Инструменты разработчика' }] },
+      { label: 'Вид', submenu: [{ role: 'togglefullscreen', label: 'Полный экран' }, { role: 'reload', label: 'Перезапустить' }, ...(app.isPackaged ? [] : [{ type: 'separator' }, { role: 'toggleDevTools', label: 'Инструменты разработчика' }])] },
       { label: 'Окно', submenu: [{ role: 'minimize', label: 'Свернуть' }, ...(isMac ? [] : [{ role: 'quit', label: 'Выйти' }])] },
     ]),
   );
@@ -66,7 +67,8 @@ app.whenReady().then(() => {
   protocol.handle('app', (req) => {
     const { pathname } = new URL(req.url);
     const file = path.normalize(path.join(GAME_DIR, decodeURIComponent(pathname)));
-    if (!file.startsWith(GAME_DIR)) return new Response('Not found', { status: 404 });
+    // файл должен лежать внутри папки игры: «GAME_DIR + разделитель», иначе соседняя папка с тем же началом имени тоже прошла бы
+    if (file !== GAME_DIR && !file.startsWith(GAME_DIR + path.sep)) return new Response('Not found', { status: 404 });
     return net.fetch(pathToFileURL(file).toString());
   });
   buildMenu();

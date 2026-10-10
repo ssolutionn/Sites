@@ -16,6 +16,16 @@ export function fmt(sec) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** Предупреждение о сохранении для меню и итога дня (пусто, если всё в порядке). */
+function saveNote(save) {
+  const w = save.writeError;
+  if (save.status === 'newer' || w === 'protected') return 'Сохранение от более новой версии игры. В этом запуске прогресс не записывается: «Новая кампания» начнёт заново, а старое сохранение останется в копии.';
+  if (!save.available || w === 'noStorage') return 'Браузер не даёт сохранять — прогресс пропадёт, когда закроешь игру.';
+  if (w === 'failed') return 'Не удалось сохранить прогресс: браузер отказал в записи.';
+  if (save.status === 'migrated') return 'Сохранение обновлено до новой версии игры, прогресс на месте.';
+  if (save.status === 'reset') return 'Старое сохранение не удалось прочитать — начата новая кампания. Копия старого лежит в браузере, её можно вернуть.';
+  return '';
+}
 const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
 const PICON = { potato: '🥔', carrot: '🥕', sausage: '🌭', cucumber: '🥒', pickle: '🫙', egg: '🥚', peas: '🫛', mayo: '🫙', crab: '🦀', corn: '🌽', bread: '🍞', butter: '🧈', caviar: '🔴', tartlet: '🧁', cheese: '🧀', greens: '🌿', tomato: '🍅', onion: '🧅', herring: '🐟', beet: '🟣', skewer: '🍡', mandarin: '🍊', apple: '🍏', grapes: '🍇', chicken: '🍗', marinade: '🥣' };
@@ -185,7 +195,7 @@ export class CampaignUI {
           <h1>Симулятор<br/><span>новогодней</span><br/>суеты</h1>
           <p>${has ? `Пройдено дней: ${done} из 7 · итог кампании ${campaignScore(save.data)}` : 'Режь, мешай, пробуй и успевай — а кот пусть не трогает колбасу.'}</p>
           ${NEUTRAL ? '' : `<div class="by"><img src="${LOGO_URL}" alt="" /> вместе с «Пятёрочкой»</div>`}
-          ${save.status === 'reset' ? '<p class="small warn">Старое сохранение повреждено или устарело — начата новая кампания.</p>' : ''}
+          ${saveNote(save) ? `<p class="small warn">${esc(saveNote(save))}</p>` : ''}
         </div>
         <div class="glass side">
           ${has ? `<button class="primary big" data-ui="continue">▶ ${contLabel}</button>` : `<button class="primary big" data-ui="new">▶ Начать готовить</button>`}
@@ -275,7 +285,8 @@ export class CampaignUI {
     );
   }
 
-  showPause() {
+  /** Пауза. day — идёт ли день кампании: выход в меню из него теряет день, поэтому сначала спрашиваем. */
+  showPause(day = false) {
     this._overlay(
       `<div class="card dialog" style="width:min(400px,100%);text-align:center">
         <h2>Пауза</h2>
@@ -283,12 +294,27 @@ export class CampaignUI {
         <div class="actions" style="justify-content:center">
           <button class="primary big" data-ui="resume">Продолжить</button>
           <button class="ghost" data-ui="restartDay">Начать день заново</button>
-          <button class="ghost" data-ui="menu">В меню</button>
+          <button class="ghost" data-ui="${day ? 'exitAsk' : 'menu'}">В меню</button>
         </div>
       </div>`,
       'dim',
     );
     document.body.classList.add('paused-anim');
+  }
+
+  /** «В меню» посреди дня: день не сохраняется (он идёт 6–10 минут), поэтому предупреждаем заранее. */
+  showExitConfirm() {
+    this._overlay(
+      `<div class="card dialog" style="width:min(420px,100%);text-align:center">
+        <h2>Выйти в меню?</h2>
+        <p class="small">Этот день начнётся заново. Результаты прошлых дней сохранены.</p>
+        <div class="actions" style="justify-content:center">
+          <button class="primary big" data-ui="pauseBack">Остаться</button>
+          <button class="ghost big" data-ui="menu">Выйти в меню</button>
+        </div>
+      </div>`,
+      'dim',
+    );
   }
 
   showPracticeSelect() {
@@ -327,6 +353,7 @@ export class CampaignUI {
         ${wish ? `<div class="wishes">${wish}</div>` : ''}
         ${guests}
         <div class="order-row"><b>Порядок на кухне: ${r.order}</b>${r.orderNotes.length ? ' — ' + r.orderNotes.map(esc).join('; ') : ' — чисто и празднично'}</div>
+        ${save.writeError ? `<p class="small warn">⚠ Результат дня не сохранён. ${esc(saveNote(save))}</p>` : ''}
         <p class="small">Время на кухне: ${fmt(r.time)} при ориентире ${fmt(r.par ?? 0)} — темп ${r.pace ?? '—'} (ходьба ${fmt(r.stats.walk)}, крупный план ${fmt(r.stats.closeup)}, телефон ${fmt(r.stats.phone)}). Покупки: ${r.spent ?? 0} из ${r.budget ?? 0} ₽.</p>
         <div class="actions" style="justify-content:center">
           ${r.challenge ? '<button class="primary big" data-ui="challenges">🏆 К испытаниям</button>' : isLast ? '<button class="primary big" data-ui="final">🎄 Финальный стол</button>' : '<button class="primary big" data-ui="nextDay">Следующий день →</button>'}

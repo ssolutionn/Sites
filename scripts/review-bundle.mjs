@@ -14,15 +14,17 @@ const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const TAG = `sueta-${version}${NEUTRAL ? '-neutral' : ''}`;
 
 // Документы обзора — в этом порядке
-const OVERVIEW = ['docs/CHATGPT_BRIEF.md', 'docs/IMPROVEMENTS.md', 'docs/CODE_TOUR.md', 'design/gdd/interaction-spec.md', 'CHANGELOG.md'];
+const OVERVIEW = ['docs/CHATGPT_BRIEF.md', 'docs/IMPROVEMENTS.md', 'docs/HANDOFF_PLAN.md', 'docs/CODE_TOUR.md', 'design/gdd/interaction-spec.md', 'CHANGELOG.md'];
 
 // Файлы игры: только то, что под git, без инструментов процесса разработки, картинок и сборок
 const INCLUDE = [
   /^src\//, /^tests\//, /^scripts\/[^/]+\.mjs$/, /^desktop\/[^/]+\.(c|m)?js$/, /^design\/(gdd|art|ui)\//,
   /^\.planning\//, /^\.github\/workflows\//,
   /^(package\.json|vite\.config\.js|index\.html|classic\.html|gallery\.html|README\.md|CHANGELOG\.md)$/,
-  /^docs\/(CHATGPT_BRIEF|IMPROVEMENTS|CODE_TOUR|QA_v06|asset-contract|TZ_Novogodnyaya_sueta_build_v04)\.md$/,
+  /^docs\/(CHATGPT_BRIEF|IMPROVEMENTS|HANDOFF_PLAN|CODE_TOUR|QA_v06|asset-contract|TZ_Novogodnyaya_sueta_build_v04)\.md$/,
 ];
+// только в ZIP (не в code.md): без lock-файла `npm ci` в распакованном архиве не работает
+const ZIP_ONLY = ['package-lock.json'];
 const TEXT = new Set(['.js', '.mjs', '.cjs', '.css', '.md', '.html', '.json', '.yml', '.yaml']);
 const isGameFile = (f) => INCLUDE.some((r) => r.test(f)) && TEXT.has(extname(f)) && !/(^|\/)CLAUDE\.md$/.test(f);
 
@@ -95,6 +97,7 @@ const STAGE = join(OUT, '.stage');
 const DIR = join(STAGE, TAG);
 rmSync(STAGE, { recursive: true, force: true });
 for (const f of files) { mkdirSync(dirname(join(DIR, f)), { recursive: true }); writeFileSync(join(DIR, f), read(f)); }
+for (const f of ZIP_ONLY) if (tracked.includes(f)) copyFileSync(join(ROOT, f), join(DIR, f));
 if (!NEUTRAL) {
   mkdirSync(join(DIR, 'screens'), { recursive: true });
   for (const [n] of SCREENS) if (existsSync(join(ROOT, EVIDENCE, n))) copyFileSync(join(ROOT, EVIDENCE, n), join(DIR, 'screens', n));

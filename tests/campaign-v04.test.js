@@ -467,7 +467,8 @@ test('сохранение: восстановление, повреждённы
   assert.equal(back.save.days[0].best.D, 88);
   assert.ok(back.save.days[1].unlocked);
   assert.equal(parseSave('{bad json').status, 'reset');
-  assert.equal(parseSave(JSON.stringify({ version: 99, days: [] })).status, 'reset');
+  assert.equal(parseSave(JSON.stringify({ version: 99, days: [] })).status, 'newer'); // от более новой игры — не затираем (0.8)
+  assert.equal(parseSave(JSON.stringify({ days: [] })).status, 'reset');
   const mem = { data: {}, getItem(k) { return this.data[k] ?? null; }, setItem(k, v) { this.data[k] = v; } };
   const st = new SaveStore(mem);
   recordDay(st.data, 1, { D: 50, dishes: { olivier: 50 } });

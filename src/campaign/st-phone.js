@@ -22,7 +22,7 @@ export const phoneMethods = {
   // ---------- банк: бонусы ----------
   _earn(points, why) {
     const n = Math.round(points);
-    if (n <= 0 || this.practice) return 0;
+    if (n <= 0 || this.practice || this.challenge) return 0;
     this.bonus.points += n;
     this.bonus.history.unshift({ t: this.t, n, why });
     this._emit('bonus', { n, why });
@@ -42,6 +42,10 @@ export const phoneMethods = {
   buyDecor(id) {
     const d = DECOR[id];
     if (!d || this.decor.includes(id)) return false;
+    if (this.challenge || this.practice) {
+      this.setHint('Декор покупается в кампании', 2.5);
+      return false;
+    }
     if (this.bonus.points < d.price) {
       this.setHint(`Не хватает баллов: нужно ${d.price}, есть ${this.bonus.points}`, 2.5);
       return false;

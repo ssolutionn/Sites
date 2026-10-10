@@ -3,10 +3,17 @@
 import { CAMPAIGN, DAYS } from './data.js';
 
 export const SAVE_KEY = 'novogodnyaya-sueta.campaign';
+export const SAVE_BACKUP_KEY = `${SAVE_KEY}.backup`;
 
-export function emptySave() {
+/**
+ * Миграции формата: ключ — версия, из которой переходим, значение — функция «данные → данные следующей версии».
+ * Меняешь формат — поднимай CAMPAIGN.saveVersion и добавляй сюда шаг ОТ старой версии, иначе у игроков обнулится прогресс.
+ */
+export const MIGRATIONS = {};
+
+export function emptySave(version = CAMPAIGN.saveVersion) {
   return {
-    version: CAMPAIGN.saveVersion,
+    version,
     days: DAYS.map((d, i) => ({ id: d.id, unlocked: i === 0, completed: false, best: null, last: null, medals: [], stars: 0, bestTime: null })),
     settings: { quality: 'high' },
     challenges: {}, // дата испытания → лучший результат
@@ -18,18 +25,35 @@ export function emptySave() {
   };
 }
 
-// Нормализация и миграция. Возвращает { save, status: 'ok' | 'empty' | 'reset' | 'migrated' }.
-export function parseSave(raw) {
-  if (raw == null) return { save: emptySave(), status: 'empty' };
+/**
+ * Нормализация и миграция. Возвращает { save, status }, status:
+ *  'ok' — формат текущий; 'empty' — сохранения не было; 'migrated' — прогресс перенесён со старой версии;
+ *  'reset' — данные повреждены или миграции нет (начата новая кампания, старое лежит в резервной копии);
+ *  'newer' — сохранение от более новой версии игры (не перезаписывать, см. SaveStore).
+ */
+export function parseSave(raw, { version = CAMPAIGN.saveVersion, migrations = MIGRATIONS } = {}) {
+  if (raw == null) return { save: emptySave(version), status: 'empty' };
   let data;
   try {
     data = typeof raw === 'string' ? JSON.parse(raw) : raw;
   } catch {
-    return { save: emptySave(), status: 'reset' };
+    return { save: emptySave(version), status: 'reset' };
   }
-  if (!data || typeof data !== 'object' || !Array.isArray(data.days)) return { save: emptySave(), status: 'reset' };
-  if (data.version !== CAMPAIGN.saveVersion) return { save: emptySave(), status: 'reset' };
-  const base = emptySave();
+  if (!data || typeof data !== 'object' || !Array.isArray(data.days) || !Number.isInteger(data.version)) return { save: emptySave(version), status: 'reset' };
+  if (data.version > version) return { save: emptySave(version), status: 'newer' };
+  let migrated = false;
+  while (data.version < version) {
+    const step = migrations[data.version];
+    if (typeof step !== 'function') return { save: emptySave(version), status: 'reset' };
+    try {
+      const from = data.version;
+      data = { ...step(structuredClone(data)), version: from + 1 };
+    } catch {
+      return { save: emptySave(version), status: 'reset' };
+    }
+    migrated = true;
+  }
+  const base = emptySave(version);
   for (const d of base.days) {
     const src = data.days.find((x) => x && x.id === d.id);
     if (!src) continue;
@@ -53,7 +77,7 @@ export function parseSave(raw) {
   base.bonus = Number.isFinite(data.bonus) && data.bonus >= 0 ? Math.round(data.bonus) : 0;
   base.decor = Array.isArray(data.decor) ? data.decor.filter((x) => typeof x === 'string') : [];
   base.finished = base.days.every((d) => d.completed);
-  return { save: base, status: 'ok' };
+  return { save: base, status: migrated ? 'migrated' : 'ok' };
 }
 
 function validResult(r) {
@@ -89,6 +113,10 @@ export function currentDayIndex(save) {
 }
 
 export class SaveStore {
+  /**
+   * @param storage объект { getItem, setItem }; undefined — localStorage; null — хранилища нет.
+   * Поля: status (см. parseSave), available, writeError (null | 'noStorage' | 'failed' | 'protected').
+   */
   constructor(storage) {
     if (storage === undefined) {
       try {
@@ -97,27 +125,52 @@ export class SaveStore {
         storage = null;
       }
     }
-    this.storage = storage;
+    this.storage = storage ?? null;
+    this.available = this.storage != null;
+    this.writeError = null;
     let raw = null;
     try {
-      raw = storage?.getItem(SAVE_KEY) ?? null;
+      raw = this.storage?.getItem(SAVE_KEY) ?? null;
     } catch {
       raw = null;
     }
     const { save, status } = parseSave(raw);
     this.data = save;
     this.status = status;
+    // сохранение от другой версии игры: копия «как есть», чтобы прогресс можно было достать руками
+    if (raw != null && status !== 'ok') this._backup(raw);
+    // новее нашей версии — не затираем, пока игрок сам не начнёт новую кампанию
+    this.protected = status === 'newer';
   }
-  write() {
+  _backup(raw) {
     try {
-      this.storage?.setItem(SAVE_KEY, JSON.stringify(this.data));
+      this.storage?.setItem(SAVE_BACKUP_KEY, typeof raw === 'string' ? raw : JSON.stringify(raw));
+    } catch {
+      /* копия — необязательная страховка */
+    }
+  }
+  /** true — записано; false — нет, причина в writeError. */
+  write() {
+    if (!this.storage) {
+      this.writeError = 'noStorage';
+      return false;
+    }
+    if (this.protected) {
+      this.writeError = 'protected';
+      return false;
+    }
+    try {
+      this.storage.setItem(SAVE_KEY, JSON.stringify(this.data));
+      this.writeError = null;
       return true;
     } catch {
+      this.writeError = 'failed';
       return false;
     }
   }
   reset() {
     this.data = emptySave();
+    this.protected = false;
     this.write();
   }
   get hasProgress() {

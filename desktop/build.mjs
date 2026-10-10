@@ -14,6 +14,8 @@ const stage = 'build/desktop-app';
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
 cpSync('dist', `${stage}/game`, { recursive: true });
+// эти страницы и модели в самой игре не загружаются (старый режим и галерея — только веб, ?dev): в упаковку не кладём
+for (const extra of ['classic.html', 'gallery.html', 'models']) rmSync(`${stage}/game/${extra}`, { recursive: true, force: true });
 cpSync('desktop/main.cjs', `${stage}/main.cjs`);
 writeFileSync(`${stage}/package.json`, JSON.stringify({ name: 'novogodnyaya-sueta', productName: 'Novogodnyaya Sueta', version: pkg.version, description: 'Симулятор новогодней суеты', author: 'Novogodnyaya Sueta team', main: 'main.cjs' }, null, 2));
 

@@ -3,6 +3,7 @@
 import { CAMPAIGN, DAYS, DISH_ORDER } from './campaign/data.js';
 import { KitchenSession } from './campaign/session.js';
 import { SaveStore, recordDay, currentDayIndex } from './campaign/save.js';
+import { markInProgress, applyDecorPurchase } from './campaign/persist.js';
 import { CLAYOUT, TABLE_SLOTS } from './campaign/layout.js';
 import { SceneView } from './view/scene.js';
 import { CampaignView } from './view/campaign-view.js';
@@ -77,6 +78,22 @@ function boot() {
   }
   applyQuality();
 
+  // Запись сохранения с честным ответом игроку: молча терять прогресс нельзя (причины — SaveStore.writeError).
+  const SAVE_WARN = {
+    noStorage: 'Браузер не даёт сохранять — прогресс пропадёт при закрытии игры',
+    failed: 'Не удалось сохранить прогресс (браузер отказал в записи)',
+    protected: 'Сохранение от более новой версии игры: в этом запуске прогресс не записывается. «Новая кампания» начнёт заново, старое останется в копии',
+  };
+  let warnedSave = null;
+  function persist(loud = false) {
+    const ok = save.write();
+    if (!ok && (loud || warnedSave !== save.writeError)) {
+      warnedSave = save.writeError;
+      ui.toast(`⚠ ${SAVE_WARN[save.writeError] ?? SAVE_WARN.failed}`, 'bad', 6);
+    }
+    return ok;
+  }
+
   const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'unpack', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'feedCat', 'playCat', 'reduceHeat']);
   function act(name, ...args) {
     if (!session || mode !== 'kitchen') return false;
@@ -101,16 +118,12 @@ function boot() {
   };
 
   function dispatch(e) {
-    // декор кухни и баллы сохраняются сразу — это покупка, а не результат дня
-    if (e.type === 'decorBought' && !session.practice) {
-      save.data.bonus = session.bonus.points;
-      save.data.decor = [...session.decor];
-      save.write();
-    }
+    // декор кухни сохраняется сразу — это покупка, а не результат дня; баллы дня сюда не попадают (persist.js)
+    if (e.type === 'decorBought' && applyDecorPurchase(save.data, { id: e.id, practice: !!session.practice, challenge: session.challenge })) persist();
     // любимая волна радио переходит из дня в день
     if (e.type === 'radioTuned' && !session.practice) {
       save.data.settings.radioFreq = e.freq;
-      save.write();
+      persist();
     }
     view.onEvent(e);
     ui.onEvent(e, session);
@@ -131,7 +144,7 @@ function boot() {
     challenge = ch;
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
-    session = new KitchenSession({ dayIndex: i, seed, tableDishes: completedDishes(i), mods, bonus: save.data.bonus ?? 0, decor: save.data.decor ?? [] });
+    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [] });
     if (Number.isFinite(save.data.settings.radioFreq)) session.radio.freq = clampFreq(save.data.settings.radioFreq);
     view.reset();
     view.setActive(true);
@@ -163,17 +176,14 @@ function boot() {
     const best = save.data.speed?.best;
     const rec = best == null || t < best;
     if (rec) save.data.speed = { best: t };
-    save.write();
+    persist();
     ui.toast(`<b>⏱ Скоростная нарезка: ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}</b>${rec ? ' — новый рекорд!' : ''}`, 'good', 6);
   }
 
   function enterKitchen() {
     if (!session) return;
     mode = 'kitchen';
-    if (!session.practice) {
-      save.data.settings.inProgress = session.day.id;
-      save.write();
-    }
+    if (markInProgress(save.data, { dayId: session.day.id, practice: !!session.practice, challenge: session.challenge })) persist();
     ui.hideOverlay();
     ui.showKitchen(session);
     last = performance.now();
@@ -191,7 +201,7 @@ function boot() {
       const prev = save.data.challenges[challenge.key];
       if (!prev || r.D > prev.D) save.data.challenges[challenge.key] = { D: r.D, stars: r.stars, day: session.day.id };
       delete save.data.settings.inProgress;
-      save.write();
+      persist(true);
       sound.play('success');
       mode = 'dayResult';
       ui.hideKitchen();
@@ -202,7 +212,7 @@ function boot() {
     save.data.bonus = session.bonus.points;
     save.data.decor = [...session.decor];
     delete save.data.settings.inProgress;
-    save.write();
+    persist(true);
     sound.play('success');
     mode = 'dayResult';
     ui.hideKitchen();
@@ -272,7 +282,7 @@ function boot() {
       ui.releaseHolds();
       session?.pointerUp();
       session?._releaseHolds();
-      ui.showPause();
+      ui.showPause(!session?.practice && !session?.challenge);
     },
     resume() {
       if (mode !== 'paused') return;
@@ -290,8 +300,7 @@ function boot() {
       ui.hideFinal();
       view.reset();
       view.setActive(false);
-      delete save.data.settings.inProgress;
-      save.write();
+      if (delete save.data.settings.inProgress) persist();
       ui.hideKitchen();
       sv.setCameraMode('menu');
       ui.showMenu(save);
@@ -345,6 +354,12 @@ function boot() {
         case 'menu':
           app.toMenu();
           break;
+        case 'exitAsk':
+          ui.showExitConfirm();
+          break;
+        case 'pauseBack':
+          if (mode === 'paused') ui.showPause(!session?.practice && !session?.challenge);
+          break;
         case 'resume':
           app.resume();
           break;
@@ -388,7 +403,7 @@ function boot() {
           const ch = document.getElementById('stream-channel')?.value ?? '';
           const test = !!document.getElementById('stream-test')?.checked;
           save.data.settings.stream = { on: cmd === 'streamOn', channel: ch, test };
-          save.write();
+          persist();
           setupStream();
           ui.showStream(save);
           break;
@@ -407,7 +422,7 @@ function boot() {
           break;
         case 'quality':
           save.data.settings.quality = save.data.settings.quality === 'low' ? 'high' : 'low';
-          save.write();
+          persist();
           applyQuality();
           ui.showMenu(save);
           break;
@@ -540,7 +555,7 @@ function boot() {
       ff: () => session && mode === 'kitchen' && session.fastForward(30),
       unlock: () => {
         save.data.days.forEach((d) => (d.unlocked = true));
-        save.write();
+        persist();
         if (mode === 'menu') ui.showMenu(save);
       },
     });

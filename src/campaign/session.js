@@ -28,8 +28,9 @@ export function buildNav() {
 }
 
 export class KitchenSession {
-  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, tableDishes = [], mods = {}, bonus = 0, decor = [] } = {}) {
+  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, challenge = false, tableDishes = [], mods = {}, bonus = 0, decor = [] } = {}) {
     this.cfg = cfg;
+    this.challenge = !!challenge; // испытание: баллы и декор кампании не трогаем (persist.js)
     this.mods = mods;
     this.seed = seed;
     this.rng = createRng(seed);
