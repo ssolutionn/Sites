@@ -43,7 +43,26 @@ export const CLAYOUT = {
 };
 
 // Станции, у которых есть крупный план от первого лица.
-export const CLOSEUP_STATIONS = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'stove', 'radio']);
+export const CLOSEUP_STATIONS = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'stove', 'radio', 'tree']);
+
+// --- Ёлка (0.9): центр и места для игрушек ---
+// Места — в координатах ёлки (от её центра на полу), только на стороне к камере. Ярусы как у модели (kitchen.js):
+// конус i — центр по высоте 0.55 + 0.32·i, радиус основания 0.55 − 0.11·i, высота 0.55; игрушка висит в нижней части яруса.
+export const TREE = { x: -3.0, z: -1.9, face: 0.34 };
+export const TREE_SLOTS = (() => {
+  const out = [];
+  const perTier = [6, 5, 4, 3];
+  perTier.forEach((n, i) => {
+    const y = 0.55 + 0.32 * i - 0.13;
+    const r = (0.55 - 0.11 * i) * ((0.275 + 0.13) / 0.55) + 0.08; // с запасом: крупная игрушка не тонет в ветках
+    const spread = 1.25 - i * 0.12;
+    for (let k = 0; k < n; k++) {
+      const a = TREE.face + (n === 1 ? 0 : -spread + (2 * spread * k) / (n - 1)) + (i % 2 ? 0.12 : 0);
+      out.push({ i: out.length, x: Math.sin(a) * r, y, z: Math.cos(a) * r });
+    }
+  });
+  return out;
+})();
 
 // --- Рабочие места на подносе (локальные координаты: центр подноса) ---
 export const TRAY = { w: 0.56, d: 0.4, workPlate: { x: -0.33, z: 0.11, r: 0.065 } };

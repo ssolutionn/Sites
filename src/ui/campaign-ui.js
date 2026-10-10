@@ -1,5 +1,5 @@
 // Интерфейс кампании (DOM). Читает состояние и отправляет команды через act().
-import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER } from '../campaign/data.js';
+import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS } from '../campaign/data.js';
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
@@ -78,6 +78,7 @@ export const TIPS = {
   radio: 'Радио замолчало. Это не срочно: подойди к нему, зажми ручку настройки и подержи пару секунд — треск стихнет, музыка вернётся.',
   radioTune: 'Радио: зажми ручку настройки и веди по кругу — по часовой частота выше. Между станциями шипит. Колёсико мыши — точная подстройка, ◀ ▶ — соседняя станция.',
   garland: 'Часть гирлянды погасла. Не срочно, но к концу дня её стоит починить — это влияет на порядок.',
+  gifts: 'Под ёлкой подарки! Подойди к ёлке и открой — внутри баллы или ёлочная игрушка. Игрушки вешают на ёлку, их можно купить и в «Банке».',
   catBored: 'Кот скучает. Подойди к его миске и поиграй мячиком — иначе он начнёт безобразничать: полезет на ёлку или к гирлянде.',
   catWave: 'Кот безобразничает! Выйди в обзор кухни (Esc) и помаши мышью над котом — влево-вправо, — он убежит.',
   star: 'Погасла звезда на ёлке. Подойди к ёлке и удержи «Поправить звезду» — к концу дня она должна гореть.',
@@ -510,6 +511,9 @@ export class CampaignUI {
 
   // ---------- кухня ----------
   showKitchen(session) {
+    // подарки под ёлкой (0.9): напомнить один раз, когда игрок осмотрится
+    clearTimeout(this.giftTipTimer);
+    if (session.giftsLeft?.().length) this.giftTipTimer = setTimeout(() => this.app.session === session && this.tipWhenFree('gifts'), 15000);
     this.el.hud.classList.remove('hidden');
     this.el.hud.innerHTML = `
       <div class="glass hud2-task">
@@ -755,6 +759,14 @@ export class CampaignUI {
       case 'starFixed':
         this.toast('Звезда снова горит ⭐', 'good');
         break;
+      case 'giftOpened':
+        if (e.prize.kind === 'points') this.popup(`🎁 +${e.prize.n} баллов`, 'good');
+        else this.popup(`🎁 ${TOYS[e.prize.id].icon} ${esc(TOYS[e.prize.id].name)}!`, 'good');
+        this.toast(e.prize.kind === 'points' ? `В подарке ${e.prize.n} баллов — их можно потратить в «Банке» на игрушки` : `В подарке игрушка: ${esc(TOYS[e.prize.id].name.toLowerCase())}. Она в коробке — повесь на ёлку`, 'good', 3.5);
+        break;
+      case 'toyHung':
+        this.toast(`${TOYS[e.id].icon} Повесили: ${esc(TOYS[e.id].name.toLowerCase())}`, 'good', 1.6);
+        break;
       case 'radioFixed':
         this.toast('Радио снова играет 🎵', 'good');
         break;
@@ -942,7 +954,7 @@ export class CampaignUI {
   }
 
   _renderLabels(s) {
-    const closeup = ['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'radio', 'stove'].includes(s.panel) || s.practice;
+    const closeup = CLOSEUP_STATIONS.has(s.panel) || s.practice;
     for (const [id, el] of Object.entries(this.labelEls)) {
       let show = !closeup && !s.heroine.away && s.phase !== 'finished';
       if (id === 'bag') show = show && !!s.delivery.bag;
@@ -973,7 +985,7 @@ export class CampaignUI {
       if (!el) {
         el = document.createElement('div');
         el.className = `card alert ${a.urgent ? 'urgent' : ''}`;
-        const icon = { cat: '🐱', spillWarn: '🐱', catBored: '🧶', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', star: '⭐', radio: '📻', phone: '📱', delivery: '🛵', bag: '🛍', puddle: '💧' }[a.key] ?? '❗';
+        const icon = { cat: '🐱', spillWarn: '🐱', catBored: '🧶', toys: '🧸', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', star: '⭐', radio: '📻', phone: '📱', delivery: '🛵', bag: '🛍', puddle: '💧' }[a.key] ?? '❗';
         let acts = '';
         // 0.9: кнопки «Прогнать» нет — владелец: «из нарезки кнопкой прогнать нельзя». Выйти в обзор и помахать мышью над котом
         if (a.action === 'shoo') acts = `<span class="wave-hint">👋 помаши мышью над котом</span>`;
@@ -1131,7 +1143,7 @@ export class CampaignUI {
       case 'garland':
         return `${base}|${s.garland.broken}`;
       case 'tree':
-        return `${base}|${s.star.broken}`;
+        return `${base}|${s.star.broken}|${s.giftsLeft().join()}|${s.toys.map((x) => `${x.uid}:${x.slot}:${+x.fallen}`).join()}|${s.treeHand}`;
       case 'bag':
         return `${base}|${s.delivery.bag?.items.map((i) => +i.placed).join('')}`;
       case 'fridge':
@@ -1385,8 +1397,17 @@ export class CampaignUI {
       }
       case 'garland':
         return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
-      case 'tree':
-        return `<h2>🎄 Ёлка</h2><div class="row">${s.star.broken ? `<button class="primary big hold-btn" data-hold="star" data-act="hold">⭐ Поправить звезду (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.star.broken ? 'Удерживай полторы секунды.' : 'Звезда горит.'}</p>`;
+      case 'tree': {
+        // ёлка (0.9): звезда, подарки дня, игрушки из коробки — выбрать и кликнуть по ветке
+        const star = s.star.broken ? `<button class="primary big hold-btn" data-hold="star" data-act="hold">⭐ Поправить звезду (удерживай)</button>` : '';
+        const gifts = s.giftsLeft().map((i) => this._btn(`🎁 Подарок ${i + 1}`, 'openGift', [i], 'primary gift-btn', busy, 'Открыть подарок')).join('');
+        const fallen = s.toys.filter((x) => x.fallen).length;
+        const pick = fallen ? this._btn(`🧸 Поднять игрушки (${fallen})`, 'pickUpToys', [], 'danger', busy) : '';
+        const box = s.toysInBox().map((x) => this._btn(`<span class="pi">${TOYS[x.id].icon}</span><span class="pn">${esc(TOYS[x.id].name)}</span>`, 'pickToy', [x.uid], 'prod-chip ' + (s.treeHand === x.uid ? 'active' : ''), busy)).join('');
+        const hung = s.toys.filter((x) => x.slot != null).length;
+        const note = s.treeHand != null ? 'Кликни по ветке — повесим. Клик по чипу — положить обратно.' : box ? 'Выбери игрушку и кликни по ёлке. Клик по висящей игрушке — снять.' : hung ? 'Клик по игрушке на ёлке — снять и перевесить. Новые — в «Банке» за баллы или в подарках.' : 'Игрушки покупают в «Банке» за баллы или находят в подарках.';
+        return `<h2>🎄 Ёлка<span class="sub">на ёлке: ${hung}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${gifts}${box || (gifts ? '' : '<span class="small">В коробке пусто.</span>')}</div><div class="dock-main">${star}${pick}</div></div>${live}<p class="note">${note}</p>`;
+      }
       case 'fridge': {
         const rows = Object.entries(s.inventory.stock)
           .filter(([, q]) => q > 0 || s.practice)

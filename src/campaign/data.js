@@ -60,6 +60,8 @@ export const CAMPAIGN = {
     dilute: 3.5, // разбавить пересоленное
     feedCat: 1.5,
     playCat: 1,
+    openGift: 1, // развязать бант и открыть подарок
+    pickToys: 1.2, // поднять сбитые котом игрушки
   },
 
   // Ручные механики
@@ -127,7 +129,7 @@ export const CAMPAIGN = {
   scoring: {
     weights: { prep: 0.3, comp: 0.2, asm: 0.2, taste: 0.15, wish: 0.15 },
     day: { dishes: 0.75, order: 0.15, pace: 0.1 },
-    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, starLeft: 6, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
+    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, starLeft: 6, toysLeft: 4, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
   },
 };
 
@@ -177,6 +179,33 @@ export const DECOR = {
   lights: { name: 'Гирлянда-шарики', icon: '🔴', price: 45, note: 'Тёплые шарики над столешницей' },
   cloth: { name: 'Скатерть в клетку', icon: '🟥', price: 35, note: 'Праздничная скатерть на стол' },
   candles: { name: 'Свечи-звёзды', icon: '⭐', price: 25, note: 'Подсвечники на подоконник' },
+};
+
+// Ёлочные игрушки (0.9, пункт 24 владельца): покупают в «Банке» за баллы или находят в подарках под ёлкой;
+// вешают на ёлку в крупном плане. Ёлка наряжается от дня к дню (save.toys). shape — модель в src/view/toys.js.
+export const TOYS = {
+  ballRed: { name: 'Красный шар', icon: '🔴', price: 25, color: 0xd7262b, shape: 'ball' },
+  ballBlue: { name: 'Синий шар', icon: '🔵', price: 25, color: 0x1e6fd9, shape: 'ball' },
+  ballGold: { name: 'Золотой шар', icon: '🟡', price: 35, color: 0xe6b548, shape: 'ball' },
+  icicle: { name: 'Сосулька', icon: '🧊', price: 30, color: 0xcfefff, shape: 'icicle' },
+  cone: { name: 'Шишка', icon: '🌰', price: 30, color: 0x9a6a3a, shape: 'cone' },
+  snowflake: { name: 'Снежинка', icon: '❄️', price: 40, color: 0xf4fbff, shape: 'flake' },
+  bell: { name: 'Колокольчик', icon: '🔔', price: 40, color: 0xf2c14e, shape: 'bell' },
+  bird: { name: 'Птичка на прищепке', icon: '🐦', price: 50, color: 0xff8a3d, shape: 'bird' },
+  santa: { name: 'Дед Мороз', icon: '🎅', price: 60, color: 0xd7262b, shape: 'figure' },
+  snowmaiden: { name: 'Снегурочка', icon: '👧', price: 60, color: 0x4f9fe0, shape: 'figure' },
+};
+
+// Подарки под ёлкой: perDay штук в каждый день кампании, внутри — баллы или игрушка (вес w).
+// Приз закреплён за днём и номером подарка: переиграть день и «перевыбить» приз нельзя (st-tree.js giftPrize).
+export const GIFTS = {
+  perDay: 3,
+  prizes: [
+    { kind: 'points', n: 20, w: 3 },
+    { kind: 'points', n: 35, w: 2 },
+    { kind: 'points', n: 60, w: 1 },
+    { kind: 'toy', w: 4 },
+  ],
 };
 
 // Витрина доставки сверх нужного: красиво, но не по карману (атмосфера магазина под праздник).

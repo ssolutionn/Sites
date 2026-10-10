@@ -256,6 +256,57 @@ try {
     await shot('phone_chats_chatter');
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('tree')) {
+    // 24: подарки под ёлкой, игрушки за баллы, повесить на ёлку мышью, сохранится между днями
+    await openDay(2);
+    await S(() => { const sv = window.__sueta.save; sv.data.bonus = 200; sv.write(); window.__sueta.session.bonus.points = 200; });
+    await station('tree');
+    await wait(800); await tip();
+    check('у ёлки три подарка', (await S(() => document.querySelectorAll('button[data-act="openGift"]').length)) === 3);
+    await shot('tree_closeup_gifts');
+    for (let k = 0; k < 3; k++) {
+      await S(() => document.querySelector('button[data-act="openGift"]')?.click());
+      await waitFor(() => !window.__sueta.session.action, 10000); await wait(300);
+    }
+    check('подарки открыты', (await sess('s.giftsLeft().length')) === 0);
+    check('открытые подарки сохранены сразу', (await S(() => JSON.stringify(window.__sueta.save.data.gifts))) === '{"2":[0,1,2]}', await S(() => JSON.stringify(window.__sueta.save.data.gifts)));
+    await S(() => { const s = window.__sueta.session; s.buyToy('ballGold'); s.buyToy('santa'); s.buyToy('icicle'); });
+    await wait(500);
+    const box = await sess('s.toysInBox().length');
+    check('в коробке игрушки (подарки + покупки)', box >= 3, `${box}`);
+    // повесить: выбрать в доке, кликнуть по ветке
+    const pos = (i) => S((i) => { const { sv, view } = window.__sueta; const c = view.treeSlotScreen(i); return c; }, i);
+    for (const slot of [1, 3, 7, 12].slice(0, box)) {
+      const chip = page.locator('button[data-act="pickToy"]').first();
+      if (!(await chip.count())) break;
+      await chip.click(); await wait(200);
+      const q = await pos(slot);
+      await page.mouse.move(q.x, q.y); await wait(250); await page.mouse.click(q.x, q.y); await wait(300);
+    }
+    const hung = await sess('s.toys.filter((t) => t.slot != null).length');
+    check('мышью повесили игрушки на ёлку', hung >= 3, `${hung}`);
+    await wait(500); await shot('tree_toys_hung');
+    check('игрушки на местах в сохранении', (await S(() => window.__sueta.save.data.toys.filter((t) => t.slot != null).length)) === hung);
+    // кот сбивает игрушки
+    await S(() => { const s = window.__sueta.session; s.closePanel(); s.garland.broken = s.star.broken = true; s.catNeeds.hunger = 0; s.catNeeds.boredom = 85; });
+    await waitFor(() => window.__sueta.session.cat.state === 'mischief', 20000);
+    await S(() => { window.__sueta.session.cat.deadline = window.__sueta.session.t + 0.3; });
+    await waitFor(() => window.__sueta.session.toys.some((t) => t.fallen), 20000);
+    await wait(1200); await tip();
+    check('кот сбил игрушки на пол', (await sess('s.toys.filter((t) => t.fallen).length')) > 0);
+    await shot('tree_toys_fallen');
+    // новый день: ёлка наряжена, как оставили (сохранение не стираем — перезагрузка и день 3)
+    const keep = await S(() => { const sv = window.__sueta.save; sv.data.days[1].completed = true; sv.data.days[1].best = sv.data.days[1].last = { D: 90, dishes: {}, order: 100, time: 0 }; sv.data.days[2].unlocked = true; delete sv.data.settings.inProgress; sv.write(); return sv.data.toys.length; });
+    await page.reload({ timeout: 180000 }); await waitFor(() => !!window.__sueta?.save, 120000); await wait(1500);
+    await page.waitForSelector('[data-ui=continue],[data-ui=new]', { timeout: 120000 });
+    await S(() => (document.querySelector('[data-ui=continue]') ?? document.querySelector('[data-ui=new]'))?.click()); await wait(800);
+    await page.waitForSelector('[data-ui=enter]', { timeout: 120000 }); await click('[data-ui=enter]'); await wait(1200);
+    check('открыт день 3', (await sess('s.day.id')) === 3);
+    check('на следующий день игрушки на месте', (await sess('s.toys.length')) === keep && keep >= 3, `${keep}`);
+    await station('tree'); await wait(800); await tip();
+    await shot('tree_next_day');
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`, errs.slice(0, 4));
 await browser.close();

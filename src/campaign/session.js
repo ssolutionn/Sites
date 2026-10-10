@@ -15,6 +15,7 @@ import { homeMethods } from './st-home.js';
 import { phoneMethods } from './st-phone.js';
 import { extraMethods, BOILED } from './st-extra.js';
 import { radioMethods } from './st-radio.js';
+import { treeMethods } from './st-tree.js';
 import { RADIO } from './radio-data.js';
 import { CHATTER } from './chatter.js';
 
@@ -29,7 +30,7 @@ export function buildNav() {
 }
 
 export class KitchenSession {
-  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, challenge = false, tableDishes = [], mods = {}, bonus = 0, decor = [] } = {}) {
+  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, challenge = false, tableDishes = [], mods = {}, bonus = 0, decor = [], toys = [], giftsOpened = [] } = {}) {
     this.cfg = cfg;
     this.challenge = !!challenge; // испытание: баллы и декор кампании не трогаем (persist.js)
     this.mods = mods;
@@ -94,6 +95,7 @@ export class KitchenSession {
     this.phone = { messages: [], unread: 0, posts: [], feed: [], liked: {} };
     this.bonus = { points: Math.max(0, Math.round(bonus) || 0), history: [] }; // баллы бонусной программы (между днями — в сохранении)
     this.decor = [...decor]; // купленный декор кухни
+    this._initTree(toys, giftsOpened); // игрушки на ёлке и подарки дня (st-tree.js)
     this.kitchenTimers = [];
     this.delivery = { draft: {}, order: null, bag: null, usePoints: false };
     this.table = { placed: {}, available: new Set(tableDishes) };
@@ -807,6 +809,10 @@ export class KitchenSession {
       s -= o.starLeft;
       notes.push('Звезда на ёлке не горит');
     }
+    if (this.toys.some((t) => t.fallen)) {
+      s -= o.toysLeft;
+      notes.push('Игрушки так и лежат на полу');
+    }
     if (this.radio.broken) {
       s -= o.radioLeft;
       notes.push('Радио осталось сломанным');
@@ -924,7 +930,7 @@ export class KitchenSession {
 }
 
 // Методы станций в отдельных модулях — общий источник состояния остаётся один.
-Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods);
+Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods);
 
 export function emptyBurner(i) {
   // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне

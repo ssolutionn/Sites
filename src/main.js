@@ -3,7 +3,7 @@
 import { CAMPAIGN, DAYS, DISH_ORDER } from './campaign/data.js';
 import { KitchenSession } from './campaign/session.js';
 import { SaveStore, recordDay, currentDayIndex } from './campaign/save.js';
-import { markInProgress, applyDecorPurchase } from './campaign/persist.js';
+import { markInProgress, applyDecorPurchase, applyTreeEvent } from './campaign/persist.js';
 import { CLAYOUT, TABLE_SLOTS } from './campaign/layout.js';
 import { SceneView } from './view/scene.js';
 import { CampaignView } from './view/campaign-view.js';
@@ -112,7 +112,7 @@ function boot() {
 
   const SOUND_OF = {
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
-    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss',
+    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'drop', toyTaken: 'select', toysPicked: 'added',
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
@@ -127,6 +127,8 @@ function boot() {
   function dispatch(e) {
     // декор кухни сохраняется сразу — это покупка, а не результат дня; баллы дня сюда не попадают (persist.js)
     if (e.type === 'decorBought' && applyDecorPurchase(save.data, { id: e.id, practice: !!session.practice, challenge: session.challenge })) persist();
+    // ёлка: подарки, игрушки и их места сохраняются сразу (persist.js)
+    if (applyTreeEvent(save.data, e, { toys: session.toysForSave?.(), practice: !!session.practice, challenge: session.challenge })) persist();
     // любимая волна радио переходит из дня в день
     if (e.type === 'radioTuned' && !session.practice) {
       save.data.settings.radioFreq = e.freq;
@@ -135,7 +137,7 @@ function boot() {
     view.onEvent(e);
     ui.onEvent(e, session);
     if (e.type === 'speedDone') speedFinished(e.time);
-    if (e.type === 'actionStart' && !['cut', 'shoo', 'cutEgg', 'cap', 'peel', 'split', 'pinch', 'taste', 'dilute', 'feedCat', 'playCat'].includes(e.action)) sound.play('work');
+    if (e.type === 'actionStart' && !['cut', 'shoo', 'cutEgg', 'cap', 'peel', 'split', 'pinch', 'taste', 'dilute', 'feedCat', 'playCat', 'gift'].includes(e.action)) sound.play('work');
     else if (SOUND_OF[e.type]) sound.play(SOUND_OF[e.type], e);
   }
 
@@ -151,7 +153,7 @@ function boot() {
     challenge = ch;
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
-    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [] });
+    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [] });
     if (Number.isFinite(save.data.settings.radioFreq)) session.radio.freq = clampFreq(save.data.settings.radioFreq);
     view.reset();
     view.setActive(true);
@@ -218,6 +220,7 @@ function boot() {
     recordDay(save.data, session.day.id, r);
     save.data.bonus = session.bonus.points;
     save.data.decor = [...session.decor];
+    save.data.toys = session.toysForSave();
     delete save.data.settings.inProgress;
     persist(true);
     sound.play('success');
@@ -465,6 +468,11 @@ function boot() {
         return;
       }
     }
+    if (session?.panel === 'tree') {
+      view.treeHover = view.treeSlotAt(lastNdc);
+      canvas.style.cursor = view.treeHover != null ? 'pointer' : '';
+      return;
+    }
     if (canvas.style.cursor) canvas.style.cursor = '';
   });
   canvas.addEventListener('pointerleave', () => {
@@ -489,6 +497,12 @@ function boot() {
       return;
     }
     if (session.panel === 'table' || session.panel === 'phone') return;
+    // ёлка крупным планом: клик по ветке — повесить игрушку из руки или снять висящую
+    if (session.panel === 'tree' && sv.camT >= 0.95) {
+      const slot = view.treeSlotAt(ndc);
+      if (slot != null) act('treeClick', slot);
+      return;
+    }
     const hit = view.pick(ndc);
     if (!hit) return;
     if (hit.station) act('goTo', hit.station);

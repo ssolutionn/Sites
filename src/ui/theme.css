@@ -548,3 +548,6 @@ button.ready-pulse { animation: readyPulse 1.1s ease-in-out infinite; box-shadow
 
 /* 0.9: вместо кнопки «Прогнать» — подсказка жеста */
 .alert .wave-hint { font-size: 12px; font-weight: 700; color: #ffd9d2; white-space: nowrap; }
+
+/* 0.9: подарки под ёлкой */
+.gift-btn { background: linear-gradient(135deg, #e0453a, #b8231c) !important; }

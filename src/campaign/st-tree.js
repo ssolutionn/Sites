@@ -1,0 +1,158 @@
+// Ёлка (0.9, пункт 24 владельца): подарки под ёлкой (3 в день, внутри баллы или игрушка), ёлочные игрушки —
+// купить в «Банке», повесить на ёлку, снять; кот от скуки сбивает игрушки на пол. Звезда на ёлке — st-home.js (lightsOff).
+import { TOYS, GIFTS } from './data.js';
+import { TREE_SLOTS } from './layout.js';
+import { createRng } from '../game/rng.js';
+
+export const TOY_IDS = Object.keys(TOYS);
+
+/**
+ * Приз подарка: «случайный» для игрока, но закреплён за днём и номером подарка — переиграть день и выбить
+ * другой приз нельзя. { kind: 'points', n } или { kind: 'toy', id }.
+ */
+export function giftPrize(dayId, index, gifts = GIFTS) {
+  const rng = createRng((dayId * 1009 + index * 97 + 13) >>> 0);
+  rng.next();
+  const total = gifts.prizes.reduce((s, p) => s + p.w, 0);
+  let r = rng.next() * total;
+  const p = gifts.prizes.find((x) => (r -= x.w) < 0) ?? gifts.prizes[0];
+  if (p.kind === 'toy') return { kind: 'toy', id: TOY_IDS[Math.floor(rng.next() * TOY_IDS.length)] };
+  return { kind: 'points', n: p.n };
+}
+
+export const treeMethods = {
+  _initTree(toys = [], giftsOpened = []) {
+    // uid — номер игрушки в сохранении (с 1); slot — место на ёлке (TREE_SLOTS) или null — в коробке
+    this.toys = toys.filter((t) => TOYS[t?.id]).map((t, i) => ({ uid: i + 1, id: t.id, slot: Number.isInteger(t.slot) && TREE_SLOTS[t.slot] ? t.slot : null, fallen: false }));
+    this.treeHand = null; // uid игрушки в руке
+    const noGifts = this.practice || this.challenge;
+    this.gifts = { opened: new Set(noGifts ? Array.from({ length: GIFTS.perDay }, (_, i) => i) : giftsOpened) };
+  },
+
+  /** Номера ещё не открытых подарков этого дня. */
+  giftsLeft() {
+    return Array.from({ length: GIFTS.perDay }, (_, i) => i).filter((i) => !this.gifts.opened.has(i));
+  },
+
+  /** Открыть подарок под ёлкой (у ёлки). */
+  openGift(index) {
+    if (!this._isIdleAt('tree') || this.action) return false;
+    if (!this.giftsLeft().includes(index)) return false;
+    return this._startAction('gift', this.cfg.durations.openGift, () => {
+      if (this.gifts.opened.has(index)) return;
+      this.gifts.opened.add(index);
+      const prize = giftPrize(this.day.id, index);
+      let uid = null;
+      if (prize.kind === 'points') this._earn(prize.n, 'Подарок под ёлкой');
+      else uid = this._addToy(prize.id);
+      this._emit('giftOpened', { dayId: this.day.id, index, prize, uid });
+    });
+  },
+
+  _addToy(id) {
+    const uid = this.toys.length + 1;
+    this.toys.push({ uid, id, slot: null, fallen: false });
+    return uid;
+  },
+
+  /** Купить ёлочную игрушку за баллы (телефон → «Банк»). */
+  buyToy(id) {
+    const t = TOYS[id];
+    if (!t) return false;
+    if (this.challenge || this.practice) {
+      this.setHint('Игрушки покупаются в кампании', 2.5);
+      return false;
+    }
+    if (this.bonus.points < t.price) {
+      this.setHint(`Не хватает баллов: нужно ${t.price}, есть ${this.bonus.points}`, 2.5);
+      return false;
+    }
+    this.bonus.points -= t.price;
+    this.bonus.history.unshift({ t: this.t, n: -t.price, why: t.name });
+    const uid = this._addToy(id);
+    this._emit('toyBought', { id, uid });
+    this.setHint(`${t.name} — в коробке у ёлки. Повесь её!`, 3);
+    return true;
+  },
+
+  /** Игрушки в коробке (не на ёлке и не на полу). */
+  toysInBox() {
+    return this.toys.filter((t) => t.slot == null && !t.fallen);
+  },
+
+  _toysOnTree() {
+    return this.toys.filter((t) => t.slot != null).length;
+  },
+
+  /** Взять игрушку из коробки в руку (повторно — положить обратно). */
+  pickToy(uid) {
+    if (!this._isIdleAt('tree')) return false;
+    const t = this.toys.find((x) => x.uid === uid);
+    if (!t || t.slot != null || t.fallen) return false;
+    this.treeHand = this.treeHand === uid ? null : uid;
+    this._emit('pick', { product: 'toy' });
+    return true;
+  },
+
+  /**
+   * Клик по месту на ёлке: с игрушкой в руке — повесить на свободное место; пустой рукой по игрушке — снять её в руку
+   * (перевесить можно следующим кликом).
+   */
+  treeClick(slot) {
+    if (!this._isIdleAt('tree') || this.action || !TREE_SLOTS[slot]) return false;
+    const there = this.toys.find((t) => t.slot === slot);
+    if (this.treeHand != null) {
+      if (there) {
+        this.setHint('Тут уже висит игрушка — выбери свободную ветку', 1.8);
+        return false;
+      }
+      const t = this.toys.find((x) => x.uid === this.treeHand);
+      t.slot = slot;
+      this.treeHand = null;
+      this._emit('toyHung', { uid: t.uid, id: t.id, slot });
+      return true;
+    }
+    if (!there) return false;
+    there.slot = null;
+    this.treeHand = there.uid;
+    this._emit('toyTaken', { uid: there.uid, id: there.id });
+    return true;
+  },
+
+  // Кот сбил игрушки (проказа от скуки): до двух висящих — на пол, их нужно поднять.
+  _knockToys() {
+    const hung = this.toys.filter((t) => t.slot != null);
+    const n = Math.min(2, hung.length);
+    const knocked = [];
+    for (let k = 0; k < n; k++) {
+      const i = Math.floor(this.rng.next() * hung.length);
+      const t = hung.splice(i, 1)[0];
+      t.slot = null;
+      t.fallen = true;
+      knocked.push(t.uid);
+    }
+    if (knocked.length) {
+      this._alert('toys', 'Игрушки на полу — подними их у ёлки', { station: 'tree' });
+      this._emit('toysKnocked', { uids: knocked });
+    }
+    return knocked.length;
+  },
+
+  /** Поднять сбитые котом игрушки (они возвращаются в коробку — повесь снова). */
+  pickUpToys() {
+    if (!this._isIdleAt('tree') || this.action) return false;
+    const fallen = this.toys.filter((t) => t.fallen);
+    if (!fallen.length) return false;
+    return this._startAction('pickToys', this.cfg.durations.pickToys, () => {
+      for (const t of fallen) t.fallen = false;
+      this._removeAlert('toys');
+      this._emit('toysPicked', { n: fallen.length });
+      this.setHint('Игрушки в коробке — повесь их обратно', 2.5);
+    });
+  },
+
+  /** Для сохранения: игрушки по порядку uid. Упавшие сохраняются «в коробке». */
+  toysForSave() {
+    return this.toys.map((t) => ({ id: t.id, slot: t.slot }));
+  },
+};

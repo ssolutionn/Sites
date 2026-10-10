@@ -1,7 +1,10 @@
 // Отображение дня кампании поверх общей сцены (кухня, героиня, кот, доска).
 // Только читает KitchenSession; ничего не начисляет.
 import * as THREE from 'three';
-import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE } from '../campaign/layout.js';
+import { toyModel, ghostify } from './toys.js';
+
+const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
+import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, TREE_SLOTS } from '../campaign/layout.js';
 import { PRODUCTS, DISH_ORDER } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
@@ -166,6 +169,7 @@ export class CampaignView {
     fridgeHit.position.set(3.05, 1, -2.15);
     this.root.add(fridgeHit);
     tag(fridgeHit, 'fridge');
+    for (const o of k.gifts ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = 'tree', this.clickables.push(q))); // подарки ведут к ёлке
     for (const id of ['radio', 'garland', 'tree', 'phone', 'bowl', 'board']) for (const o of k.stations[id] ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = id, this.clickables.push(q)));
     this.radioView = new RadioView(k.radio);
 
@@ -447,6 +451,13 @@ export class CampaignView {
         pos.set(T.x + 0.02, T.h + 1.5 * back, T.z + 0.15 + 1.1 * back);
         return true;
       }
+      case 'c-tree': {
+        // ёлка целиком, чуть справа-спереди: видны ветки для игрушек и звезда
+        // вся ёлка между HUD сверху и доком снизу: нижние ветки и звезда в кадре
+        look.set(TREE.x + 0.05, 1.02, TREE.z);
+        pos.set(TREE.x + 0.05 + 1.55 * back, 1.55, TREE.z + 4.4 * back);
+        return true;
+      }
       case 'c-final': {
         const T = CLAYOUT.table;
         const a = this.time * 0.15;
@@ -465,7 +476,7 @@ export class CampaignView {
     if (!session || session.heroine.away) return 'c-overview';
     const p = session.panel;
     if (p === 'board') return 'board';
-    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove' || p === 'radio') return 'c-' + p;
+    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove' || p === 'radio' || p === 'tree') return 'c-' + p;
     return 'c-overview';
   }
 
@@ -723,6 +734,101 @@ export class CampaignView {
         { from: top.clone(), to: top.clone(), dur: 999, mode: 'reach', face },
       ],
     };
+  }
+
+  // ---------- ёлка: игрушки и подарки ----------
+  /** Ближайшее к мыши место на ёлке (ndc) или null — для «повесить/снять» в крупном плане. */
+  treeSlotAt(ndc) {
+    const tr = this.k.tree;
+    if (!ndc || !tr) return null;
+    const aspect = this.sv.camera.aspect || 16 / 9;
+    const v = new THREE.Vector3();
+    let best = null, bd = 0.075;
+    for (const sl of TREE_SLOTS) {
+      v.set(sl.x, sl.y - 0.05, sl.z);
+      tr.group.localToWorld(v).project(this.sv.camera);
+      const d = Math.hypot((v.x - ndc.x) * aspect, v.y - ndc.y);
+      if (d < bd) [best, bd] = [sl.i, d];
+    }
+    return best;
+  }
+
+  /** Место на ёлке на экране (пиксели) — для проверок мышью. */
+  treeSlotScreen(i) {
+    const sl = TREE_SLOTS[i];
+    const v = new THREE.Vector3(sl.x, sl.y - 0.05, sl.z);
+    this.k.tree.group.localToWorld(v).project(this.sv.camera);
+    const r = this.sv.renderer.domElement.getBoundingClientRect();
+    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+  }
+
+  _syncTree(s, t) {
+    const tr = this.k.tree;
+    if (!tr) return;
+    this.toyMeshes ??= new Map();
+    const live = new Set();
+    for (const toy of s.toys ?? []) {
+      let m = this.toyMeshes.get(toy.uid);
+      if (!m || m.userData.id !== toy.id) {
+        if (m) m.removeFromParent();
+        m = toyModel(toy.id);
+        m.userData.id = toy.id;
+        this.toyMeshes.set(toy.uid, m);
+      }
+      live.add(toy.uid);
+      if (toy.slot != null) {
+        const sl = TREE_SLOTS[toy.slot];
+        if (m.parent !== tr.group) tr.group.add(m);
+        m.position.set(sl.x, sl.y, sl.z);
+        m.rotation.set(0, Math.atan2(sl.x, sl.z), Math.sin(t * 1.3 + toy.uid) * 0.08);
+        const hot = s.panel === 'tree' && this.treeHover === toy.slot && s.treeHand == null;
+        m.scale.setScalar(TOY_SCALE * (hot ? 1.18 : 1));
+        m.visible = true;
+      } else if (toy.fallen) {
+        // на полу у ёлки: лежат на боку
+        if (m.parent !== this.root) this.root.add(m);
+        m.position.set(TREE.x + 0.62 + (toy.uid % 3) * 0.13, 0.03, TREE.z + 0.55 + (toy.uid % 2) * 0.12);
+        m.rotation.set(Math.PI / 2, 0, toy.uid);
+        m.scale.setScalar(TOY_SCALE);
+        m.visible = true;
+      } else m.visible = false;
+    }
+    for (const [uid, m] of this.toyMeshes)
+      if (!live.has(uid)) {
+        m.removeFromParent();
+        this.toyMeshes.delete(uid);
+      }
+    // игрушка в руке — «примерка» над свободной веткой под мышью
+    const hand = s.treeHand != null ? s.toys.find((x) => x.uid === s.treeHand) : null;
+    const free = this.treeHover != null && !s.toys.some((x) => x.slot === this.treeHover);
+    if (hand && free && s.panel === 'tree') {
+      if (this.toyGhost?.userData.id !== hand.id) {
+        this.toyGhost?.removeFromParent();
+        this.toyGhost = ghostify(toyModel(hand.id));
+        this.toyGhost.userData.id = hand.id;
+        this.toyGhost.scale.setScalar(TOY_SCALE);
+        tr.group.add(this.toyGhost);
+      }
+      const sl = TREE_SLOTS[this.treeHover];
+      this.toyGhost.position.set(sl.x, sl.y, sl.z);
+      this.toyGhost.rotation.y = Math.atan2(sl.x, sl.z);
+      this.toyGhost.visible = true;
+    } else if (this.toyGhost) this.toyGhost.visible = false;
+    // подарки: открытые исчезают
+    (this.k.gifts ?? []).forEach((g, i) => {
+      const open = s.gifts?.opened.has(i);
+      if (open && g.visible && g.userData.popT == null) g.userData.popT = 0;
+      if (g.userData.popT != null) {
+        g.userData.popT += 1 / 60;
+        const k2 = Math.min(1, g.userData.popT / 0.35);
+        g.scale.setScalar(1 + k2 * 0.25);
+        if (k2 >= 1) g.visible = false;
+      } else {
+        g.visible = !open;
+        g.scale.setScalar(1);
+      }
+      if (!open) g.userData.popT = null;
+    });
   }
 
   /** Мышь над котом (ndc): для жеста «помахать» — с запасом вокруг кота, он маленький на экране. */
@@ -1039,6 +1145,7 @@ export class CampaignView {
       b.material.emissiveIntensity = on;
     });
     g.light.intensity = broken && !fixing ? 0.9 : 2.2;
+    this._syncTree(s, t);
     // кот безобразничает: ёлка качается, гирлянда дёргается
     const mis = s.cat.state === 'mischief' ? s.cat.kind : null;
     if (this.k.tree) this.k.tree.group.rotation.z = mis === 'star' || mis === 'toys' ? Math.sin(t * 17) * 0.035 : 0;

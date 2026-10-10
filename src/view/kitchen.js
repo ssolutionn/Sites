@@ -278,17 +278,23 @@ export function buildKitchen(scene) {
   k.tree = { group: treeG, star, glow: starGlow };
   tag(treeG, 'tree');
   k.stations.tree = [treeG];
-  // подарки
+  // подарки (0.9: их открывают — campaign-view.js прячет открытые; клик по ним ведёт к ёлке)
   const giftColors = [0xd7262b, 0x2e7d32, 0xfdd835];
+  k.gifts = [];
   for (let i = 0; i < 3; i++) {
-    const g = box(0.24, 0.18, 0.24, toon(giftColors[i]));
-    g.position.set(-2.65 + i * 0.28, 0.09, -1.45 + (i % 2) * 0.15);
-    g.rotation.y = i * 0.5;
-    scene.add(g);
-    const ribbon = box(0.25, 0.19, 0.04, toon(0xffffff));
-    ribbon.position.copy(g.position);
-    ribbon.rotation.y = g.rotation.y;
-    scene.add(ribbon);
+    const gift = new THREE.Group();
+    gift.add(box(0.24, 0.18, 0.24, toon(giftColors[i])));
+    gift.add(box(0.25, 0.19, 0.04, toon(0xffffff)));
+    gift.add(box(0.04, 0.19, 0.25, toon(0xffffff)));
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.012, 8, 16), toon(0xffffff));
+    bow.position.y = 0.1;
+    bow.rotation.x = Math.PI / 2;
+    gift.add(bow);
+    gift.position.set(-2.65 + i * 0.28, 0.09, -1.45 + (i % 2) * 0.15);
+    gift.rotation.y = i * 0.5;
+    scene.add(gift);
+    tag(gift, 'tree');
+    k.gifts.push(gift);
   }
 
   // гирлянда над окном

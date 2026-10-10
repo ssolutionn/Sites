@@ -1,7 +1,7 @@
 // Телефон героини: цельный смартфон с новогодним домашним экраном и пятью приложениями.
 // Только отображение и команды через act(...): состояние живёт в KitchenSession.
 import { clockText, wallAgo } from '../campaign/clock.js';
-import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER } from '../campaign/data.js';
+import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER, TOYS } from '../campaign/data.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
@@ -295,9 +295,16 @@ export class PhoneUI {
         return `<div class="decor ${own ? 'own' : ''}"><span class="di">${d.icon}</span><span class="dn"><b>${esc(d.name)}</b><small>${esc(d.note)}</small></span>${own ? '<span class="owned">на кухне ✓</span>' : btn(`⭐ ${d.price}`, 'buyDecor', [id], s.bonus.points >= d.price ? 'primary mini' : 'mini soft-disabled')}</div>`;
       })
       .join('');
+    // ёлочные игрушки (0.9): можно купить сколько угодно — повесить у ёлки
+    const own = {};
+    for (const t of s.toys ?? []) own[t.id] = (own[t.id] ?? 0) + 1;
+    const toys = Object.entries(TOYS)
+      .map(([id, t]) => `<div class="decor"><span class="di">${t.icon}</span><span class="dn"><b>${esc(t.name)}</b><small>${own[id] ? `у тебя: ${own[id]}` : 'на ёлку'}</small></span>${btn(`⭐ ${t.price}`, 'buyToy', [id], s.bonus.points >= t.price && !s.challenge && !s.practice ? 'primary mini' : 'mini soft-disabled')}</div>`)
+      .join('');
     return `${this._head('Банк', 'бонусная программа')}<div class="app-body bank">
       <div class="bcard"><small>${NEUTRAL ? 'Бонусная карта' : 'Карта «Выручай-карта»'}</small><div class="bp">${s.bonus.points}<span>баллов</span></div><div class="bn">•••• 2025</div></div>
-      <div class="earn"><span>🛒 ${Math.round(BONUS.cashback * 100)} % с заказов</span><span>🍽 за каждое блюдо</span><span>📷 за фото</span></div>
+      <div class="earn"><span>🛒 ${Math.round(BONUS.cashback * 100)} % с заказов</span><span>🍽 за каждое блюдо</span><span>📷 за фото</span><span>🎁 в подарках</span></div>
+      <h4>Ёлочные игрушки</h4><p class="fine">Купленная игрушка ждёт в коробке у ёлки — подойди и повесь.</p>${toys}
       <h4>Декор кухни за баллы</h4>${decor}
       <h4>История</h4>${hist || '<div class="fine">Баллы появятся после первого заказа или готового блюда.</div>'}
       <p class="fine">Баллами можно оплатить до половины заказа в доставке. Игровые баллы, без реальных денег.</p></div>`;
