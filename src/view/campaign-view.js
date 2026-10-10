@@ -669,7 +669,7 @@ export class CampaignView {
         break;
       }
       case 'catStart':
-        this._catPath(e.kind === 'spill' ? 'spill' : 'theft');
+        this._catPath(e.kind === 'spill' ? 'spill' : e.kind === 'mischief' ? 'mischief:' + e.target : 'theft');
         break;
       case 'catVisit':
         this._catPath('visit');
@@ -678,6 +678,7 @@ export class CampaignView {
       case 'catGone':
       case 'catStole':
       case 'catSpill':
+      case 'catMischief':
         this._catFlee(e.type === 'catStole');
         break;
       default:
@@ -697,6 +698,16 @@ export class CampaignView {
       floor = new THREE.Vector3(CLAYOUT.glass.x + 0.3, 0, 1.3);
       top = new THREE.Vector3(CLAYOUT.glass.x + 0.18, ISLAND_H, 0.9);
       face = -Math.PI / 2 - 0.4;
+    } else if (kind === 'mischief:garland') {
+      // на заднюю столешницу под окном — тянется лапой к гирлянде
+      floor = new THREE.Vector3(-1.0, 0, -1.5);
+      top = new THREE.Vector3(-1.2, ISLAND_H, -2.12);
+      face = Math.PI;
+    } else if (kind === 'mischief:star' || kind === 'mischief:toys') {
+      // к ёлке: на звезду — лезет в ветки, за игрушками — встаёт на задние лапы у ёлки
+      floor = new THREE.Vector3(-2.25, 0, -1.25);
+      top = kind === 'mischief:star' ? new THREE.Vector3(-2.72, 0.75, -1.62) : new THREE.Vector3(-2.5, 0, -1.45);
+      face = -2.2;
     } else {
       floor = new THREE.Vector3(0.6, 0, 1.4);
       this.catVis = { mode: 'visit', t: 0, seg: 0, segs: [{ from, to: floor, dur: 2 }, { from: floor, to: floor, dur: 999, mode: 'sit', face: 0.3 }] };
@@ -712,6 +723,14 @@ export class CampaignView {
         { from: top.clone(), to: top.clone(), dur: 999, mode: 'reach', face },
       ],
     };
+  }
+
+  /** Мышь над котом (ndc): для жеста «помахать» — с запасом вокруг кота, он маленький на экране. */
+  catHit(ndc) {
+    if (!ndc) return false;
+    const rc = this.sv._ray(ndc);
+    const c = this.sv.cat.getWorldPosition(new THREE.Vector3()); // кот вложен в группу кухни со сдвигом — нужна мировая точка
+    return rc.ray.intersectsSphere(new THREE.Sphere(c.setY(c.y + 0.15), 0.34));
   }
 
   _catTo(target, mode, face) {
@@ -1020,6 +1039,10 @@ export class CampaignView {
       b.material.emissiveIntensity = on;
     });
     g.light.intensity = broken && !fixing ? 0.9 : 2.2;
+    // кот безобразничает: ёлка качается, гирлянда дёргается
+    const mis = s.cat.state === 'mischief' ? s.cat.kind : null;
+    if (this.k.tree) this.k.tree.group.rotation.z = mis === 'star' || mis === 'toys' ? Math.sin(t * 17) * 0.035 : 0;
+    g.group.position.y = mis === 'garland' ? Math.max(0, Math.sin(t * 13)) * -0.025 : 0;
     // звезда на ёлке: горит и мягко дышит; погасла — тёмная, изредка вспыхивает (плохой контакт); чинят — мигает
     const tr = this.k.tree;
     if (tr) {

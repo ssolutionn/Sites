@@ -211,6 +211,11 @@ export const extraMethods = {
     return base * (this.mods.hungryCat ? 2 : 1);
   },
 
+  _boredRate() {
+    const c = this.cfg.cat;
+    return this.dayIndex === 0 ? c.boredRateFirstDay : c.boredRate;
+  },
+
   catCalm() {
     return this.catNeeds.hunger < this.cfg.cat.calm || this.cat.state === 'play' || this.cat.state === 'eat';
   },
@@ -234,6 +239,14 @@ export const extraMethods = {
       n.lastTry = this.t;
       this._startCatTheft(this._temptingItem().product);
     }
+    // скука: растёт, пока кот дома (сытый дремлет — вдвое медленнее); попросил поиграть — не поиграли — бесчинствует
+    if (this.cat.state === 'home' || this.cat.state === 'visit') n.boredom = Math.min(100, n.boredom + this._boredRate() * (this.catCalm() ? 0.5 : 1) * h);
+    if (n.boredom >= c.wantPlayAt && !n.boredWarned) {
+      n.boredWarned = true;
+      this._alert('catBored', 'Кот скучает — поиграй с ним, иначе начнёт безобразничать', { station: 'catbowl' });
+      this._emit('catBored');
+    }
+    if (this.cat.state === 'home' && n.boredom >= c.mischiefAt && this._canStartUrgent()) this._startMischief();
   },
 
   feedCat() {
@@ -260,9 +273,12 @@ export const extraMethods = {
       return false;
     }
     return this._startAction('playCat', this.cfg.durations.playCat, () => {
+      this.catNeeds.boredom = 0;
+      this.catNeeds.boredWarned = false;
+      this._removeAlert('catBored');
       this.cat = { state: 'play', until: this.t + this.cfg.cat.playTime, startedAt: this.t };
       this._emit('catPlay');
-      this.setHint(`Кот гоняет мячик ${this.cfg.cat.playTime} с — но голод это не отменяет`, 3);
+      this.setHint(`Кот гоняет мячик ${this.cfg.cat.playTime} с и больше не скучает — но голод это не отменяет`, 3);
     });
   },
 

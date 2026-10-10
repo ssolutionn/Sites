@@ -16,6 +16,7 @@ import { phoneMethods } from './st-phone.js';
 import { extraMethods, BOILED } from './st-extra.js';
 import { radioMethods } from './st-radio.js';
 import { RADIO } from './radio-data.js';
+import { CHATTER } from './chatter.js';
 
 const EPS = 1e-6;
 export const URGENT = new Set(['cat', 'pot', 'pot2', 'oven', 'spillWarn']);
@@ -84,7 +85,7 @@ export class KitchenSession {
     this.garland = { broken: false, progress: 0, repairs: 0 };
     this.star = { broken: false, progress: 0, repairs: 0 }; // большая звезда на ёлке (поправить — у ёлки, st-home.js)
     this.cat = { state: 'home', kind: null, deadline: 0, startedAt: 0, visitUntil: 0 };
-    this.catNeeds = { hunger: practice ? 0 : cfg.cat.hungerStart, warned: false, lastTry: -1e9 };
+    this.catNeeds = { hunger: practice ? 0 : cfg.cat.hungerStart, warned: false, lastTry: -1e9, boredom: practice ? 0 : cfg.cat.boredStart, boredWarned: false };
     this.wallet = { budget: practice ? 0 : Math.round((this.day.budget ?? 0) * (mods.tightBudget ? 0.6 : 1)), spent: 0 };
     this.glass = { present: !!this.day.events?.some((e) => e.type === 'spill'), spilled: false };
     this.puddles = [];
@@ -105,6 +106,7 @@ export class KitchenSession {
     this.penalties = []; // однократные происшествия: { kind, points, label }
     this.stats = { walk: 0, closeup: 0, panel: 0, phone: 0, away: 0, idle: 0, thefts: 0, shoos: 0, spills: 0, puddlesMade: 0, catFed: 0 };
     this.tutorialSeen = new Set();
+    this._initChatter();
   }
 
   // Совместимость: «плита» — первая конфорка.
@@ -331,6 +333,7 @@ export class KitchenSession {
     this._updateCat(h);
     this._updateCatNeeds(h);
     this._updateSchedule();
+    this._updateChatter();
     this._expireAlerts();
     if (this.hint && this.clock > this.hint.until) this.hint = null;
     this._checkDayReady();
@@ -736,6 +739,37 @@ export class KitchenSession {
           e.fired = true;
       }
     }
+  }
+
+  // ---------- сообщения «просто так» ----------
+  // Родные и соседи пишут по ходу дня (chatter.js) — отвлекают, как в жизни. Свой генератор случайностей: остальные события
+  // дня (окна кота, кастрюли) от этого не сдвигаются.
+  _initChatter() {
+    const n = this.cfg.notify;
+    if (!n || this.practice) {
+      this.chatter = null;
+      return;
+    }
+    const rng = createRng((this.seed * 31 + 7) >>> 0);
+    const first = this.dayIndex === 0;
+    const id = this.day.id;
+    const pool = CHATTER.filter((m) => !m.days || m.days.includes(id));
+    // перемешать пул заранее: в каждой игре свой порядок, но без повторов внутри дня
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng.next() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const every = first ? n.everyFirstDay : n.every;
+    this.chatter = { pool, next: first ? n.startFirstDay : n.start, every, rng };
+  }
+
+  _updateChatter() {
+    const c = this.chatter;
+    if (!c || this.t < c.next || this.isOver()) return;
+    const [a, b] = c.every;
+    c.next = this.t + a + (b - a) * c.rng.next();
+    const m = c.pool.shift();
+    if (m) this.pushMessage(m.from, m.text, { chatter: true });
   }
 
   // ---------- готовность дня ----------

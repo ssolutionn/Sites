@@ -86,7 +86,16 @@ export const CAMPAIGN = {
 
   // Кот как система: голод растёт, сытый кот спит, голодный ищет еду без присмотра
   // голод растёт медленнее, чем в 0.8 (владелец: «кот много хочет есть»): от 35 до «голоден» (50) ~1,5 мин, до кражи (70) ~3 мин
-  cat: { hungerStart: 35, rate: 0.18, rateFirstDay: 0.14, theftAt: 70, warnAt: 50, calm: 30, playTime: 45, afterShoo: -12 },
+  cat: {
+    hungerStart: 35, rate: 0.18, rateFirstDay: 0.14, theftAt: 70, warnAt: 50, calm: 30, playTime: 45, afterShoo: -12,
+    // скука (0.9, владелец: «пусть чаще хочет играть, а не играешь — бесчинствует»): растёт, пока кот дома (сытый спит — вдвое медленнее);
+    // на wantPlayAt просит поиграть, на mischiefAt лезет на ёлку или к гирлянде; mischiefWindow — секунд, чтобы прогнать
+    boredStart: 15, boredRate: 0.45, boredRateFirstDay: 0.3, wantPlayAt: 50, mischiefAt: 85, mischiefWindow: [12, 16], afterMischief: 25, afterShooMischief: -30,
+    // прогнать — помахать мышью над котом в обзоре: reversals разворотов за window секунд, каждый не короче minAmp (доля высоты экрана)
+    wave: { reversals: 3, minAmp: 0.035, window: 2.5 },
+  },
+  // сообщения «просто так» (chatter.js): первое через start с, дальше раз в every с; в первый день реже
+  notify: { start: 20, every: [30, 45], startFirstDay: 45, everyFirstDay: [50, 70] },
 
   // Деньги и доставка
   money: {

@@ -89,6 +89,44 @@ export class Stirrer {
   }
 }
 
+// ---------- Помахать рукой: развороты туда-обратно с размахом ----------
+// Прогнать кота (0.9): мышь над котом ходит влево-вправо. Разворот засчитывается, когда указатель ушёл от крайней точки
+// назад не меньше чем на minAmp; reversals разворотов за window секунд — помахали. Мелкое дрожание не считается.
+export class Waver {
+  constructor({ reversals = 3, minAmp = 0.035, window = 1.6 } = {}) {
+    Object.assign(this, { reversals, minAmp, window });
+    this.reset();
+  }
+  reset() {
+    this.peak = null;
+    this.dir = 0;
+    this.marks = [];
+  }
+  /** x — положение указателя по горизонтали, t — секунды. true — помахали достаточно. */
+  move(x, t) {
+    if (this.peak == null) {
+      this.peak = x;
+      return false;
+    }
+    if (this.dir === 0) {
+      if (Math.abs(x - this.peak) >= this.minAmp) {
+        this.dir = Math.sign(x - this.peak);
+        this.peak = x;
+      }
+      return false;
+    }
+    if ((x - this.peak) * this.dir >= 0) {
+      this.peak = x; // всё ещё в ту же сторону
+      return false;
+    }
+    if (Math.abs(x - this.peak) < this.minAmp) return false;
+    this.dir = -this.dir;
+    this.peak = x;
+    this.marks = [...this.marks.filter((m) => t - m <= this.window), t];
+    return this.marks.length >= this.reversals;
+  }
+}
+
 // ---------- Тёрка: засчитываются полные циклы вверх-вниз ----------
 export class Grater {
   constructor(cfg, cycles = cfg.cyclesPerPortion) {

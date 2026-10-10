@@ -210,6 +210,51 @@ try {
     await shot('d3_butter_left_half');
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('cat')) {
+    // кот на экране (центр + 15 см) в пикселях
+    const catPx = () => S(() => { const { sv } = window.__sueta; const v = sv.cat.getWorldPosition(sv.cat.position.clone()); v.y += 0.15; v.project(sv.camera); const r = document.querySelector('canvas').getBoundingClientRect(); return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height }; });
+    const catSettled = () => waitFor(() => { const cv = window.__sueta.view.catVis; return !!cv && cv.segs[cv.seg]?.dur > 100; }, 20000);
+    const waveAt = async (amp = 40) => { await catSettled(); const c = await catPx(); for (let k = 0; k < 8; k++) { await page.mouse.move(c.x + (k % 2 ? amp : -amp), c.y); await wait(30); } };
+    // 10: кот заскучал → не поиграли → лезет на ёлку или к гирлянде; помахать мышью — убежал
+    await openDay(2);
+    await S(() => { const s = window.__sueta.session; s.catNeeds.hunger = 0; s.catNeeds.boredom = 49.9; });
+    await waitFor(() => window.__sueta.session.alerts.some((a) => a.key === 'catBored'), 20000);
+    check('кот просит поиграть', await sess("s.alerts.some((a) => a.key === 'catBored')"));
+    await wait(400); await shot('cat_bored');
+    await S(() => { window.__sueta.session.catNeeds.boredom = 85; });
+    await waitFor(() => window.__sueta.session.cat.state === 'mischief', 20000);
+    const kind = await sess('s.cat.kind');
+    check('кот бесчинствует', !!kind, kind);
+    check('на карточке нет кнопки «Прогнать»', await S(() => !document.querySelector('[data-a="shoo"]')));
+    await wait(2500); await tip();
+    await shot('cat_mischief_' + kind);
+    await waveAt();
+    await wait(400);
+    check('помахала мышью над котом — убежал', (await sess('s.cat.state')) === 'home', await sess('s.cat.state'));
+    check(`${kind} не погасла`, (await sess(`s.${kind}.broken`)) === false);
+    // 7: кот у доски, а мы в нарезке — сначала выйти
+    await station('board');
+    await S(() => window.__sueta.session._startCatTheft());
+    await wait(500);
+    const bc = await scr('board', 0, 0);
+    for (let k = 0; k < 6; k++) { await page.mouse.move(bc.x + (k % 2 ? 40 : -40), bc.y); await wait(50); }
+    check('в нарезке махать бесполезно — подсказка выйти', (await sess('s.cat.state')) === 'theft' && /Выйди/.test(await sess("s.hint?.text ?? ''")));
+    await shot('cat_theft_closeup');
+    await page.keyboard.press('Escape'); await waitFor(() => window.__sueta.session.panel === null && window.__sueta.sv.camT >= 1, 10000);
+    await wait(600);
+    await shot('cat_theft_overview');
+    await waveAt();
+    await wait(400);
+    check('вышла в обзор, помахала — кот убежал от колбасы', (await sess('s.cat.state')) === 'home');
+    // уведомления чаще: сообщения от разных людей
+    await S(() => window.__sueta.session.fastForward?.(150));
+    await wait(500);
+    const froms = await sess('[...new Set(s.phone.messages.map((m) => m.from))]');
+    check('пишут разные люди', froms.length >= 3, froms.join(', '));
+    await station('phone'); await wait(800);
+    await shot('phone_chats_chatter');
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`, errs.slice(0, 4));
 await browser.close();

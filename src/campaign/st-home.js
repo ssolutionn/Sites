@@ -1,11 +1,17 @@
 // Плита, духовка, раковина, лужи, радио, гирлянда, кот, пакет доставки, праздничный стол.
 import { CoverageMask } from './coverage.js';
-import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS, STOVE } from './layout.js';
-import { Scrubber } from './mechanics.js';
+import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS, STOVE, CLOSEUP_STATIONS } from './layout.js';
+import { Scrubber, Waver } from './mechanics.js';
 import { PRODUCTS, DISH_ORDER } from './data.js';
 import { TEMPTING, BOILED } from './st-extra.js';
 
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
+// Что кот затеял от скуки — текст срочного дела.
+const MISCHIEF = {
+  garland: 'Кот тянется к гирлянде! Помаши на него',
+  star: 'Кот лезет на ёлку! Помаши на него',
+  toys: 'Кот сбивает игрушки с ёлки! Помаши на него',
+};
 
 export const homeMethods = {
   // ---------- плита: несколько конфорок, у каждой своя кастрюля и срок ----------
@@ -584,7 +590,7 @@ export const homeMethods = {
   _startCatTheft(product = 'sausage') {
     const w = rand(this.rng, this.cfg.events.catWindow);
     this.cat = { state: 'theft', deadline: this.t + w, startedAt: this.t, product };
-    this._alert('cat', `Кот тянется ${TEMPTING[product] ?? 'к еде'}! Прогони его`, { deadline: this.t + w, window: w, action: 'shoo' });
+    this._alert('cat', `Кот тянется ${TEMPTING[product] ?? 'к еде'}! Выйди в обзор и помаши на него`, { deadline: this.t + w, window: w, action: 'shoo' });
     this._markUrgent();
     this._emit('catStart', { kind: 'theft' });
   },
@@ -592,7 +598,7 @@ export const homeMethods = {
   _startSpillWarn() {
     const w = rand(this.rng, this.cfg.events.catWindow);
     this.cat = { state: 'spill', deadline: this.t + w, startedAt: this.t };
-    this._alert('spillWarn', 'Кот подбирается к стакану компота!', { deadline: this.t + w, window: w, action: 'shoo' });
+    this._alert('spillWarn', 'Кот подбирается к стакану компота! Помаши на него', { deadline: this.t + w, window: w, action: 'shoo' });
     this._markUrgent();
     this._emit('catStart', { kind: 'spill' });
   },
@@ -602,14 +608,59 @@ export const homeMethods = {
     this._emit('catVisit');
   },
 
+  // Кот бесчинствует от скуки (0.9): лезет на ёлку (гаснет звезда), к гирлянде (гаснет гирлянда) или сбивает игрушки.
+  _startMischief() {
+    const n = this.catNeeds, c = this.cfg.cat;
+    const opts = [];
+    if (!this.garland.broken) opts.push('garland');
+    if (!this.star.broken) opts.push('star');
+    if (this._toysOnTree?.() > 0) opts.push('toys');
+    if (!opts.length) {
+      n.boredom = c.afterMischief; // ломать уже нечего — кот поскучал и улёгся
+      return false;
+    }
+    const kind = opts[Math.floor(this.rng.next() * opts.length)];
+    const w = rand(this.rng, c.mischiefWindow);
+    this.cat = { state: 'mischief', kind, deadline: this.t + w, startedAt: this.t };
+    this._alert('cat', MISCHIEF[kind], { deadline: this.t + w, window: w, action: 'shoo' });
+    this._markUrgent();
+    this._emit('catStart', { kind: 'mischief', target: kind });
+    return true;
+  },
+
+  /**
+   * Помахать на кота: x — положение мыши над котом по горизонтали (доля высоты экрана). Работает только в обзоре кухни:
+   * из крупного плана (нарезка, миска…) сначала выйти — владелец: «кнопкой из нарезки прогнать нельзя».
+   */
+  catWave(x) {
+    if (!['theft', 'spill', 'mischief'].includes(this.cat.state)) return 'calm';
+    if (this.heroine.away || this.isOver()) return 'away';
+    if (this.panel && CLOSEUP_STATIONS.has(this.panel)) {
+      if (!this.cat.closeupHint) {
+        this.cat.closeupHint = true;
+        this.setHint('Кот! Выйди из крупного плана (Esc) и помаши на него мышью', 3);
+      }
+      return 'closeup';
+    }
+    this.catWaver ??= new Waver(this.cfg.cat.wave);
+    if (this.catWaver.move(x, this.clock)) {
+      this.catWaver.reset();
+      this.shoo();
+      return 'shoo';
+    }
+    return 'wave';
+  },
+
   shoo() {
-    if (this.cat.state !== 'theft' && this.cat.state !== 'spill') return false;
+    if (!['theft', 'spill', 'mischief'].includes(this.cat.state)) return false;
     const kind = this.cat.state;
     this.cat = { state: 'home' };
+    this.catWaver?.reset();
     this._removeAlert('cat');
     this._removeAlert('spillWarn');
     this.stats.shoos++;
-    this.catNeeds.hunger = Math.max(0, this.catNeeds.hunger + this.cfg.cat.afterShoo);
+    if (kind === 'mischief') this.catNeeds.boredom = Math.max(0, this.catNeeds.boredom + this.cfg.cat.afterShooMischief);
+    else this.catNeeds.hunger = Math.max(0, this.catNeeds.hunger + this.cfg.cat.afterShoo);
     if (this.action && this.action.type !== 'shoo') this._cancelAction();
     this.action = { type: 'shoo', duration: this.cfg.durations.shooReaction, elapsed: 0, data: {} };
     this._emit('catShooed', { kind });
@@ -639,6 +690,17 @@ export const homeMethods = {
       this.glass.present = false;
       this._addPuddle('spill', CLAYOUT.spillPuddle);
       this._emit('catSpill');
+    } else if (c.state === 'mischief' && this.t >= c.deadline) {
+      this._removeAlert('cat');
+      this.cat = { state: 'home' };
+      if (c.kind === 'toys') this._knockToys?.();
+      else this.lightsOff(c.kind, { by: 'cat' });
+      const n = this.catNeeds;
+      n.boredom = this.cfg.cat.afterMischief; // набезобразничал — на время успокоился
+      n.boredWarned = false;
+      this._removeAlert('catBored');
+      this.stats.mischief = (this.stats.mischief ?? 0) + 1;
+      this._emit('catMischief', { kind: c.kind });
     } else if (c.state === 'visit' && this.t >= c.visitUntil) {
       this.cat = { state: 'home' };
       this._emit('catGone');

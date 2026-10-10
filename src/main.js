@@ -112,7 +112,7 @@ function boot() {
 
   const SOUND_OF = {
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
-    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed',
+    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss',
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
@@ -456,6 +456,16 @@ function boot() {
       view.pointerLocal = lastLocal;
       if (lastLocal && mode === 'kitchen') session.pointer('move', lastLocal.x, lastLocal.z);
     }
+    // кот безобразничает: помахать мышью над ним в обзоре — прогнать (0.9; в крупном плане — подсказка выйти)
+    if (session && mode === 'kitchen' && ['theft', 'spill', 'mischief'].includes(session.cat.state)) {
+      if (closeupActive()) session.catWave(0);
+      else if (view.catHit(lastNdc)) {
+        canvas.style.cursor = 'grab';
+        session.catWave(e.clientY !== undefined ? e.clientX / Math.max(1, canvas.clientHeight) : 0);
+        return;
+      }
+    }
+    if (canvas.style.cursor) canvas.style.cursor = '';
   });
   canvas.addEventListener('pointerleave', () => {
     lastNdc = null;

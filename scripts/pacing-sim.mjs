@@ -29,14 +29,24 @@ const PACE = {
 
 const R = { cook: 0, walk: 0, read: 0, wait: 0 };
 let s;
+const CAT_ACTIVE = new Set(['theft', 'spill', 'mischief']);
+let reacting = false;
 const tick = (sec, bucket = 'cook') => {
   const n = Math.max(1, Math.round(sec * 30));
   const before = s.stats.walk;
   for (let i = 0; i < n; i++) s.update(1 / 30);
   R[bucket] += sec;
 };
+// 0.9: кот безобразничает — между действиями заметить (2,5 с), выйти в обзор и помахать мышью над ним.
+// Посреди мазка или раскладки игрок дело не бросает — не успел, значит, кот набезобразничал (гирлянду поправит в конце).
+function catReact() {
+  if (reacting || !CAT_ACTIVE.has(s.cat.state)) return;
+  if (s.t - s.cat.startedAt < 2.5) tick(2.5 - (s.t - s.cat.startedAt));
+  shoo();
+}
 const think = (sec, bucket = 'cook') => tick(sec, bucket);
 function go(st) {
+  catReact();
   think(PACE.stationChoice);
   if (!s.goTo(st)) throw new Error('goTo ' + st + ' ' + s.hint?.text);
   let t = 0;
@@ -56,9 +66,12 @@ function tip(topic) {
   read(PACE.readTip);
 }
 function shoo() {
-  think(0.8);
+  if (!CAT_ACTIVE.has(s.cat.state)) return;
+  reacting = true;
+  think(2.2); // выйти из крупного плана и помахать мышью над котом (0.9: кнопки «Прогнать» нет)
   s.shoo();
   tick(0.8);
+  reacting = false;
 }
 function waitAction() {
   while (s.action) tick(1 / 30);
@@ -164,6 +177,7 @@ function zig(cx, cz, w, d, rows) {
   dragPath(pts);
 }
 function ui(fn) {
+  catReact();
   think(PACE.uiClick);
   const r = fn();
   if (r === false || r === null) console.log('  ! отказ:', fn.toString().slice(6, 60), '—', s.hint?.text);
@@ -284,6 +298,12 @@ function catCheck() {
     tip('catHungry');
     ui(() => s.feedCat());
   }
+  // 0.9: заскучал — поиграть мячиком, пока не полез на ёлку
+  if (s.catNeeds.boredom >= 50 && s.cat.state === 'home') {
+    go('catbowl');
+    tip('catBored');
+    ui(() => s.playCat());
+  }
 }
 // Дождаться продукта, достать, остудить у раковины.
 function boiled(product) {
@@ -308,7 +328,13 @@ function stir(turns = 4.2) {
   tip('bowl');
   const pts = [];
   for (let i = 0; i <= turns * 36; i++) pts.push([Math.cos((i / 36) * Math.PI * 2) * 0.1, Math.sin((i / 36) * Math.PI * 2) * 0.1]);
-  dragPath(pts, 0.1 * Math.PI * 2 * PACE.stirSpeed);
+  // кот отвлёк посреди перемешивания (вышла прогнать) — вернуться и домешать
+  for (let k = 0; k < 4; k++) {
+    if (s.panel !== 'bowl') go('bowl');
+    dragPath(pts, 0.1 * Math.PI * 2 * PACE.stirSpeed);
+    const mt = s.mixTarget();
+    if (!(mt?.ok && !s.stepDone(mt.dishId, mt.stepId)) && !s._restirTarget()) break;
+  }
 }
 function wash(item) {
   go('sink');
@@ -342,10 +368,11 @@ function fixHome() {
   wipeAll();
 }
 function readPhone() {
-  const unread = s.phone.messages.filter((m) => !m.read).length;
-  if (!unread) return;
+  const unread = s.phone.messages.filter((m) => !m.read);
+  const real = unread.filter((m) => !m.chatter).length;
+  if (!real) return; // болтовню «просто так» (0.9) не бегут читать — заглянут вместе с нужным сообщением
   go('phone');
-  read(PACE.readMessage * unread);
+  read(PACE.readMessage * real + 1.5 * (unread.length - real));
   s.markRead();
 }
 function order(items) {

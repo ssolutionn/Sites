@@ -7,6 +7,7 @@ import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
 import { feedArt, dishArt, heartIcon } from './feed-art.js';
 import { PICON } from './icons.js';
+import { CHATTER_AVATARS } from '../campaign/chatter.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (sec) => {
@@ -253,7 +254,7 @@ export class PhoneUI {
     if (tab === 'chats') {
       const by = {};
       for (const m of s.phone.messages) by[m.from] = m;
-      const ava = { Верка: '🌴', Гости: '🎉', Доставка: '🛵' };
+      const ava = { Верка: '🌴', Гости: '🎉', Доставка: '🛵', ...CHATTER_AVATARS };
       const rows = Object.values(by)
         .reverse()
         .map((m) => `<button class="chat-row" data-nav="andrey|${esc(m.from)}|chats"><span class="ava">${ava[m.from] ?? '🙂'}</span><span class="cr"><b>${esc(m.from)}</b><small>${esc(m.text)}</small></span><span class="ct">${phoneClock(m.t, s.t)}</span></button>`)
