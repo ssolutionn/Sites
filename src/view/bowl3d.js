@@ -23,6 +23,39 @@ const FLESH = {
 };
 const CREAM = new THREE.Color(0xfff6dc);
 
+// «Инструмент в руке» над миской для каждого продукта, который туда кладут, плюс солонка и перечница.
+const TOOL_MAKERS = {
+  peas: () => peasCan(),
+  corn: () => {
+    const g = peasCan();
+    g.children[1].material = mat(0xe8b923, 0.5);
+    return g;
+  },
+  mayo: () => mayoPack(),
+  greens: () => greensBunch(),
+  salt: () => shaker('salt'),
+  pepper: () => shaker('pepper'),
+};
+
+// пучок укропа: стебли и мелкие веточки, держат за хвостики
+function greensBunch() {
+  const g = new THREE.Group();
+  const stem = mat(0x5f9a3a, 0.7), leaf = mat(0x3f8a2e, 0.8);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2, r = 0.006;
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.0015, 0.002, 0.07, 5), stem);
+    st.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+    st.rotation.set(Math.sin(a) * 0.25, 0, Math.cos(a) * 0.25);
+    g.add(st);
+    const top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.011, 0), leaf);
+    top.scale.set(1, 1.6, 1);
+    top.position.set(Math.cos(a) * r * 3, 0.04, Math.sin(a) * r * 3);
+    g.add(top);
+  }
+  return g;
+}
+export const BOWL_TOOL_IDS = Object.keys(TOOL_MAKERS);
+
 // Детерминированный «случай» для раскладки — картинка не прыгает между кадрами.
 function hash(n) {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -108,8 +141,7 @@ export class BowlView {
     this.particles = [];
     this.lastPinch = { salt: 0, pepper: 0 };
     // в руке
-    this.tools = { peas: peasCan(), corn: peasCan(), mayo: mayoPack(), salt: shaker('salt'), pepper: shaker('pepper') };
-    this.tools.corn.children[1].material = mat(0xe8b923, 0.5);
+    this.tools = Object.fromEntries(Object.entries(TOOL_MAKERS).map(([id, make]) => [id, make()]));
     this.toolRoot = new THREE.Group();
     for (const t of Object.values(this.tools)) {
       t.visible = false;
@@ -250,11 +282,16 @@ export class BowlView {
     for (const [id, tool] of Object.entries(this.tools)) tool.visible = active && hand === id;
     if (!active || hand === 'spoon') return;
     const tool = this.tools[hand];
+    if (!tool) return; // продукт без своего инструмента: игра идёт дальше, просто без предмета в руке
     const tgt = pointer ? new THREE.Vector3(pointer.x, 0.17, pointer.z) : new THREE.Vector3(0.14, 0.2, 0.1);
     this.toolPos.lerp(tgt, 1 - Math.exp(-dt * 18));
     tool.position.copy(this.toolPos);
     const down = s.pointerDown;
-    if (hand === 'peas' || hand === 'corn') {
+    if (hand === 'greens') {
+      // пучок зелени встряхивают над миской — веточки сыплются
+      tool.rotation.set(0, 0, down ? -2.4 : -0.4);
+      if (down && s.bowl.pouring && Math.random() < dt * 25) this._spawn(this.toolPos.x + (Math.random() - 0.5) * 0.03, this.toolPos.y - 0.03, this.toolPos.z, 0x3f8a2e, 0.005);
+    } else if (hand === 'peas' || hand === 'corn') {
       // банку наклоняют над миской
       tool.rotation.set(0, 0, down ? -1.9 : -0.25);
       if (down && s.bowl.pouring && Math.random() < dt * 40) this._spawn(this.toolPos.x - 0.03, this.toolPos.y - 0.01, this.toolPos.z, hand === 'peas' ? 0x6dbb3a : 0xf4c430, 0.007);
