@@ -37,6 +37,7 @@ export const CAMPAIGN = {
   // замечания после блюда о нарезке (observations.js): с каких долей по площади кусок считается «много»
   observe: { crumb: 0.25, big: 0.25, bigMean: 1.3, long: 0.2, small: 0.35, smallMean: 0.75, rulerSpread: 0.15 },
   roundTarget: { thickness: 1, min: 0.64, max: 1.44, minCut: 0.36 }, // кружочки, см
+  cutReady: 0.8, // доля продукта в кусках нужного размера, с которой доска говорит «нарезано — можно в миску» (0.9, пункт 8)
 
   durations: {
     take: 0.8, // достать продукт из холодильника в руки
@@ -48,6 +49,7 @@ export const CAMPAIGN = {
     pickSpoon: 0.25,
     radioHold: 2,
     garlandHold: 2,
+    starHold: 1.5, // поправить звезду на ёлке
     shooReaction: 0.8,
     ovenLoad: 1.2,
     ovenTake: 1.2,
@@ -80,7 +82,7 @@ export const CAMPAIGN = {
   wipe: { cols: 14, rows: 10, brush: 0.035, complete: 0.92, autoFinish: 0.92 },
   fill: { scoop: 0.34, normalMin: 0.75, normalMax: 1.25, overflow: 1.35 },
   dose: { scoop: 1, normal: 2, max: 3 },
-  season: { salt: [2, 4], pepper: [1, 2] }, // скрытая «норма» блюда в щепотках
+  // соль и перец — точная норма блюда в щепотках, RECIPES[*].season (0.9: «по вкусу — бред, нужны чёткие пропорции»)
 
   // Кот как система: голод растёт, сытый кот спит, голодный ищет еду без присмотра
   // голод растёт медленнее, чем в 0.8 (владелец: «кот много хочет есть»): от 35 до «голоден» (50) ~1,5 мин, до кражи (70) ~3 мин
@@ -116,7 +118,7 @@ export const CAMPAIGN = {
   scoring: {
     weights: { prep: 0.3, comp: 0.2, asm: 0.2, taste: 0.15, wish: 0.15 },
     day: { dishes: 0.75, order: 0.15, pace: 0.1 },
-    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
+    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, starLeft: 6, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
   },
 };
 
@@ -190,6 +192,7 @@ export const CATALOG = Object.keys(PRODUCTS).filter((id) => !['skewer'].includes
 export const RECIPES = {
   olivier: {
     name: 'Оливье',
+    season: { salt: 4, pepper: 2 }, // щепотки на всю миску — видно в рецепте и у солонки
     short: 'Оливье',
     serve: 'saladBowl',
     uses: ['bowl'],
@@ -214,6 +217,7 @@ export const RECIPES = {
   },
   crab: {
     name: 'Крабовый салат',
+    season: { salt: 2, pepper: 1 }, // щепотки на всю миску — видно в рецепте и у солонки
     short: 'Крабовый',
     serve: 'saladBowlCrab',
     uses: ['bowl'],
@@ -245,6 +249,7 @@ export const RECIPES = {
   },
   eggs: {
     name: 'Фаршированные яйца',
+    season: { salt: 1, pepper: 1 }, // щепотки на всю миску — видно в рецепте и у солонки
     short: 'Яйца',
     serve: 'eggPlate',
     uses: ['tray', 'bowl'],
@@ -264,6 +269,7 @@ export const RECIPES = {
   },
   tartlets: {
     name: 'Тарталетки',
+    season: { salt: 1, pepper: 1 }, // щепотки на всю миску — видно в рецепте и у солонки
     short: 'Тарталетки',
     serve: 'tartletTray',
     uses: ['bowl', 'tray'],
@@ -284,6 +290,7 @@ export const RECIPES = {
   },
   tomatoes: {
     name: 'Фаршированные помидоры',
+    season: { salt: 1, pepper: 1 }, // щепотки на всю миску — видно в рецепте и у солонки
     short: 'Помидоры',
     serve: 'tomatoPlate',
     uses: ['bowl', 'tray'],
@@ -441,6 +448,7 @@ export const DAYS = [
       { type: 'pot', after: 'boilStart', delay: 70 },
       { type: 'radio', after: 'boilStart', delay: 85 },
       { type: 'cat', when: 'sausageOnBoard', delay: 6 },
+      { type: 'garland', at: 170 }, // 0.9: владелец не видел, чтобы гирлянда гасла
     ],
     messages: [{ at: 40, from: 'Верка', text: 'Мы уже у моря. А ты как, всё успеваешь?' }],
   },
@@ -455,7 +463,7 @@ export const DAYS = [
     wishes: 1,
     stock: { crab: 3, egg: 2, cucumber: 1, corn: 0, mayo: 1 },
     dirty: ['bowl'],
-    events: [{ type: 'radio', at: 140 }],
+    events: [{ type: 'radio', at: 140 }, { type: 'star', at: 110 }],
     messages: [
       { at: 15, from: 'Верка', text: 'Смотри, какой у нас вид!', photo: 'sea' },
       { at: 90, from: 'Гости', text: 'Мы придём к семи. Чем помочь? 🎄' },
@@ -472,7 +480,7 @@ export const DAYS = [
     wishes: 1,
     stock: { bread: 6, butter: 1, caviar: 0, egg: 3, mayo: 1, greens: 1 },
     dirty: [],
-    events: [{ type: 'cat', when: 'idle', at: 200 }],
+    events: [{ type: 'cat', when: 'idle', at: 200 }, { type: 'garland', at: 100 }, { type: 'star', at: 240 }],
     messages: [{ at: 8, from: 'Доставка', text: 'Нужны продукты? Оформите заказ во вкладке «Заказ».' }],
   },
   {
@@ -487,7 +495,7 @@ export const DAYS = [
     stock: { cheese: 3, egg: 2, mayo: 2, tartlet: 8, greens: 0, tomato: 4, onion: 1 },
     dirty: [],
     request: { recipe: 'tomatoes', onion: false },
-    events: [{ type: 'radio', at: 200 }],
+    events: [{ type: 'radio', at: 200 }, { type: 'star', at: 150 }],
     messages: [{ at: 5, from: 'Гости', text: 'Можно нам помидоры без лука? Остальное как обычно.', request: true }],
   },
   {
@@ -504,6 +512,7 @@ export const DAYS = [
     events: [
       { type: 'pot', after: 'boilStart', delay: 60 },
       { type: 'garland', at: 150 },
+      { type: 'star', at: 260 },
     ],
     messages: [{ at: 30, from: 'Верка', text: 'Тут даже ёлки на пляже наряжают. Скучаю по нашей кухне!' }],
   },
@@ -522,6 +531,7 @@ export const DAYS = [
       { type: 'cat', when: 'sausageOnBoard', delay: 8 },
       { type: 'spill', at: 120 },
       { type: 'radio', at: 240 },
+      { type: 'star', at: 200 },
     ],
     messages: [{ at: 60, from: 'Гости', text: 'Мы купили бенгальские огни! ✨' }],
   },
@@ -537,7 +547,7 @@ export const DAYS = [
     stock: { chicken: 2, marinade: 0 },
     dirty: [],
     finalServe: true,
-    events: [{ type: 'garland', at: 90 }, { type: 'cat', when: 'idle', at: 60 }],
+    events: [{ type: 'garland', at: 90 }, { type: 'cat', when: 'idle', at: 60 }, { type: 'star', at: 200 }],
     messages: [{ at: 20, from: 'Гости', text: 'Выходим! Будем через час 🎉' }],
   },
 ];

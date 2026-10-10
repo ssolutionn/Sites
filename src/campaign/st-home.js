@@ -546,7 +546,7 @@ export const homeMethods = {
     return 'wipe';
   },
 
-  // ---------- радио и гирлянда ----------
+  // ---------- радио, гирлянда, звезда ----------
   toggleRadio() {
     if (!this._isIdleAt('radio') || this.action) return false;
     if (this.radio.broken) {
@@ -555,6 +555,18 @@ export const homeMethods = {
     }
     this.radio.enabled = !this.radio.enabled;
     this._emit('radioToggle', { on: this.radio.enabled });
+    return true;
+  },
+
+  // Погасить гирлянду или звезду на ёлке (расписание дня, чат стрима, кот). Уже не горит — false.
+  lightsOff(kind, { by = null } = {}) {
+    const st = this[kind];
+    if (!st || st.broken) return false;
+    st.broken = true;
+    st.progress = 0;
+    if (kind === 'star') this._alert('star', 'Звезда на ёлке погасла', { station: 'tree' });
+    else this._alert('garland', 'Часть гирлянды погасла', { station: 'garland' });
+    this._emit(kind + 'Off', { by });
     return true;
   },
 

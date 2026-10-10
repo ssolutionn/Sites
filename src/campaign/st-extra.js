@@ -17,10 +17,10 @@ export const TEMPTING = { sausage: 'к колбасе', herring: 'к селёд�
 
 export const extraMethods = {
   // ---------- вкус ----------
-  _initSeason(dish, rng) {
-    const c = this.cfg.season;
-    const pick = ([a, b]) => a + Math.floor(rng.next() * (b - a + 1));
-    dish.season = { salt: 0, pepper: 0, target: { salt: pick(c.salt), pepper: pick(c.pepper) }, tastes: 0, last: null };
+  // Норма соли и перца — из рецепта, одна и та же в каждой игре; пожелания гостей меняют её открыто (_addRandomWish).
+  _initSeason(dish) {
+    const n = dish.recipe.season ?? { salt: 2, pepper: 1 };
+    dish.season = { salt: 0, pepper: 0, target: { salt: n.salt, pepper: n.pepper }, tastes: 0, last: null };
   },
 
   // Вкус как в жизни: посолить и поперчить → перемешать → попробовать. Пока не перемешано,
@@ -288,6 +288,7 @@ export const extraMethods = {
           if (!dish.season || (dish.steps.taste ?? dish.steps.season).done) continue;
         }
         if (kind === 'noOnion' && !RECIPES[r].onionOption) continue;
+        if (kind === 'lessSalt' && (RECIPES[r].season?.salt ?? 0) < 2) continue; // «на щепотку меньше» одной щепотки — это без соли
         out.push({ kind, recipe: r });
       }
     return out;
@@ -398,11 +399,7 @@ export const extraMethods = {
         this._emit('stream', { kind, text: 'Чат сломал радио' });
         return true;
       case 'garland':
-        if (this.garland.broken) return false;
-        this.garland.broken = true;
-        this.garland.progress = 0;
-        this._alert('garland', 'Часть гирлянды погасла', { station: 'garland' });
-        this._emit('garlandOff');
+        if (!this.lightsOff('garland', { by: 'stream' })) return false;
         this._emit('stream', { kind, text: 'Чат выключил гирлянду' });
         return true;
       case 'guest': {

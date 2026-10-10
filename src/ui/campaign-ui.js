@@ -8,6 +8,7 @@ import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
 import { LOGO_URL, NEUTRAL } from '../view/textures.js';
 import { formatFreq } from '../campaign/st-radio.js';
+import { PICON } from './icons.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -28,8 +29,7 @@ function saveNote(save) {
 }
 const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
-const PICON = { potato: '🥔', carrot: '🥕', sausage: '🌭', cucumber: '🥒', pickle: '🫙', egg: '🥚', peas: '🫛', mayo: '🫙', crab: '🦀', corn: '🌽', bread: '🍞', butter: '🧈', caviar: '🔴', tartlet: '🧁', cheese: '🧀', greens: '🌿', tomato: '🍅', onion: '🧅', herring: '🐟', beet: '🟣', skewer: '🍡', mandarin: '🍊', apple: '🍏', grapes: '🍇', chicken: '🍗', marinade: '🥣' };
-const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', fridge: '🧊', bag: '🛍', table: '🎄', puddle: '🧽' };
+const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', bag: '🛍', table: '🥂', puddle: '🧽' };
 const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука', skewer: '🍡 Шпажка' };
 
 // Шкала пробы: где вкус относительно «в самый раз» — понятнее, чем слово «пресно».
@@ -78,6 +78,7 @@ export const TIPS = {
   radio: 'Радио замолчало. Это не срочно: подойди к нему, зажми ручку настройки и подержи пару секунд — треск стихнет, музыка вернётся.',
   radioTune: 'Радио: зажми ручку настройки и веди по кругу — по часовой частота выше. Между станциями шипит. Колёсико мыши — точная подстройка, ◀ ▶ — соседняя станция.',
   garland: 'Часть гирлянды погасла. Не срочно, но к концу дня её стоит починить — это влияет на порядок.',
+  star: 'Погасла звезда на ёлке. Подойди к ёлке и удержи «Поправить звезду» — к концу дня она должна гореть.',
   stove: 'Плита: четыре конфорки и четыре крутилки. Подойди с продуктом в руках и нажми «Положить сюда» у нужной конфорки, огонь — только крутилкой (зажми и веди по кругу). На 6 закипает за ~25 с. 7–9 быстрее, но на кипении убежит пена и зальёт плиту — убавь до 4–5. Над кастрюлей кольцо: синее — греется, оранжевое — варится, зелёное ✓ — готово, сними с огня, иначе переварится.',
   fridge: 'Для варки продукт сначала берут в руки: яйца — из холодильника, картофель — из кладовой. Руки одни: отнеси, что держишь, к доске (почистить) или к плите (в кастрюлю).',
   stoveWipe: 'Конфорку залило убежавшей пеной. Сними кастрюлю, потом зажми кнопку на пятне и три туда-обратно — как тряпкой.',
@@ -662,6 +663,9 @@ export class CampaignUI {
       case 'garlandOff':
         this.tipWhenFree('garland');
         break;
+      case 'starOff':
+        this.tipWhenFree('star');
+        break;
       case 'catStole':
         this.toast(`Кот утащил кусок (${esc(PRODUCTS[e.product ?? 'sausage'].name.toLowerCase())})! На доске — «Взять замену»`, 'bad', 3.5);
         this.popup('🐈 Утащил!', 'bad');
@@ -736,12 +740,20 @@ export class CampaignUI {
       case 'garlandFixed':
         this.toast('Гирлянда снова горит ✨', 'good');
         break;
+      case 'starFixed':
+        this.toast('Звезда снова горит ⭐', 'good');
+        break;
       case 'radioFixed':
         this.toast('Радио снова играет 🎵', 'good');
         break;
       case 'washed':
         this.toast(esc(s.equipment[e.item].cleanText) + ' ✨', 'good');
         break;
+      case 'cutReady': {
+        const where = e.dest === 'bowl' ? 'можно в миску' : e.dest === 'pieces' ? 'можно на поднос' : 'можно убирать с доски';
+        this.toast(`${PICON[e.product] ?? ''} Нарезано ровно — ${where} ✓`, 'good', 2.4);
+        break;
+      }
       case 'transfer': {
         this.toast(`${PICON[e.product] ?? ''} ${esc(PRODUCTS[e.product].name)} — готово (${Math.round(e.q * 100)} % аккуратно)`, 'good', 2.2);
         const l = this._lessonStep(e.dishId, e.stepId);
@@ -863,6 +875,10 @@ export class CampaignUI {
     if (step.type === 'peel' && step.raw && !mine) return `Достать ${name} из ${where} и почистить`;
     if (step.type === 'boil' && !mine) return `Достать ${name} из ${where} → в кастрюлю`;
     if (step.type === 'boil' && mine) return `Положить ${name} в кастрюлю на плите`;
+    if (step.type === 'season') {
+      const n = s.dishes[dishId].season.target;
+      return `Посолить (${n.salt}) и поперчить (${n.pepper}) — щепотки`;
+    }
     return step.label;
   }
 
@@ -945,7 +961,7 @@ export class CampaignUI {
       if (!el) {
         el = document.createElement('div');
         el.className = `card alert ${a.urgent ? 'urgent' : ''}`;
-        const icon = { cat: '🐱', spillWarn: '🐱', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', radio: '📻', phone: '📱', delivery: '🛵', bag: '🛍', puddle: '💧' }[a.key] ?? '❗';
+        const icon = { cat: '🐱', spillWarn: '🐱', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', star: '⭐', radio: '📻', phone: '📱', delivery: '🛵', bag: '🛍', puddle: '💧' }[a.key] ?? '❗';
         let acts = '';
         if (a.action === 'shoo') acts = `<button class="danger" data-a="shoo">👋 Прогнать</button>`;
         else if (a.action === 'collect') acts = `<button class="primary" data-a="collect">Забрать заказ</button>`;
@@ -1075,7 +1091,7 @@ export class CampaignUI {
     switch (p) {
       case 'board': {
         const it = s.boardCur();
-        return `${base}|${s.board.current}|${s.boardTasks().map((t) => t.key + t.state + t.started).join(',')}|${it?.missing.length}|${s.transferBlock()}|${it?.cuts}|${it?.grater?.done}|${s.equipment.bowl.clean}|${s.bowl.owner}`;
+        return `${base}|${s.board.current}|${s.boardTasks().map((t) => t.key + t.state + t.started).join(',')}|${it?.missing.length}|${s.transferBlock()}|${it?.cuts}|${it?.cutReady}|${it?.grater?.done}|${s.equipment.bowl.clean}|${s.bowl.owner}`;
       }
       case 'bowl': {
         const mt = s.mixTarget();
@@ -1101,6 +1117,8 @@ export class CampaignUI {
         return `${base}|${s.radio.broken}|${s.radio.enabled}`;
       case 'garland':
         return `${base}|${s.garland.broken}`;
+      case 'tree':
+        return `${base}|${s.star.broken}`;
       case 'bag':
         return `${base}|${s.delivery.bag?.items.map((i) => +i.placed).join('')}`;
       case 'fridge':
@@ -1164,11 +1182,15 @@ export class CampaignUI {
         if (s.bowl.shaker) {
           const se = s.dishes[s.bowl.shaker.dishId].season;
           const k = s.bowl.shaker.kind;
-          return `<span class="q">${k === 'salt' ? '🧂 Солонка' : '🌶 Перечница'} в руке · ${se[k]} ${plural(se[k], 'щепотка', 'щепотки', 'щепоток')}</span><span>кликни над миской — щепотка; или зажми и тряхни вниз-вверх</span>${se.last ? tasteScale(se.last) : ''}`;
+          return `<span class="q">${k === 'salt' ? '🧂 Солонка' : '🌶 Перечница'} в руке · ${se[k]} из ${se.target[k]} ${plural(se.target[k], 'щепотки', 'щепоток', 'щепоток')}</span><span>кликни над миской — щепотка; или зажми и тряхни вниз-вверх</span>${se.last ? tasteScale(se.last) : ''}`;
         }
         const mt = s.mixTarget();
         const ph = s.bowl.owner && s.seasonState(s.bowl.owner);
-        if (ph?.phase === 'spice') return `<span class="q">1. Посоли и поперчи</span><span>возьми 🧂 внизу и кликни над миской 2–3 раза → 2. перемешай → 3. попробуй</span>`;
+        if (ph?.phase === 'spice') {
+          const n = ph.target, r = s.recipes[s.bowl.owner]?.season;
+          const wish = r && (n.salt !== r.salt || n.pepper !== r.pepper) ? ' · гости попросили' : '';
+          return `<span class="q">1. Посоли и поперчи: 🧂 ${n.salt} ${plural(n.salt, 'щепотка', 'щепотки', 'щепоток')} · 🌶 ${n.pepper ? n.pepper + ' ' + plural(n.pepper, 'щепотка', 'щепотки', 'щепоток') : 'без перца'}${wish}</span><span>клик над миской — щепотка → 2. перемешай → 3. попробуй</span>`;
+        }
         if (mt?.ok) {
           const m = Math.min(1, s.mixTurns() / CAMPAIGN.mix.turnsRequired);
           return `<span class="qbar"><i style="width:${m * 100}%"></i></span><span class="q">Однородность ${Math.round(m * 100)} %</span><span>зажми и веди ложку по кругу</span>`;
@@ -1219,6 +1241,8 @@ export class CampaignUI {
       }
       case 'garland':
         return s.garland.broken ? `Контакт: ${Math.round((s.garland.progress / CAMPAIGN.durations.garlandHold) * 100)} %` : '';
+      case 'tree':
+        return s.star.broken ? `Контакт: ${Math.round((s.star.progress / CAMPAIGN.durations.starHold) * 100)} %` : '';
       case 'stove':
         return '<span>Сильный огонь — быстрее закипит, но может убежать. Закипело — убавь до 4–5.</span>';
       case 'oven':
@@ -1255,7 +1279,7 @@ export class CampaignUI {
               ${it.body ? this._btn('⟲ <kbd>A</kbd>', 'boardTurn', [1], 'ghost turn', busy, 'Повернуть доску против часовой (держи A — плавно)') + this._btn('<kbd>D</kbd> ⟳', 'boardTurn', [-1], 'ghost turn', busy, 'Повернуть доску по часовой (держи D — плавно)') : ''}
               ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
               ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
-              ${(it.grater && !s.practice) || it.peel ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : ''), busy, block ?? '')}
+              ${(it.grater && !s.practice) || it.peel ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : it.cutReady ? 'ready-pulse' : ''), busy, block ?? '')}
             </div>
           </div>${it.missing.length ? bar : ''}<div class="dock-live" data-live></div>`;
       }
@@ -1348,6 +1372,8 @@ export class CampaignUI {
       }
       case 'garland':
         return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
+      case 'tree':
+        return `<h2>🎄 Ёлка</h2><div class="row">${s.star.broken ? `<button class="primary big hold-btn" data-hold="star" data-act="hold">⭐ Поправить звезду (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.star.broken ? 'Удерживай полторы секунды.' : 'Звезда горит.'}</p>`;
       case 'fridge': {
         const rows = Object.entries(s.inventory.stock)
           .filter(([, q]) => q > 0 || s.practice)

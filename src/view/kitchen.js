@@ -242,11 +242,42 @@ export function buildKitchen(scene) {
     o.position.set(Math.cos(a) * r, 0.45 + lvl * 0.32, Math.sin(a) * r);
     treeG.add(o);
   }
-  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.08), toon(0xffd54f, { emissive: 0xffc107, emissiveIntensity: 0.8 }));
-  star.position.y = 1.78;
+  // большая пятиконечная звезда на макушке (0.9: владелец попросил; она тоже иногда гаснет — campaign-view.js)
+  const starShape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? 0.075 : 0.18;
+    const a = Math.PI / 2 + (i * Math.PI) / 5;
+    if (i) starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    else starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.035, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 2 });
+  starGeo.center();
+  const star = new THREE.Mesh(starGeo, new THREE.MeshStandardMaterial({ color: 0xffd54f, emissive: 0xffb300, emissiveIntensity: 1.2, metalness: 0.35, roughness: 0.35 }));
+  star.position.set(0, 1.97, 0.02);
+  star.rotation.y = 0.35; // лицом к камере
+  star.castShadow = true;
   treeG.add(star);
+  const glowCv = document.createElement('canvas');
+  glowCv.width = glowCv.height = 64;
+  const gctx = glowCv.getContext('2d');
+  const grad = gctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,230,140,0.9)');
+  grad.addColorStop(0.35, 'rgba(255,200,80,0.35)');
+  grad.addColorStop(1, 'rgba(255,190,60,0)');
+  gctx.fillStyle = grad;
+  gctx.fillRect(0, 0, 64, 64);
+  const starGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(glowCv), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  starGlow.position.copy(star.position);
+  starGlow.scale.setScalar(0.75);
+  treeG.add(starGlow);
+  const topper = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.12, 8), toon(0xe6b548));
+  topper.position.y = 1.83;
+  treeG.add(topper);
   treeG.position.set(-3.0, 0, -1.9);
   scene.add(treeG);
+  k.tree = { group: treeG, star, glow: starGlow };
+  tag(treeG, 'tree');
+  k.stations.tree = [treeG];
   // подарки
   const giftColors = [0xd7262b, 0x2e7d32, 0xfdd835];
   for (let i = 0; i < 3; i++) {

@@ -334,6 +334,11 @@ function fixHome() {
     s.setHold('garland', true);
     tick(2.1);
   }
+  if (s.star.broken) {
+    go('tree');
+    s.setHold('star', true);
+    tick(1.6);
+  }
   wipeAll();
 }
 function readPhone() {

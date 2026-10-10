@@ -145,7 +145,9 @@ export function maskPlane(maskTex, w, d, y, ellipse = false) {
 export function breadSlice() {
   const g = new THREE.Group();
   add(g, rbox(0.1, 0.012, 0.078, 0.012), m(COL.crust, 0.8));
-  add(g, rbox(0.092, 0.002, 0.07, 0.01), m(COL.bread, 0.9), 0, 0.0115, 0);
+  // мякиш — на 2 мм выше корки (верх корки с фаской — 0,014, мякиша — 0,016). Раньше верхи совпадали, грани мерцали
+  // друг сквозь друга, и на чистом ломтике проступали ступенчатые «пятна масла» (0.9)
+  add(g, rbox(0.092, 0.002, 0.07, 0.01), m(COL.bread, 0.9), 0, 0.0135, 0);
   return g;
 }
 

@@ -215,11 +215,12 @@ export class BowlView {
       this.key = key;
       this._build(s);
     }
-    const st = s.bowl.stirrer;
-    const mixed = st ? Math.min(1, st.turns / CAMPAIGN.mix.turnsRequired) : 0;
+    // мешают ложкой всегда, когда в миске что-то есть (0.9): blend — перемешанность «просто так», stirrer — шаг рецепта
+    const st = s.bowl.stirrer ?? s.bowl.freeStir;
+    const mixed = Math.max(s.bowl.stirrer ? Math.min(1, s.bowl.stirrer.turns / CAMPAIGN.mix.turnsRequired) : 0, s.bowl.blend ?? 0);
     const e = mixed * mixed * (3 - 2 * mixed);
     // содержимое медленно идёт за ложкой
-    this.root.rotation.y = -(st?.angle ?? 0) * 0.25;
+    this.root.rotation.y = -(s.bowl.spin ?? 0) * 0.25; // общий угол ложки: не прыгает, когда «просто мешаю» сменяется шагом рецепта
     const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
     const hasMayo = this.mayoPts.length > 0;
     let nc = 0, nb = 0;

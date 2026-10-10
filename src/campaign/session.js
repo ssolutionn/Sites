@@ -52,7 +52,7 @@ export class KitchenSession {
     this.heroine = { x: s.x, z: s.z, facing: Math.PI, path: [], target: null, station: null, moving: false, away: false, awayLeft: 0, returnTo: null };
     this.action = null;
     this.panel = null;
-    this.holds = { radio: false, garland: false };
+    this.holds = { radio: false, garland: false, star: false };
     this.pointerDown = false;
 
     this.equipment = {
@@ -64,13 +64,12 @@ export class KitchenSession {
 
     this.recipes = practice ? { practice: this.day.recipe } : Object.fromEntries(this.day.dishes.map((id) => [id, RECIPES[id]]));
     this.dishes = {};
-    this._seasonRng = createRng((seed * 7919 + 17) >>> 0);
     for (const id of Object.keys(this.recipes)) this.dishes[id] = this._createDish(id);
     this.request = this.day.request ?? null;
     this.requestKnown = false;
 
     this.board = { current: null, items: {}, grated: null, stroke: null };
-    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null, pouring: null, shaker: null };
+    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null, pouring: null, shaker: null, freeStir: null, blend: 0 };
     this.workPlate = { owner: null, amount: 0 };
     this.spoon = { load: 0 };
     this.tool = 'hand';
@@ -83,6 +82,7 @@ export class KitchenSession {
     this.oven = { state: 'empty', owner: null, t: 0, readyAt: 0, windowEnd: 0, doneness: 0 };
     this.radio = { enabled: true, broken: false, progress: 0, repairs: 0, breaks: 0, freq: RADIO.startFreq }; // freq — МГц, ручка настройки (st-radio.js)
     this.garland = { broken: false, progress: 0, repairs: 0 };
+    this.star = { broken: false, progress: 0, repairs: 0 }; // большая звезда на ёлке (поправить — у ёлки, st-home.js)
     this.cat = { state: 'home', kind: null, deadline: 0, startedAt: 0, visitUntil: 0 };
     this.catNeeds = { hunger: practice ? 0 : cfg.cat.hungerStart, warned: false, lastTry: -1e9 };
     this.wallet = { budget: practice ? 0 : Math.round((this.day.budget ?? 0) * (mods.tightBudget ? 0.6 : 1)), spent: 0 };
@@ -166,7 +166,7 @@ export class KitchenSession {
     const steps = {};
     for (const s of r.steps) steps[s.id] = { done: false, q: null, info: null };
     const dish = { id, recipe: r, variant: { onion: true }, steps, done: false, Q: null, parts: null, notes: [], prepared: {}, pieces: {}, work: null, penalty: { prep: 0 }, attempt: 0, mayo: null };
-    if (r.steps.some((s) => s.type === 'season')) this._initSeason(dish, this._seasonRng);
+    if (r.steps.some((s) => s.type === 'season')) this._initSeason(dish);
     return dish;
   }
 
@@ -527,6 +527,7 @@ export class KitchenSession {
   _releaseHolds() {
     this.holds.radio = false;
     this.holds.garland = false;
+    this.holds.star = false;
   }
 
   setHold(kind, on) {
@@ -537,6 +538,8 @@ export class KitchenSession {
     if (this.action) return false;
     if (kind === 'radio' && (!this._isIdleAt('radio') || !this.radio.broken)) return false;
     if (kind === 'garland' && (!this._isIdleAt('garland') || !this.garland.broken)) return false;
+    if (kind === 'star' && (!this._isIdleAt('tree') || !this.star.broken)) return false;
+    if (!(kind in this.holds)) return false;
     this.holds[kind] = true;
     return true;
   }
@@ -556,17 +559,22 @@ export class KitchenSession {
         }
       }
     }
-    if (this.holds.garland) {
-      if (!this._isIdleAt('garland') || this.action) this.holds.garland = false;
-      else {
-        this.garland.progress = Math.min(this.cfg.durations.garlandHold, this.garland.progress + h);
-        if (this.garland.progress >= this.cfg.durations.garlandHold - EPS) {
-          this.garland.broken = false;
-          this.garland.repairs++;
-          this.holds.garland = false;
-          this._removeAlert('garland');
-          this._emit('garlandFixed');
-        }
+    // гирлянда — у окна, звезда — у ёлки: удержание доводит контакт, потом огоньки снова горят
+    for (const [kind, station] of [['garland', 'garland'], ['star', 'tree']]) {
+      if (!this.holds[kind]) continue;
+      if (!this._isIdleAt(station) || this.action) {
+        this.holds[kind] = false;
+        continue;
+      }
+      const need = this.cfg.durations[kind + 'Hold'];
+      const st = this[kind];
+      st.progress = Math.min(need, st.progress + h);
+      if (st.progress >= need - EPS) {
+        st.broken = false;
+        st.repairs++;
+        this.holds[kind] = false;
+        this._removeAlert(kind);
+        this._emit(kind + 'Fixed');
       }
     }
   }
@@ -615,6 +623,7 @@ export class KitchenSession {
       this.board.knife = null;
     }
     this.bowl.stirrer?.release();
+    this.bowl.freeStir?.release();
     this.bowl.pouring?.tracker.release();
     const it = this.board.current && this.board.items[this.board.current];
     it?.grater?.release();
@@ -683,14 +692,10 @@ export class KitchenSession {
           break;
         }
         case 'garland':
+        case 'star':
           if (t >= e.at) {
             e.fired = true;
-            if (!this.garland.broken) {
-              this.garland.broken = true;
-              this.garland.progress = 0;
-              this._alert('garland', 'Часть гирлянды погасла', { station: 'garland' });
-              this._emit('garlandOff');
-            }
+            this.lightsOff(e.type);
           }
           break;
         case 'cat': {
@@ -763,6 +768,10 @@ export class KitchenSession {
     if (this.garland.broken) {
       s -= o.garlandLeft;
       notes.push('Гирлянда так и не горит');
+    }
+    if (this.star.broken) {
+      s -= o.starLeft;
+      notes.push('Звезда на ёлке не горит');
     }
     if (this.radio.broken) {
       s -= o.radioLeft;

@@ -538,3 +538,10 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 .radio-readout .rbars i:nth-child(4) { height: 16px; }
 .radio-readout .rbars i.on { background: #4cc28a; }
 #panel.station-panel .radio-seek { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; font-size: 15px; }
+
+/* 0.9: нарисованные значки продуктов (свёкла, икра) — того же размера, что эмодзи вокруг */
+.picon { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
+.pcard .pi .picon, .ring .picon { vertical-align: middle; }
+/* 0.9: нарезка готова — кнопка «В миску» мягко пульсирует, пока не нажмёшь */
+button.ready-pulse { animation: readyPulse 1.1s ease-in-out infinite; box-shadow: 0 0 0 0 rgba(72, 199, 116, 0.7); }
+@keyframes readyPulse { 50% { box-shadow: 0 0 0 9px rgba(72, 199, 116, 0); transform: scale(1.04); } }

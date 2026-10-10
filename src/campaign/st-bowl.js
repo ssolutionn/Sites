@@ -17,11 +17,12 @@ export const bowlMethods = {
     this.bowl.owner = dishId;
     this.equipment.bowl.owner = dishId;
     this.bowl.contents.push(content);
+    this.bowl.blend = (this.bowl.blend ?? 0) * 0.5; // новое легло сверху — перемешанность наполовину
     this._emit('bowlAdd', { dishId, product: content.product, kind: content.kind });
   },
 
   _dirtyBowl() {
-    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null, pouring: null, shaker: null };
+    this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null, pouring: null, shaker: null, freeStir: null, blend: 0 };
     this.equipment.bowl.clean = false;
     this.equipment.bowl.owner = null;
     this._emit('dirty', { item: 'bowl' });
@@ -198,29 +199,51 @@ export const bowlMethods = {
         const se = this.dishes[tgt.dishId].season;
         if (!se.salt && !se.pepper) {
           this.setHint('Сначала посоли и поперчи — потом мешай, чтобы соль разошлась', 2.5);
-          return 'blocked';
+          return this._freeStir('down', x, z) ?? 'blocked';
         }
         this.seasonDone(tgt.dishId);
         tgt = this.mixTarget();
       }
       if (!tgt) {
-        this.setHint(this.bowl.contents.length ? 'Сначала добавь всё по рецепту' : 'Миска пуста', 2);
+        if (this.bowl.contents.length) return this._freeStir('down', x, z);
+        this.setHint('Миска пуста', 2);
         return 'nothing';
       }
       if (!tgt.ok) {
-        this.setHint('Состав ещё не полный. ' + tgt.block, 2.5);
-        return 'blocked';
+        // 0.9: мешать можно всегда, когда в миске что-то есть; шаг засчитается, когда состав полный
+        this.setHint('Мешаешь — но в салате ещё не всё. ' + tgt.block, 2.5);
+        return this._freeStir('down', x, z) ?? 'blocked';
       }
+      this.bowl.freeStir = null;
       if (!this.bowl.stirrer || this.bowl.mixStep !== tgt.stepId + tgt.dishId) {
         this.bowl.stirrer = new Stirrer(this.cfg.mix);
         this.bowl.mixStep = tgt.stepId + tgt.dishId;
       }
     }
+    if (this.bowl.freeStir) return this._freeStir(type, x, z) ?? 'idle';
     if (!this.pointerDown || !tgt?.ok || !this.bowl.stirrer || this.action) return 'idle';
     const gain = this.bowl.stirrer.move(x, z);
+    this.bowl.spin = (this.bowl.spin ?? 0) + gain;
     if (gain > 0) this._emit('stir', { turns: this.bowl.stirrer.turns });
     if (this.bowl.stirrer.turns >= this.cfg.mix.turnsRequired) this._mixComplete(tgt.dishId, tgt.stepId);
     return gain > 0 ? 'stir' : 'idle';
+  },
+
+  // Мешать «просто так»: в миске что-то есть, а шаг «перемешать» ещё не открыт. Содержимое перемешивается
+  // (bowl.blend 0..1 — для вида), шаг не засчитывается. Пустая миска — null.
+  _freeStir(type, x, z) {
+    if (!this.bowl.contents.length) return null;
+    if (type === 'down') {
+      this.bowl.freeStir ??= new Stirrer(this.cfg.mix);
+      return 'free';
+    }
+    if (!this.pointerDown || !this.bowl.freeStir || this.action) return 'idle';
+    const gain = this.bowl.freeStir.move(x, z);
+    if (gain <= 0) return 'idle';
+    this.bowl.spin = (this.bowl.spin ?? 0) + gain;
+    this.bowl.blend = Math.min(1, (this.bowl.blend ?? 0) + gain / (Math.PI * 2 * this.cfg.mix.turnsRequired));
+    this._emit('stir', { turns: this.bowl.freeStir.turns, free: true });
+    return 'stir';
   },
 
   _restirTarget() {
@@ -236,6 +259,7 @@ export const bowlMethods = {
     }
     if (!this.pointerDown || !this.bowl.restir || this.action) return 'idle';
     const gain = this.bowl.restir.move(x, z);
+    this.bowl.spin = (this.bowl.spin ?? 0) + gain;
     if (gain > 0) this._emit('stir', { turns: this.bowl.restir.turns, restir: true });
     const se = this.dishes[dishId].season;
     if (this.bowl.restir.turns >= se.unmixed) {
@@ -255,6 +279,7 @@ export const bowlMethods = {
     }
     if (!this._completeStep(dishId, stepId, 1)) return;
     this.bowl.stirrer.release();
+    this.bowl.blend = 1;
     if (this.stepDef(dishId, 'taste')) {
       this.setHint('Перемешано! Теперь попробуй ложкой — и доведи до вкуса', 3);
       this._emit('mixed', { dishId });

@@ -112,7 +112,7 @@ function boot() {
 
   const SOUND_OF = {
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
-    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed',
+    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed',
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
@@ -120,7 +120,7 @@ function boot() {
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
     unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
     stir: 'stir', peel: 'peelSkin', cutDenied: 'scuff', // перемешивание, чистка и отказ ножа раньше молчали
-    taken: 'select', returned: 'select', eggCrack: 'crack', overcooked: 'deny', stoveClean: 'fixed', wipe: 'scrub', wash: 'scrub', // 0.9: руки, яйцо, плита, мытьё
+    cutReady: 'ready', taken: 'select', returned: 'select', eggCrack: 'crack', overcooked: 'deny', stoveClean: 'fixed', wipe: 'scrub', wash: 'scrub', // 0.9: руки, яйцо, плита, мытьё
     feedLike: 'select', // лайк в ленте «Андрея»; новые посты приходят без звука — только значок
   };
 

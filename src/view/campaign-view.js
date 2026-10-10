@@ -94,6 +94,9 @@ export class CampaignView {
     this.grater.visible = false;
     this.root.add(this.grater);
     this.grateProduct = new THREE.Mesh(F.rbox(0.05, 0.035, 0.04, 0.008), F.m(0xffffff, 0.6));
+    // свёкла на тёрке — корнеплод с хвостиком, а не брусок (0.9: «просто фиолетовый круг»)
+    const beetProfile = [[0, -0.048], [0.004, -0.04], [0.014, -0.026], [0.026, -0.012], [0.031, 0.002], [0.028, 0.014], [0.018, 0.024], [0.007, 0.029], [0.004, 0.036], [0, 0.037]];
+    this.grateGeo = { block: this.grateProduct.geometry, beet: new THREE.LatheGeometry(beetProfile.map(([x, y]) => new THREE.Vector2(x, y)), 20) };
     this.grateProduct.visible = false;
     this.root.add(this.grateProduct);
     this.shreds = new THREE.Group();
@@ -163,7 +166,7 @@ export class CampaignView {
     fridgeHit.position.set(3.05, 1, -2.15);
     this.root.add(fridgeHit);
     tag(fridgeHit, 'fridge');
-    for (const id of ['radio', 'garland', 'phone', 'bowl', 'board']) for (const o of k.stations[id] ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = id, this.clickables.push(q)));
+    for (const id of ['radio', 'garland', 'tree', 'phone', 'bowl', 'board']) for (const o of k.stations[id] ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = id, this.clickables.push(q)));
     this.radioView = new RadioView(k.radio);
 
     // кукуруза у миски
@@ -781,7 +784,7 @@ export class CampaignView {
     if (a?.type === 'shoo') return { pose: 'shoo' };
     if (a?.type === 'cut') return { pose: 'cut', progress: a.elapsed / a.duration };
     if (a) return { pose: 'work' };
-    if (s.holds.garland) return { pose: 'reach' };
+    if (s.holds.garland || s.holds.star) return { pose: 'reach' };
     if (s.holds.radio) return { pose: 'work' };
     if (s.panel === 'sink' && s.pointerDown) return { pose: 'wash' };
     if (s.panel === 'puddle') return { pose: 'wipe' };
@@ -1017,6 +1020,17 @@ export class CampaignView {
       b.material.emissiveIntensity = on;
     });
     g.light.intensity = broken && !fixing ? 0.9 : 2.2;
+    // звезда на ёлке: горит и мягко дышит; погасла — тёмная, изредка вспыхивает (плохой контакт); чинят — мигает
+    const tr = this.k.tree;
+    if (tr) {
+      let glow = 1 + Math.sin(t * 1.7) * 0.15;
+      if (s.star.broken) glow = (t % 2.6) < 0.09 ? 0.7 : 0.02;
+      if (s.holds.star) glow = Math.random() > 0.55 ? 1.1 : 0.15;
+      tr.star.material.emissiveIntensity = 1.3 * glow;
+      tr.star.material.color.setScalar(0.55 + 0.45 * Math.min(1, glow * 1.5));
+      tr.glow.visible = glow > 0.1;
+      tr.glow.material.opacity = Math.min(1, glow);
+    }
     const rb = s.radio.broken;
     const ron = s.radio.enabled && !rb;
     const r = this.k.radio;
@@ -1090,6 +1104,7 @@ export class CampaignView {
     if (it?.grater) {
       const left = it.grater.remaining;
       this.grateProduct.material.color.setHex(PRODUCTS[it.product].color);
+      this.grateProduct.geometry = this.grateGeo[it.product] ?? this.grateGeo.block;
       const z = this.pointerLocal && s.pointerDown && s.panel === 'board' ? THREE.MathUtils.clamp(this.pointerLocal.z, -0.06, 0.06) : 0;
       this.grateProduct.position.copy(this.k.boardCenter).add(new THREE.Vector3(0, 0.1 - z * 0.9, -0.03 + z * 0.35 + 0.02));
       this.grateProduct.rotation.x = -0.35;
@@ -1172,7 +1187,7 @@ export class CampaignView {
           o.butter[i].update();
           for (let k = 0; k < b.doses * 22 && n < o.caviar.instanceMatrix.count; k++) {
             const a = k * 2.399, r = Math.sqrt(k / (b.doses * 22)) * (0.012 + b.doses * 0.006);
-            mtx.makeTranslation(b.x + Math.cos(a) * r, 0.016 + (k % 3) * 0.002, b.z + Math.sin(a) * r);
+            mtx.makeTranslation(b.x + Math.cos(a) * r, 0.0175 + (k % 3) * 0.002, b.z + Math.sin(a) * r);
             o.caviar.setMatrixAt(n++, mtx);
           }
         });
@@ -1245,7 +1260,7 @@ export class CampaignView {
           g.add(bm);
           const tx = new F.MaskTexture(b.mask, F.COL.butter);
           this.trayTex.push(tx);
-          const pl = F.maskPlane(tx, b.w * 0.92, b.d * 0.92, 0.0145);
+          const pl = F.maskPlane(tx, b.w * 0.92, b.d * 0.92, 0.0166); // чуть над мякишем (верх 0,016)
           pl.position.x = b.x;
           pl.position.z = b.z;
           g.add(pl);

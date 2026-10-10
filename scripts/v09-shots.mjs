@@ -137,6 +137,79 @@ try {
     }
     check('яйца почищены пальцами', await sess("s.stepDone('olivier', 'peelEgg')"));
   }
+  if (want('p1')) {
+    const stroke = async (st, pts, steps = 10) => {
+      let q = await scr(st, ...pts[0]); await page.mouse.move(q.x, q.y); await page.mouse.down();
+      for (const pt of pts.slice(1)) { q = await scr(st, ...pt); await page.mouse.move(q.x, q.y, { steps }); }
+      await page.mouse.up(); await wait(40);
+    };
+    // 14/16: звезда на ёлке гаснет → подойти к ёлке → удержать
+    await openDay(2);
+    await S(() => window.__sueta.session.lightsOff('star'));
+    await wait(700);
+    await shot('tree_star_off');
+    await station('tree');
+    check('у ёлки кнопка «Поправить звезду»', await S(() => !!document.querySelector('button[data-hold="star"]')));
+    await wait(900); await tip(); // подсказка «звезда погасла» ставит игру на паузу
+    const hb = await page.locator('button[data-hold="star"]').boundingBox();
+    await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2); const t0 = await sess('s.t'); await page.mouse.down(); await waitFor(() => !window.__sueta.session.star.broken, 8000); await page.mouse.up();
+    check('звезда снова горит', (await sess('s.star.broken')) === false, `игровое время удержания ${((await sess('s.t')) - t0).toFixed(1)} с`);
+    await wait(500); await shot('tree_star_on');
+
+    // 8: морковь кубиком мышью → сигнал «нарезано», кнопка «В миску» пульсирует
+    await openDay(1);
+    await station('board');
+    await S(() => document.querySelector('button[data-act="boardSelect"][data-args*="carrot"]')?.click()); await wait(1200);
+    const body = await sess('({ w: s.boardCur().body.shape.w, d: s.boardCur().body.shape.d, zs: s.boardCur().body.copies.map((c) => c.cz) })');
+    const U = 0.021;
+    const z0 = Math.min(...body.zs) - body.d / 2 - 0.8, z1 = Math.max(...body.zs) + body.d / 2 + 0.8;
+    for (let x = -body.w / 2 + 1; x < body.w / 2 - 0.3; x += 1) await stroke('board', [[x * U, z0 * U], [x * U, z1 * U]]);
+    for (const cz of body.zs) for (let z = cz - body.d / 2 + 1; z < cz + body.d / 2 - 0.3; z += 1) await stroke('board', [[(-body.w / 2 - 0.8) * U, z * U], [(body.w / 2 + 0.8) * U, z * U]], 16);
+    await wait(400);
+    check('нарезка готова — сигнал', (await sess('s.boardCur()?.cutReady')) === true, `качество ${await sess('Math.round(s.boardQuality(s.boardCur()).score * 100)')} %`);
+    check('кнопка «В миску» подсвечена', await S(() => !!document.querySelector('button.ready-pulse[data-act="boardTransfer"]')));
+    await shot('board_cut_ready');
+    await S(() => document.querySelector('button[data-act="boardTransfer"]')?.click()); await wait(600);
+    // 1: в миске только морковь — мешается всё равно
+    await station('bowl');
+    const c = await scr('bowl', 0, 0);
+    await page.mouse.move(c.x + 70, c.y); await page.mouse.down();
+    for (let i = 0; i <= 60; i++) { const a = (i / 20) * Math.PI * 2; const q = await scr('bowl', Math.cos(a) * 0.1, Math.sin(a) * 0.1); await page.mouse.move(q.x, q.y); await wait(16); }
+    await shot('bowl_free_stir');
+    await page.mouse.up();
+    check('морковь в миске перемешивается', (await sess('s.bowl.blend')) > 0.3, `blend ${await sess('s.bowl.blend.toFixed(2)')}`);
+    check('шаг «перемешать» ещё не засчитан', (await sess("s.stepDone('olivier', 'mix')")) === false);
+    // 2: соль и перец — точная норма видна
+    await S(() => { const s = window.__sueta.session; const d = s.dishes.olivier; for (const st of d.recipe.steps) if (!['season', 'mix', 'taste'].includes(st.id)) d.steps[st.id].done = true; s.hot = {}; });
+    await S(() => window.__sueta.session.closePanel()); await station('bowl'); await wait(600);
+    const live = await S(() => [...document.querySelectorAll('[data-live]')].map((e) => e.textContent).join(' '));
+    check('у миски видна норма: 4 соли и 2 перца', /4 щепотки/.test(live) && /2 щепотки/.test(live), live.slice(0, 90));
+    await shot('bowl_season_norm');
+
+    // 13: свёкла — нарисованный значок и корнеплод на тёрке
+    await openDay(5);
+    await station('fridge');
+    check('у свёклы свой значок, не круг', await S(() => document.querySelectorAll('svg.picon').length > 0));
+    await shot('fridge_beet_icon');
+    await S(() => { const s = window.__sueta.session; s.dishes.shuba.steps.boilBeet.done = true; s.hot = {}; });
+    await station('board');
+    await S(() => document.querySelector('button[data-act="boardSelect"][data-args*="shuba:beet"]')?.click()); await wait(1200);
+    check('свёкла на тёрке', (await sess("s.boardCur()?.product")) === 'beet');
+    await shot('board_beet_grater');
+
+    // 15: масло ложится там, где прошла мышь (левая половина ломтика)
+    await openDay(3);
+    await station('tray');
+    await S(() => window.__sueta.session.traySelect('sandwiches')); await wait(800);
+    const b0 = await sess('(({ x, z, w, d }) => ({ x, z, w, d }))(s.dishes.sandwiches.work.breads[0])');
+    const pts = [];
+    for (let r = 0; r <= 6; r++) { const z = b0.z - b0.d * 0.42 + (b0.d * 0.84 * r) / 6; const xl = b0.x - b0.w * 0.45, xr = b0.x - b0.w * 0.05; pts.push(r % 2 ? [xr, z] : [xl, z], r % 2 ? [xl, z] : [xr, z]); }
+    await stroke('tray', pts, 6);
+    const cov = await sess('s.dishes.sandwiches.work.breads[0].mask.coverage()');
+    check('намазана левая половина', cov > 0.2 && cov < 0.75, `${Math.round(cov * 100)} %`);
+    await shot('d3_butter_left_half');
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`, errs.slice(0, 4));
 await browser.close();

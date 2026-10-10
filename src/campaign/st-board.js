@@ -191,7 +191,20 @@ export const boardMethods = {
     if (it.pieces.length > before) {
       it.cuts++;
       this._emit('cut', { key: it.key, x: bx, z: bz, px, pz, count: it.pieces.length - before });
+      this._checkCutReady(it);
     }
+  },
+
+  // Почти все куски нужного размера — один раз сказать «готово»: звук, подсказка, кнопка «В миску» подсвечена.
+  _checkCutReady(it) {
+    if (it.cutReady || it.peel || it.grater || it.missing.length) return;
+    if (this._freshLeft(it)) return;
+    if (it.log && roundSlices(it.log).length < 3) return;
+    const q = this.boardQuality(it).score;
+    if (q < this.cfg.cutReady) return;
+    it.cutReady = true;
+    const dest = this.stepDef(it.dishId, it.stepId)?.dest;
+    this._emit('cutReady', { key: it.key, product: it.product, q, dest });
   },
 
   /** Повернуть доску на четверть оборота: dir = 1 — против часовой (A), −1 — по часовой (D). */
@@ -347,6 +360,7 @@ export const boardMethods = {
       it.cuts++;
       for (const c of r.cuts) it.freshIds.delete(c.original.id);
       this._emit('cut', { key: it.key, axis: line.axis, pos: line.pos, x: line.axis === 'x' ? line.pos : null, count: r.cuts.length });
+      this._checkCutReady(it);
     }, { key: it.key, axis: line.axis, pos: line.pos, from: line.from, to: line.to, x: line.axis === 'x' ? line.pos : 0, z: line.axis === 'z' ? line.pos : 0 });
     return 'cut';
   },
@@ -366,6 +380,7 @@ export const boardMethods = {
       it.log = rr.log;
       it.cuts++;
       this._emit('cut', { key: it.key, axis: 'x', pos: ux, x: ux, round: true });
+      this._checkCutReady(it);
     }, { key: it.key, axis: 'x', pos: ux, from: line.from, to: line.to, x: ux, z: 0, round: true });
     return 'cut';
   },
@@ -391,8 +406,16 @@ export const boardMethods = {
     if (it.missing.length) return 'Кот утащил кусок — возьми замену';
     if (it.cuts < 1) return 'Сначала сделай хотя бы один разрез';
     if (it.log && roundSlices(it.log).length < 3) return 'Нарежь хотя бы несколько кружочков';
-    if (it.body ? it.pieces.some((p) => p.fresh) : it.pieces?.some((p) => it.freshIds.has(p.id))) return 'Замену нужно дорезать';
+    if (this._freshLeft(it)) return 'Замену нужно дорезать';
     return this._destBlock(it);
+  },
+
+  // Есть замена, которую ещё нужно дорезать. Замена размером уже с кубик (кот утащил готовый кубик) — не считается:
+  // меньше её не разрезать, и «В миску» не должно застревать навсегда.
+  _freshLeft(it) {
+    if (!it.body) return !!it.pieces?.some((p) => it.freshIds.has(p.id));
+    const t = this.cfg.tolerance, k = it.size ?? 1;
+    return it.pieces.some((p) => p.fresh && !(Math.sqrt(p.area) <= t.max * k && p.elong <= t.elong));
   },
 
   _destBlock(it) {
