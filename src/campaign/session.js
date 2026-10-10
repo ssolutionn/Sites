@@ -13,7 +13,7 @@ import { bowlMethods } from './st-bowl.js';
 import { trayMethods } from './st-tray.js';
 import { homeMethods } from './st-home.js';
 import { phoneMethods } from './st-phone.js';
-import { extraMethods } from './st-extra.js';
+import { extraMethods, BOILED } from './st-extra.js';
 import { radioMethods } from './st-radio.js';
 import { RADIO } from './radio-data.js';
 
@@ -77,6 +77,8 @@ export class KitchenSession {
     this.tray = { owner: null, drag: null };
 
     this.burners = Array.from({ length: cfg.burners ?? 1 }, (_, i) => emptyBurner(i));
+    this.carry = null; // в руках у героини: { product, qty, dishId, stepId, boilStep, peeled } — из холодильника к доске или к плите
+    this.stoveWipe = null; // вытираем залитую конфорку: { i, scrub }
     this.hot = {}; // продукт → время, до которого он горячий
     this.oven = { state: 'empty', owner: null, t: 0, readyAt: 0, windowEnd: 0, doneness: 0 };
     this.radio = { enabled: true, broken: false, progress: 0, repairs: 0, breaks: 0, freq: RADIO.startFreq }; // freq — МГц, ручка настройки (st-radio.js)
@@ -579,7 +581,7 @@ export class KitchenSession {
     if (this.isOver() || this.heroine.away || this.heroine.target) return 'ignored';
     if (type === 'down') this.pointerDown = true;
     if (type === 'up') {
-      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : this.panel === 'bowl' ? this._bowlPointer('up', x, z) : 'up';
+      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : this.panel === 'bowl' ? this._bowlPointer('up', x, z) : this.panel === 'stove' ? this._stovePointer('up', x, z) : 'up';
       this.pointerUp();
       return r;
     }
@@ -597,6 +599,8 @@ export class KitchenSession {
         return this._puddlePointer(type, x, z);
       case 'radio':
         return this._radioPointer(type, x, z);
+      case 'stove':
+        return this._stovePointer(type, x, z);
       default:
         return 'ignored';
     }
@@ -616,6 +620,7 @@ export class KitchenSession {
     it?.grater?.release();
     this.tray.lastStroke = null;
     this._sinkLast = null;
+    this.stoveWipe?.scrub.release();
     if (this.sinkCool) this.sinkCool.pressed = false;
     this._wipeLast = null;
     if (this.tray.drag) this._dropDrag(null);
@@ -763,6 +768,11 @@ export class KitchenSession {
       s -= o.radioLeft;
       notes.push('Радио осталось сломанным');
     }
+    const wet = this.burners.filter((b) => b.dirty).length;
+    if (wet) {
+      s -= o.dirtyLeft * wet;
+      notes.push('Плита залита и не вытерта');
+    }
     const dirty = this.dirtyItems();
     if (dirty.length) {
       s -= o.dirtyLeft * dirty.length;
@@ -847,6 +857,7 @@ export class KitchenSession {
     }
     if (dish.penalty.prep && parts.prep != null) parts.prep = Math.max(0, parts.prep - dish.penalty.prep);
     if (dish.penalty.prepSpill) notes.unshift('Кастрюля выкипела — картофель разварился');
+    if (dish.penalty.overcook) notes.unshift(BOILED[dish.penalty.overcook]?.note ?? 'Переварено');
     dish.parts = parts;
     dish.Q = dishScore(parts);
     dish.notes = notes.slice(0, 3);
@@ -873,7 +884,8 @@ export class KitchenSession {
 Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods);
 
 export function emptyBurner(i) {
-  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold' };
+  // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне
+  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0 };
 }
 
 // ---------- практика ----------

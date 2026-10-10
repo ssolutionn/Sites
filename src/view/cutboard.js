@@ -662,7 +662,8 @@ export class CutBoardView {
 
     // нож, рука, подсказка
     const showTools = closeup && !!it && !it.grater && s.panel === 'board';
-    this.knife.visible = showTools;
+    // яйцо чистят пальцами: ножа нет, рука идёт за мышью
+    this.knife.visible = showTools && !it?.hand;
     this.leftHand.visible = showTools && (pieces.length > 0 || !!it?.log);
     this.preview.visible = false;
     this.guide.visible = false;
@@ -734,6 +735,12 @@ export class CutBoardView {
     this.knifePos.y += (ky - this.knifePos.y) * (1 - Math.exp(-dt * 40));
     this.knife.position.copy(this.knifePos);
 
+    if (it.hand) {
+      // пальцы над яйцом: нажала — опустились к скорлупе
+      const down = s.pointerDown ? 0.05 : 0.5;
+      this.leftHand.position.set(this.knifePos.x - 0.5 * UNIT, this.knifePos.y + down * UNIT, this.knifePos.z);
+      return;
+    }
     // левая рука придерживает продукт слева от ножа
     if (pieces.length || it.log) {
       const b = area;
@@ -836,13 +843,16 @@ export class CutBoardView {
   _syncPeel(it, pointer) {
     const st = this._peelState(it.peel);
     const mask = it.peel;
-    if (st.version === mask.version && st.key === it.key) return;
+    const ck = it.hand ? it.cracks.join(',') : '';
+    if (st.version === mask.version && st.key === it.key && st.ck === ck) return;
+    st.ck = ck;
     const grew = st.key === it.key && mask.version > st.version;
     st.version = mask.version;
     st.key = it.key;
     for (let i = 0; i < st.data.length; i++) st.data[i] = Math.min(255, Math.round(Math.min(1, mask.level[i] * 2) * 255));
     st.texture.needsUpdate = true;
-    st.crack.value = mask.coverage() > 0 ? 1 : 0;
+    // яйцо: трещины появляются после ударов о доску; картофель — как только начали чистить
+    st.crack.value = it.hand ? (it.cracks.some((n) => n > 0) ? 1 : 0) : mask.coverage() > 0 ? 1 : 0;
     // очистки летят из-под ножа: полоски мундира или осколки скорлупы
     if (grew && pointer) {
       const col = new THREE.Color(PRODUCTS[it.product]?.peel ?? 0x9a7448);

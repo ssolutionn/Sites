@@ -124,10 +124,44 @@ export function seasonMixTaste(s, dishId, opts = {}) {
   tasteDone(s, dishId, opts);
 }
 
-// Чистка текущего продукта на доске: зигзаг ножом по всем копиям.
+// Достать продукт для шага (key 'блюдо:шаг') из холодильника или кладовой в руки.
+export function take(s, key) {
+  const [dishId, stepId] = key.split(':');
+  arrive(s, 'fridge');
+  if (!s.fridgeTake(dishId, stepId)) throw new Error(`не достали ${key}: ${s.hint?.text}`);
+  waitAction(s);
+}
+
+// Поставить вариться шаг boil (key 'блюдо:шаг'): достать → если по рецепту сначала чистят сырым — почистить на доске → в кастрюлю.
+// heat не задан — огонь по умолчанию (placeHeat); null — как стоит крутилка.
+export function startBoil(s, key, { burner = null, heat } = {}) {
+  const [dishId, stepId] = key.split(':');
+  const steps = s.dishes[dishId].recipe.steps;
+  const boil = steps.find((x) => x.id === stepId);
+  const raw = steps.find((x) => x.type === 'peel' && x.raw && (boil.requires ?? []).includes(x.id));
+  if (s.carry?.boilStep !== stepId || s.carry?.dishId !== dishId) take(s, `${dishId}:${raw ? raw.id : stepId}`);
+  if (raw && !s.carry?.peeled) {
+    arrive(s, 'board');
+    if (!s.boardSelect(`${dishId}:${raw.id}`)) throw new Error(`не почистить ${raw.id}: ${s.hint?.text}`);
+    peel(s);
+  }
+  arrive(s, 'stove');
+  if (!s.placePot(burner, null, heat)) throw new Error(`не поставили ${key}: ${s.hint?.text}`);
+  waitAction(s);
+  return s.burners.find((b) => b.owner === dishId && b.step === stepId);
+}
+
+// Чистка текущего продукта на доске: зигзаг ножом по всем копиям. Яйцо — сначала постучать о доску, потом пальцами.
 export function peel(s) {
   const it = s.boardCur();
   if (!it?.peel) throw new Error('на доске нечего чистить');
+  if (it.hand) {
+    const taps = s.cfg.peel.hand.taps;
+    for (const q of it.peel.zones) for (let k = 0; k < taps; k++) {
+      s.pointer('down', q.x, q.z);
+      s.pointer('up', q.x, q.z);
+    }
+  }
   const b = bounds(it.pieces);
   for (let pass = 0; pass < 3 && s.board.items[it.key]; pass++) {
     const rows = 14;

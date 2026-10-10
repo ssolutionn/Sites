@@ -2,7 +2,7 @@
 import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER } from '../campaign/data.js';
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
-import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS } from '../campaign/layout.js';
+import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
@@ -60,7 +60,7 @@ export const TIPS = {
   cube: 'Нож режет там, где прошёл: зажми кнопку и веди. Сверху вниз — полоски, поперёк — кубики. Дрогнула рука — кусок выйдет кривым. Мелко и быстро — рубка: качай нож вверх-вниз, понемногу сдвигая вбок. Доску крутят A и D: нажал — четверть оборота, держишь — плавно. Кубик для оливье — 1 см, как образец.',
   round: 'Кружочки: проведи ножом сверху вниз через продукт — отрежешь кружок. Толщина — расстояние до прошлого разреза, сравни с образцом. Вдоль кружочки не режут.',
   grate: 'Тёрка: зажми левую кнопку и води мышью вверх-вниз. Засчитываются только полные движения.',
-  peel: 'Чистка: зажми кнопку и води ножом по продукту — кожура снимается там, где прошёл нож. Почисти всё, и продукт сразу останется на доске для нарезки.',
+  peel: 'Чистка. Картофель — ножом: зажми кнопку и веди по клубню, кожура снимается там, где прошёл нож. Яйцо — пальцами: сначала нажми на каждое пару раз (постучать о доску — скорлупа треснет), потом зажми и снимай скорлупу.',
   bowl: 'Миска руками: выбери банку или майонез внизу, зажми кнопку и веди над миской — горошек высыпается, майонез ложится там, где ведёшь. Солонку возьми внизу и кликай над миской — каждый клик щепотка. Ложкой мешай по кругу.',
   sink: 'Раковина: горячее — «Под кран», потом зажми кнопку над раковиной: льётся холодная вода, держи, пока не уйдёт пар. Грязную посуду — выбери и три губкой.',
   puddle: 'Уборка: зажми кнопку и води тряпкой по луже.',
@@ -73,12 +73,14 @@ export const TIPS = {
   'tray:fruit': 'Фрукты: кликай по мандарину — снимешь кожуру и разделишь на дольки. Перетаскивай дольки, яблоко и виноград на тарелку: 12–18 кусочков.',
   catTheft: 'Кот тянется к колбасе! Нажми «Прогнать» в уведомлении, пока не кончилась красная полоска. Если не успеть — он унесёт кусок, и понадобится замена.',
   catSpill: 'Кот подбирается к стакану компота. Прогони его — иначе на полу будет лужа, которую придётся вытирать.',
-  pot: 'Вода в кастрюле поднимается. Подойди к плите и нажми «Убавить огонь», пока не кончилась полоска.',
+  pot: 'Пена поднимается — сейчас убежит! Подойди к плите и поверни крутилку этой конфорки ниже 6, пока не кончилась полоска.',
   delivery: 'Заказ оформлен. Пока курьер едет, занимайся другими делами — уведомление придёт само.',
   radio: 'Радио замолчало. Это не срочно: подойди к нему, зажми ручку настройки и подержи пару секунд — треск стихнет, музыка вернётся.',
   radioTune: 'Радио: зажми ручку настройки и веди по кругу — по часовой частота выше. Между станциями шипит. Колёсико мыши — точная подстройка, ◀ ▶ — соседняя станция.',
   garland: 'Часть гирлянды погасла. Не срочно, но к концу дня её стоит починить — это влияет на порядок.',
-  stove: 'Плита: поставь кастрюлю и поверни крутилку огня — тяни её по кругу или жми −/+. На 6 картошка сварится за ~2:00, яйца за ~1:00. Сильный огонь быстрее, но на кипении убежит пена — убавь до 4–5.',
+  stove: 'Плита: четыре конфорки и четыре крутилки. Подойди с продуктом в руках и нажми «Положить сюда» у нужной конфорки, огонь — только крутилкой (зажми и веди по кругу). На 6 закипает за ~25 с. 7–9 быстрее, но на кипении убежит пена и зальёт плиту — убавь до 4–5. Над кастрюлей кольцо: синее — греется, оранжевое — варится, зелёное ✓ — готово, сними с огня, иначе переварится.',
+  fridge: 'Для варки продукт сначала берут в руки: яйца — из холодильника, картофель — из кладовой. Руки одни: отнеси, что держишь, к доске (почистить) или к плите (в кастрюлю).',
+  stoveWipe: 'Конфорку залило убежавшей пеной. Сними кастрюлю, потом зажми кнопку на пятне и три туда-обратно — как тряпкой.',
   hot: 'Сваренное горячее: резать сразу нельзя. Подожди полминуты или остуди под холодной водой у раковины — это быстрее.',
   season: 'Вкус как в жизни: сначала посоли и поперчи (встряхивай солонку над миской), потом перемешай ложкой — и только потом пробуй. Пока не перемешано, соль лежит сверху и проба обманет. Досолила после — ещё оборот ложкой.',
   catHungry: 'Кот проголодался. Голодный кот сам полезет к колбасе, селёдке или сыру на доске. Покорми его у миски кота — сытый кот спит. Мячик отвлекает, но голод не утоляет.',
@@ -622,6 +624,7 @@ export class CampaignUI {
       case 'open':
         if (['bowl', 'sink', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
         if (e.station === 'phone') this.tip('money');
+        if (e.station === 'fridge') this.tip('fridge');
         if (e.station === 'radio') {
           this.pendingTips = this.pendingTips.filter((t) => t !== 'radio');
           this.tip('radioTune');
@@ -678,6 +681,9 @@ export class CampaignUI {
       case 'potPlaced':
         this.tip('stove');
         break;
+      case 'taken':
+        this.tip('fridge');
+        break;
       case 'potatoTaken':
         this.tip('hot');
         break;
@@ -721,7 +727,8 @@ export class CampaignUI {
         this.toast('Брысь! Кот убежал', 'good');
         break;
       case 'spill':
-        this.toast('Кастрюля выкипела — у плиты лужа', 'bad', 3);
+        this.toast('Убежало! Залило плиту и пол — вытри конфорку и лужу', 'bad', 3.5);
+        this.tipWhenFree('stoveWipe');
         break;
       case 'potSaved':
         this.toast('Огонь убавлен', 'good');
@@ -847,6 +854,18 @@ export class CampaignUI {
   }
 
   // Иерархия HUD: задача (слева) → время и активные таймеры (центр) → кот и деньги (справа).
+  // Текст шага для HUD: если для шага продукт сначала берут в руки — сказать, откуда.
+  _stepText(s, dishId, step) {
+    const c = s.carry;
+    const mine = c && c.dishId === dishId && (c.stepId === step.id || c.boilStep === step.id);
+    const name = PRODUCTS[step.product]?.name?.toLowerCase() ?? '';
+    const where = PRODUCTS[step.product]?.storage === 'fridge' ? 'холодильника' : 'кладовой';
+    if (step.type === 'peel' && step.raw && !mine) return `Достать ${name} из ${where} и почистить`;
+    if (step.type === 'boil' && !mine) return `Достать ${name} из ${where} → в кастрюлю`;
+    if (step.type === 'boil' && mine) return `Положить ${name} в кастрюлю на плите`;
+    return step.label;
+  }
+
   _renderHud(s) {
     const d = s.day;
     this._set('hud-day', s.practice ? 'Свободная практика' : `День ${d.id} из 7 · ${esc(d.title.toLowerCase())}`);
@@ -857,7 +876,7 @@ export class CampaignUI {
     else if (id) {
       const onFire = new Set(s.burners.filter((b) => b.state !== 'empty').map((b) => b.owner + ':' + b.step));
       const next = s.nextSteps(id).find((st) => !(st.type === 'boil' && onFire.has(id + ':' + st.id)));
-      step = next ? esc(next.label) : esc(s.recipes[id].name);
+      step = next ? esc(this._stepText(s, id, next)) : esc(s.recipes[id].name);
       const steps = s.recipes[id].steps.filter((st) => s.stepState(id, st.id) !== 'skipped');
       dots = steps.map((st) => `<i class="${s.stepState(id, st.id) === 'done' ? 'on' : next && st.id === next.id ? 'next' : ''}"></i>`).join('');
     } else if (s.day.finalServe) step = 'Расставь все 10 блюд на праздничном столе';
@@ -889,7 +908,8 @@ export class CampaignUI {
       const h = Math.round(s.catNeeds.hunger);
       const catTxt = s.cat.state === 'eat' ? 'ест' : s.cat.state === 'play' ? 'играет' : s.catCalm() ? 'спит' : h >= CAMPAIGN.cat.theftAt ? 'ищет еду' : h >= CAMPAIGN.cat.warnAt ? 'голоден' : 'бродит';
       const cls = h >= CAMPAIGN.cat.theftAt ? 'bad' : h >= CAMPAIGN.cat.warnAt ? 'warn' : '';
-      this._set('hud-meta', `<span class="chip2" title="Голод кота">🐱 ${catTxt} <span class="cat-bar"><i class="${cls}" style="width:${h}%"></i></span></span><span class="chip2" title="Бюджет дня">💰 ${s.wallet.budget - s.wallet.spent} ₽</span>`);
+      const hands = s.carry ? `<span class="chip2 hands" title="В руках">✋ ${PICON[s.carry.product] ?? ''} ${esc(PRODUCTS[s.carry.product].name.toLowerCase())}${s.carry.peeled ? ' · почищено' : ''}</span>` : '';
+      this._set('hud-meta', `${hands}<span class="chip2" title="Голод кота">🐱 ${catTxt} <span class="cat-bar"><i class="${cls}" style="width:${h}%"></i></span></span><span class="chip2" title="Бюджет дня">💰 ${s.wallet.budget - s.wallet.spent} ₽</span>`);
     }
   }
 
@@ -1277,23 +1297,26 @@ export class CampaignUI {
       case 'stove': {
         const tasks = s.stoveTasks();
         const usable = new Set(s.usableBurners().map((b) => b.i));
+        const c = s.carry;
+        const canPlace = !!c?.boilStep;
         const burners = s.burners
           .map((b) => {
-            const name = `Конфорка ${b.i + 1}`;
-            if (!usable.has(b.i)) return `<div class="burner off"><b>${name}</b> — сломана (испытание)</div>`;
+            const name = STOVE.burners[b.i]?.name ?? `Конфорка ${b.i + 1}`;
+            if (!usable.has(b.i)) return `<div class="burner off"><b>${name}</b><span class="bstat">не работает (испытание)</span></div>`;
             let act = '';
-            if (b.overflow) act = this._btn('🔥 Убавить огонь', 'reduceHeat', [b.i], 'danger', busy);
+            if (b.overflow) act = '<span class="small warn">🔥 убегает — поверни крутилку ниже 6!</span>';
             else if (b.state === 'ready') act = this._btn(`${PICON[b.product]} Достать`, 'takePot', [b.i], 'primary', busy);
             else if (b.state === 'boiling') act = `<span class="small">${PICON[b.product]} ${esc(PRODUCTS[b.product].name)}</span>`;
-            else act = tasks.length ? tasks.map((t) => this._btn(`${PICON[t.product]} Поставить ${esc(PRODUCTS[t.product].name.toLowerCase())}`, 'placePot', [b.i, `${t.dishId}:${t.stepId}`, 0], 'primary', busy)).join('') : '<span class="small">свободна</span>';
-            // крутилка огня: тяни по кругу или −/+; 0 — выключено, 9 — максимум
+            else if (b.dirty) act = '<span class="small warn">🧽 залита — потри тряпкой</span>';
+            else if (canPlace) act = this._btn(`${PICON[c.product]} Положить сюда`, 'placePot', [b.i, null, null], 'primary', busy, 'В кастрюлю с водой на этой конфорке');
+            // крутилка огня: только крутить — зажми и веди по кругу; 0 — выключено, 9 — максимум
             const heat = b.heat ?? 0;
             const knob = `<div class="knob ${heat ? 'on' : ''}" data-knob="${b.i}" style="--a:${-135 + heat * 30}deg" title="Крутилка огня: зажми и поверни по кругу"><i></i><span>${heat}</span></div>`;
-            const pm = `<div class="kbtns">${this._btn('−', 'setHeat', [b.i, heat - 1], 'ghost', heat <= 0, 'Слабее')}${this._btn('+', 'setHeat', [b.i, heat + 1], 'ghost', heat >= CAMPAIGN.stove.maxHeat, 'Сильнее')}</div>`;
-            return `<div class="burner ${b.state}">${knob}<div class="bcol"><b>${name}</b>${pm}<span class="bstat" data-burner="${b.i}">${burnerStatus(s, b)}</span>${act}</div></div>`;
+            return `<div class="burner ${b.state} ${b.dirty ? 'dirty' : ''}">${knob}<div class="bcol"><b>${name}</b><span class="bstat" data-burner="${b.i}">${burnerStatus(s, b)}</span>${act}</div></div>`;
           })
           .join('');
-        return `<h2>♨️ Плита · две конфорки</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="burners2">${burners}</div></div><div class="row">${bar}</div>${tasks.length || s.burners.some((b) => b.state !== 'empty') ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
+        const need = !canPlace && tasks.length ? `<p class="note live">Чтобы варить, сначала достань продукт: 🧊 холодильник (яйца) или 🗄 кладовая (картофель).</p>` : '';
+        return `<h2>♨️ Плита<span class="sub">${c ? `в руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name.toLowerCase())}` : 'четыре конфорки'}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="burners4">${burners}</div></div><div class="row">${bar}</div>${need}${tasks.length || c || s.burners.some((b) => b.state !== 'empty' || b.dirty) ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
       }
       case 'catbowl': {
         const h = Math.round(s.catNeeds.hunger);
@@ -1317,12 +1340,11 @@ export class CampaignUI {
       case 'puddle':
         return `<h2>🧽 Лужа</h2><div class="row">${back}</div>${live}<p class="note">Зажми кнопку и води тряпкой по луже.</p>`;
       case 'radio': {
-        // док радио: ◀ шкала-индикатор ▶ и одна главная кнопка; крутят ручку на самом радио
-        const seek = (dir, label, title) => this._btn(label, 'seekRadio', [dir], 'radio-seek', busy, title);
+        // док радио: шкала-индикатор и одна главная кнопка; настройка — только ручкой на самом радио (или колесом над ним)
         const main = s.radio.broken
           ? `<button class="primary big hold-btn" data-hold="radio" data-act="hold">🎛 Настроить (удерживай)</button>`
           : this._btn(s.radio.enabled ? '⏻ Выключить' : '⏻ Включить', 'toggleRadio', [], s.radio.enabled ? '' : 'primary', busy);
-        return `<h2>📻 Радио</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items radio-tuner">${seek(-1, '◀', 'Предыдущая станция')}<div class="radio-readout" data-live></div>${seek(1, '▶', 'Следующая станция')}</div><div class="dock-main">${main}</div></div>`;
+        return `<h2>📻 Радио</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items radio-tuner"><div class="radio-readout" data-live></div></div><div class="dock-main">${main}</div></div>`;
       }
       case 'garland':
         return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
@@ -1331,7 +1353,12 @@ export class CampaignUI {
           .filter(([, q]) => q > 0 || s.practice)
           .map(([id, q]) => `<span class="chip">${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)}: ${q}${s.inventory.reservedOf(id) ? ` (в работе ${s.inventory.reservedOf(id)})` : ''} · ${PRODUCTS[id].storage === 'fridge' ? '🧊' : '🗄'}</span>`)
           .join(' ');
-        return `<h2>🧊 Запасы</h2><div class="stock">${rows || 'Пусто'}</div><div class="row">${back}</div><p class="note">🧊 — холодильник, 🗄 — кладовая. Не хватает — закажи в телефоне.</p>`;
+        const c = s.carry;
+        const takes = s.fridgeTasks()
+          .map((t) => this._btn(`${PICON[t.product] ?? ''} Достать: ${esc(PRODUCTS[t.product].name.toLowerCase())} ×${t.qty}${t.dest === 'board' ? ' · почистить' : ' · варить'}`, 'fridgeTake', [t.dishId, t.stepId], c ? 'ghost soft-disabled' : 'primary', busy, c ? 'Руки заняты' : PRODUCTS[t.product].storage === 'fridge' ? 'Из холодильника' : 'Из кладовой'))
+          .join('');
+        const hands = c ? `<div class="row"><span class="chip">✋ В руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name)} ×${c.qty}${c.peeled ? ' (почищено)' : ''}</span>${c.peeled ? '' : this._btn('↩ Положить обратно', 'fridgeReturn', [], 'ghost', busy)}</div>` : '';
+        return `<h2>🧊 Холодильник и кладовая</h2>${takes ? `<div class="row">${takes}</div>` : ''}${hands}<div class="stock">${rows || 'Пусто'}</div><div class="row">${back}</div><p class="note">Для варки продукт сначала берут в руки: 🧊 — холодильник, 🗄 — кладовая. Не хватает — закажи в телефоне.</p>`;
       }
       case 'bag': {
         const bag = s.delivery.bag;

@@ -3,15 +3,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CAMPAIGN } from '../src/campaign/data.js';
 import { emptySave, recordDay, parseSave } from '../src/campaign/save.js';
-import { KitchenSession, run, arrive, waitAction, cutCubes, seasonTo, tasteDone, stir, peel } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, seasonTo, tasteDone, stir, peel, startBoil, take } from './helpers-campaign.js';
 
 test('плита: две кастрюли варятся параллельно, у каждой свой срок; одна конфорка в испытании', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 2 });
-  arrive(s, 'stove');
-  assert.ok(s.placePot());
-  waitAction(s);
-  assert.ok(s.placePot());
-  waitAction(s);
+  startBoil(s, 'olivier:boil');
+  startBoil(s, 'olivier:boilEgg');
   assert.equal(s.burners[0].product, 'potato');
   assert.equal(s.burners[1].product, 'egg');
   assert.equal(Math.round(s.burners[0].readyAt - s.burners[0].startT), 120);
@@ -20,17 +17,18 @@ test('плита: две кастрюли варятся параллельно,
   assert.equal(s.burners[1].state, 'ready');
   assert.equal(s.burners[0].state, 'boiling');
   const one = new KitchenSession({ dayIndex: 0, seed: 2, mods: { oneBurner: true } });
+  startBoil(one, 'olivier:boilEgg');
+  take(one, 'olivier:peelPotato');
+  arrive(one, 'board');
+  assert.ok(one.boardSelect('olivier:peelPotato'));
+  peel(one);
   arrive(one, 'stove');
-  one.placePot();
-  waitAction(one);
-  assert.equal(one.placePot(), false);
+  assert.equal(one.placePot(), false, 'в испытании одна конфорка');
 });
 
 test('остывание: горячее не режется, через срок или после раковины — можно', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 2 });
-  arrive(s, 'stove');
-  s.placePot(null, 'olivier:boilEgg');
-  waitAction(s);
+  startBoil(s, 'olivier:boilEgg');
   run(s, 61);
   arrive(s, 'stove');
   assert.ok(s.takePot());
@@ -193,11 +191,8 @@ test('день 1 целиком через API даёт звёзды и меда
   arrive(s, 'catbowl');
   s.feedCat();
   waitAction(s);
-  arrive(s, 'stove');
-  s.placePot();
-  waitAction(s);
-  s.placePot();
-  waitAction(s);
+  startBoil(s, 'olivier:boil');
+  startBoil(s, 'olivier:boilEgg');
   for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:pickle']) {
     arrive(s, 'board');
     s.boardSelect(key);
@@ -214,8 +209,9 @@ test('день 1 целиком через API даёт звёзды и меда
     s.coolProduct(s.burners[b].product ?? (b ? 'egg' : 'potato'));
     waitAction(s);
     arrive(s, 'board');
-    assert.ok(s.boardSelect(b ? 'olivier:peelEgg' : 'olivier:peelPotato'), s.hint?.text);
-    peel(s);
+    // яйца чистят после варки руками; картофель для оливье уже почищен сырым — сразу режем
+    assert.ok(s.boardSelect(b ? 'olivier:peelEgg' : 'olivier:potato'), s.hint?.text);
+    if (b) peel(s);
     cutCubes(s);
     assert.ok(s.boardTransfer(), s.hint?.text);
   }

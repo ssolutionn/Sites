@@ -3,6 +3,51 @@ import { pieceVolume, totalVolume } from '../game/cutting.js';
 
 const EPS = 1e-9;
 
+// ---------- Потереть (мытьё, вытереть плиту): накопленный путь губки по предмету ----------
+// Не надо выискивать пятна: считается, сколько потёрла по предмету. Туда-обратно (разворот) — бонус,
+// как и в жизни; рывок дальше maxStep за шаг и движение мимо предмета не в счёт.
+export class Scrubber {
+  constructor({ need = 0.8, maxStep = 0.12, reverseBonus = 1.6 } = {}) {
+    this.need = need;
+    this.maxStep = maxStep;
+    this.reverseBonus = reverseBonus;
+    this.done = 0;
+    this.last = null;
+    this.dir = null;
+  }
+  /** Точка губки; inside — над предметом. Возвращает прирост пути (м). */
+  move(x, z, inside = true) {
+    if (!inside) {
+      this.last = null;
+      return 0;
+    }
+    if (!this.last) {
+      this.last = { x, z };
+      return 0;
+    }
+    const dx = x - this.last.x, dz = z - this.last.z;
+    const d = Math.hypot(dx, dz);
+    this.last = { x, z };
+    if (d < 1e-4 || d > this.maxStep) return 0;
+    const dir = { x: dx / d, z: dz / d };
+    const k = this.dir && dir.x * this.dir.x + dir.z * this.dir.z < -0.3 ? this.reverseBonus : 1;
+    this.dir = dir;
+    const g = Math.min(d * k, this.need - this.done);
+    this.done += g;
+    return g;
+  }
+  release() {
+    this.last = null;
+    this.dir = null;
+  }
+  get progress() {
+    return this.need > 0 ? Math.min(1, this.done / this.need) : 1;
+  }
+  get complete() {
+    return this.done >= this.need - 1e-9;
+  }
+}
+
 // ---------- Перемешивание: накопленная угловая длина вокруг центра ----------
 // Неподвижное удержание ничего не даёт; рывки и шум отсекаются.
 export class Stirrer {

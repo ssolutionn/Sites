@@ -175,6 +175,7 @@ export function buildKitchen(scene) {
   // до старта кастрюля стоит рядом, на столешнице
   k.potHome = new THREE.Vector3(st.anchor.x - 0.65, bc.h, bc.z + 0.1);
   k.potOnStove = pot.position.clone();
+  k.stoveCenter = new THREE.Vector3(st.anchor.x, bc.h + 0.03, bc.z); // центр варочной поверхности: от него — конфорки (STOVE)
   pot.position.copy(k.potHome);
   // лужа при выкипании
   const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.35, 24), new THREE.MeshStandardMaterial({ color: 0x9fd3ef, transparent: true, opacity: 0.6, roughness: 0.05 }));

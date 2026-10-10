@@ -1,7 +1,7 @@
 // Отображение дня кампании поверх общей сцены (кухня, героиня, кот, доска).
 // Только читает KitchenSession; ничего не начисляет.
 import * as THREE from 'three';
-import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL } from '../campaign/layout.js';
+import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE } from '../campaign/layout.js';
 import { PRODUCTS, DISH_ORDER } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
@@ -256,25 +256,27 @@ export class CampaignView {
     // курица на подносе (до духовки)
     this.trayChicken = null;
 
-    // вторая кастрюля (вторая конфорка) — копия первой, своё содержимое и пар
-    const pot0 = k.pot;
-    const g2 = pot0.group.clone(true);
-    this.scene.add(g2);
-    const ch = g2.children;
-    this.pots = [
-      { group: pot0.group, lid: pot0.lid, foam: pot0.foam, content: pot0.potatoes, steam: pot0.steam, home: k.potHome.clone(), on: k.potOnStove.clone(), move: null, hideHome: false },
-      // ковшик поменьше — на задней левой конфорке, по диагонали: кастрюли не касаются друг друга
-      { group: g2, lid: ch[5], foam: ch[4], content: ch[3], steam: pot0.steam.map((st) => { const c = st.clone(); c.material = st.material.clone(); this.scene.add(c); return c; }), home: k.potHome.clone().add(new THREE.Vector3(0, 0, -0.28)), on: k.potOnStove.clone().add(new THREE.Vector3(-0.3, 0, -0.28)), move: null, hideHome: true },
-    ];
-    g2.scale.setScalar(0.8);
-    for (const p of this.pots) p.content.traverse((o) => o.isMesh && (o.material = o.material.clone()));
-    g2.visible = false;
-    tag(g2, 'stove');
-    // огонь под кастрюлей и пузыри в воде; крутилка конфорки 0 — правая передняя (3), конфорки 1 — левая задняя (0)
+    // четыре конфорки — четыре кастрюли (копии одной), у каждой своё содержимое, пар, пламя, крутилка и кольцо готовности.
+    // Конфорка i ↔ крутилка i слева направо (STOVE в layout.js).
+    const base = k.pot.group;
+    const steam0 = k.pot.steam;
+    this.pots = STOVE.burners.map((bp, i) => {
+      const g = i === 0 ? base : base.clone(true);
+      if (i) this.scene.add(g);
+      g.scale.setScalar(0.78);
+      const ch = g.children;
+      const steam = i === 0 ? steam0 : steam0.map((st) => { const c = st.clone(); c.material = st.material.clone(); this.scene.add(c); return c; });
+      const on = k.stoveCenter.clone().add(new THREE.Vector3(bp.x, 0, bp.z));
+      tag(g, 'stove');
+      return { group: g, lid: ch[5], foam: ch[4], content: ch[3], water: ch[2], steam, home: k.potHome.clone(), on, move: null, hideHome: true, knob: k.stoveKnobs?.[i] ?? null };
+    });
+    for (const p of this.pots) {
+      p.content.traverse((o) => o.isMesh && (o.material = o.material.clone()));
+      p.group.visible = false;
+    }
     const flameMat = new THREE.MeshBasicMaterial({ color: 0x4f8dff, transparent: true, opacity: 0.85, depthWrite: false });
     const bubbleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false });
     this.pots.forEach((pot, bi) => {
-      pot.knob = k.stoveKnobs?.[bi === 0 ? 3 : 0] ?? null;
       pot.flame = new THREE.Group();
       for (let i = 0; i < 14; i++) {
         const f = new THREE.Mesh(new THREE.ConeGeometry(0.007, 0.03, 6), flameMat);
@@ -286,7 +288,6 @@ export class CampaignView {
       pot.flame.position.set(pot.on.x, pot.on.y - 0.025, pot.on.z);
       pot.flame.visible = false;
       this.scene.add(pot.flame);
-      pot.water = pot.group.children[2];
       pot.bubbles = [];
       for (let i = 0; i < 8; i++) {
         const b = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 5), bubbleMat);
@@ -295,7 +296,35 @@ export class CampaignView {
         pot.group.add(b);
         pot.bubbles.push(b);
       }
+      // залитая конфорка: пятно от убежавшей пены, бледнеет, пока трёшь
+      pot.stain = new THREE.Mesh(new THREE.CircleGeometry(0.1, 24), new THREE.MeshStandardMaterial({ color: 0xc9b27a, transparent: true, opacity: 0, roughness: 0.3, depthWrite: false }));
+      pot.stain.rotation.x = -Math.PI / 2;
+      pot.stain.position.set(pot.on.x, pot.on.y + 0.004, pot.on.z);
+      pot.stain.visible = false;
+      tag(pot.stain, 'stove');
+      this.scene.add(pot.stain);
+      // кольцо готовности над кастрюлей: видно, сколько осталось, и что «готово»
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 96;
+      pot.ringCanvas = cv;
+      pot.ringKey = '';
+      pot.ring = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+      pot.ring.scale.set(0.12, 0.12, 1);
+      pot.ring.position.set(pot.on.x, pot.on.y + 0.27, pot.on.z + 0.12); // над передним краем крышки — видно и в крупном плане
+      pot.ring.renderOrder = 9;
+      pot.ring.visible = false;
+      this.scene.add(pot.ring);
     });
+    // тряпка для плиты (как для лужи)
+    this.stoveRag = F.rag();
+    this.stoveRag.visible = false;
+    this.scene.add(this.stoveRag);
+
+    // в руках у героини: продукт из холодильника (миска с картофелем, яйца)
+    this.carryGroup = new THREE.Group();
+    this.carryGroup.visible = false;
+    this.carryKey = null;
+    this.sv.heroine.add(this.carryGroup);
 
     // доска грязная после сельди/свёклы
     this.boardDirt = new THREE.Mesh(new THREE.CircleGeometry(0.12, 24), new THREE.MeshStandardMaterial({ color: 0x7a1d3c, transparent: true, opacity: 0.4, depthWrite: false }));
@@ -477,6 +506,10 @@ export class CampaignView {
         const T = CLAYOUT.table;
         return { c: new THREE.Vector3(T.x, T.h, T.z), y: T.h };
       }
+      case 'stove': {
+        const c = this.k.stoveCenter;
+        return { c: c.clone(), y: c.y };
+      }
       case 'radio': {
         // вертикальная лицевая панель: x — вправо, z — вниз по панели (как на экране)
         const a = S.radio.anchor;
@@ -548,7 +581,12 @@ export class CampaignView {
       p.group.visible = !p.hideHome;
       p.content.visible = true;
       p.move = null;
+      p.ring.visible = false;
+      p.ringKey = '';
     }
+    this.carryKey = null;
+    this.carryGroup.clear();
+    this.carryGroup.visible = false;
     this.k.pot.puddle.scale.setScalar(0.001);
     this.potMove = null;
     this.particles?.clear();
@@ -862,6 +900,11 @@ export class CampaignView {
         bb.scale.setScalar(0.6 + ph);
       });
       if (pot.water) pot.water.position.y = 0.15 + (temp > 98 ? Math.sin(t * 20 + bi) * 0.003 : 0);
+      // залитая конфорка: пятно, бледнеет, пока её трут
+      const wipe = s.stoveWipe?.i === bi ? s.stoveWipe.scrub.progress : 0;
+      pot.stain.visible = !!b?.dirty;
+      if (pot.stain.visible) pot.stain.material.opacity = 0.85 * (1 - wipe);
+      this._potRing(pot, s, b);
       const boiling = !!b && ((b.state === 'boiling' && (b.water == null || b.water === 'boil')) || b.state === 'ready');
       const over = !!b?.overflow;
       pot.foam.visible = over;
@@ -876,6 +919,11 @@ export class CampaignView {
         st.material.opacity = (1 - ph) * (over ? 0.6 : 0.3);
       });
     });
+    // тряпка над залитой конфоркой, пока вытираем
+    const wp = s.panel === 'stove' && s.stoveWipe && this.pointerLocal ? this.pointerLocal : null;
+    this.stoveRag.visible = !!wp && s.pointerDown;
+    if (this.stoveRag.visible) this.stoveRag.position.set(this.k.stoveCenter.x + wp.x, this.k.stoveCenter.y + 0.02, this.k.stoveCenter.z + wp.z);
+    this._syncCarry(s);
     // доска, миска кота, мячик
     const bd = s.equipment.board;
     this.boardDirt.visible = !!bd && !bd.clean;
@@ -896,6 +944,63 @@ export class CampaignView {
     this.ovenGlow.material.color.setHex(o.state === 'burnt' ? 0x552200 : o.state === 'over' ? 0xff5a1a : 0xff8a2a);
     this.ovenChicken.visible = on;
     if (on) F.chickenColor(this.ovenChicken, o.state, o.doneness);
+  }
+
+  // Кольцо над кастрюлей: синее — вода греется, оранжевое — варится (сколько из скольких), зелёное ✓ — готово, красное — переваривается.
+  _potRing(pot, s, b) {
+    const on = b && (b.state === 'boiling' || b.state === 'ready');
+    pot.ring.visible = !!on;
+    if (!on) return;
+    let mode, frac;
+    if (b.state === 'ready') [mode, frac] = [b.overcooked ? 'over' : 'ready', 1];
+    else if (b.water !== 'boil') [mode, frac] = ['heat', Math.max(0, Math.min(1, (b.temp - 20) / 79.5))];
+    else [mode, frac] = ['cook', Math.max(0, Math.min(1, b.cooked / Math.max(1, s.boilTime(b.product))))];
+    const key = mode + Math.round(frac * 40);
+    if (key === pot.ringKey) return;
+    pot.ringKey = key;
+    const cv = pot.ringCanvas, g = cv.getContext('2d');
+    const col = { heat: '#5aa9ff', cook: '#ffb43c', ready: '#3ccf7d', over: '#ff5a4a' }[mode];
+    g.clearRect(0, 0, 96, 96);
+    g.lineWidth = 11;
+    g.strokeStyle = 'rgba(20,16,12,0.55)';
+    g.beginPath();
+    g.arc(48, 48, 36, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = col;
+    g.beginPath();
+    g.arc(48, 48, 36, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
+    g.stroke();
+    g.fillStyle = mode === 'ready' || mode === 'over' ? col : 'rgba(255,255,255,0.9)';
+    g.font = '900 34px Nunito, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(mode === 'ready' ? '✓' : mode === 'over' ? '!' : mode === 'heat' ? '°' : '', 48, 50);
+    pot.ring.material.map.needsUpdate = true;
+  }
+
+  // Продукт в руках у героини: несколько штук перед собой, очищенный — светлее.
+  _syncCarry(s) {
+    const c = s.carry;
+    const key = c ? `${c.product}:${c.qty}:${c.peeled ? 1 : 0}` : null;
+    if (key !== this.carryKey) {
+      this.carryKey = key;
+      this.carryGroup.clear();
+      if (c) {
+        const P = PRODUCTS[c.product] ?? {};
+        const col = c.peeled ? P.color ?? 0xf0d28a : c.product === 'egg' ? 0xf3ead8 : P.peel ?? P.color ?? 0xd0b080;
+        const n = Math.min(4, c.qty ?? 1);
+        const egg = c.product === 'egg';
+        for (let i = 0; i < n; i++) {
+          const m = new THREE.Mesh(new THREE.SphereGeometry(egg ? 0.028 : 0.034, 10, 8), new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 }));
+          m.scale.set(egg ? 0.85 : 1.15, egg ? 1.1 : 0.85, 1);
+          m.position.set((i - (n - 1) / 2) * 0.06, 0.02 * (i % 2), 0);
+          m.castShadow = true;
+          this.carryGroup.add(m);
+        }
+        this.carryGroup.position.set(0, 0.98, 0.24);
+      }
+    }
+    this.carryGroup.visible = !!c;
   }
 
   _updateHome(s, dt, t) {

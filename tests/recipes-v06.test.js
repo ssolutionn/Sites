@@ -1,10 +1,18 @@
 // Решения владельца по рецептам (0.6): солим → мешаем → пробуем; солёный и свежий огурец; чистка картофеля и яиц.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KitchenSession, run, arrive, waitAction, peel, stir, seasonTo } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, peel, stir, seasonTo, take } from './helpers-campaign.js';
 import { RECIPES, DAYS, PRODUCTS, CAMPAIGN } from '../src/campaign/data.js';
 import { LESSONS } from '../src/campaign/lessons.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
+
+// постучать каждым яйцом о доску — скорлупа трескается
+function crackAll(s, it) {
+  for (const q of it.peel.zones) for (let k = 0; k < CAMPAIGN.peel.hand.taps; k++) {
+    s.pointer('down', q.x, q.z);
+    s.pointer('up', q.x, q.z);
+  }
+}
 
 function boiledAndCooled(s, product) {
   const key = product === 'egg' ? 'olivier:boilEgg' : 'olivier:boil';
@@ -22,16 +30,22 @@ test('оливье — с солёными огурцами, крабовый и
   assert.notEqual(PRODUCTS.pickle.name, PRODUCTS.cucumber.name);
 });
 
-test('каждое блюдо с варёными яйцами или картофелем чистит их перед нарезкой', () => {
+test('каждое блюдо с варёными яйцами или картофелем чистит их перед нарезкой (сырыми до варки или после)', () => {
   for (const [id, r] of Object.entries(RECIPES)) {
     for (const boil of r.steps.filter((s) => s.type === 'boil' && ['egg', 'potato'].includes(s.product))) {
       const peelStep = r.steps.find((s) => s.type === 'peel' && s.product === boil.product);
       assert.ok(peelStep, `${id}: нет чистки ${boil.product}`);
-      assert.ok(peelStep.requires.includes(boil.id), `${id}: чистка после варки`);
+      const before = peelStep.raw && (boil.requires ?? []).includes(peelStep.id);
+      assert.ok(before || (peelStep.requires ?? []).includes(boil.id), `${id}: чистка сырого до варки или варёного после`);
       const users = r.steps.filter((s) => s.product === boil.product && s.type !== 'boil' && s.type !== 'peel');
-      for (const u of users) assert.ok(u.requires.includes(peelStep.id), `${id}:${u.id} только после чистки`);
+      for (const u of users) assert.ok((u.requires ?? []).includes(before ? boil.id : peelStep.id), `${id}:${u.id} только после чистки`);
     }
   }
+  // решение владельца: картофель для оливье чистим сырым, яйца — после варки руками
+  const ol = RECIPES.olivier.steps;
+  assert.ok(ol.find((s) => s.id === 'peelPotato').raw);
+  assert.ok(ol.find((s) => s.id === 'boil').requires.includes('peelPotato'));
+  assert.ok(PRODUCTS.egg.peelByHand);
 });
 
 test('чистка: горячее не чистится; кожура снимается там, где прошёл нож; дочистила — сразу нарезка', () => {
@@ -46,6 +60,13 @@ test('чистка: горячее не чистится; кожура сним�
   assert.ok(s.boardSelect('olivier:peelEgg'));
   const it = s.boardCur();
   assert.equal(it.pieces.length, 2, 'два яйца рядом');
+  assert.ok(it.hand, 'яйцо чистят пальцами, не ножом');
+  // пока скорлупа не треснула, пальцами её не снять
+  s.pointer('down', -0.06, -0.06);
+  s.pointer('move', -0.02, -0.06);
+  s.pointer('up', 0, 0);
+  assert.equal(it.peel.coverage(), 0, 'без трещин скорлупа не снимается');
+  crackAll(s, it);
   // короткий мазок по краю — почищено немного, шаг не готов
   s.pointer('down', -0.06, -0.06);
   s.pointer('move', -0.02, -0.06);
@@ -65,6 +86,7 @@ test('чистка не зависит от скорости мыши: один 
     arrive(s, 'board');
     s.boardSelect('olivier:peelEgg');
     const it = s.boardCur();
+    crackAll(s, it);
     const p = it.pieces[0];
     const z = (p.z + p.d / 2) * BOARD_UNIT;
     s.pointer('down', -0.12, z);
@@ -89,9 +111,9 @@ test('дочистила — подсказка по-русски для дву�
 
 test('чистка не уходит мимо продукта: мазки по пустой доске не считаются', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
-  boiledAndCooled(s, 'potato');
+  take(s, 'olivier:peelPotato');
   arrive(s, 'board');
-  s.boardSelect('olivier:peelPotato');
+  assert.ok(s.boardSelect('olivier:peelPotato'), s.hint?.text);
   const it = s.boardCur();
   s.pointer('down', 0.24, -0.15);
   for (let i = 0; i < 20; i++) s.pointer('move', 0.24, -0.15 + i * 0.015);

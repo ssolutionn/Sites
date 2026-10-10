@@ -3,7 +3,7 @@
 
 export class CoverageMask {
   constructor({ cols, rows, width, depth, brush, shape = 'rect', zones = null, maxLevel = 1 }) {
-    Object.assign(this, { cols, rows, width, depth, brush, shape, maxLevel });
+    Object.assign(this, { cols, rows, width, depth, brush, shape, maxLevel, zones });
     this.level = new Float32Array(cols * rows);
     this.valid = new Uint8Array(cols * rows);
     this.zone = zones ? new Int8Array(cols * rows).fill(-1) : null;

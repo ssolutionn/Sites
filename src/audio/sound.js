@@ -9,7 +9,7 @@ const CHOP_KIND = {
   egg: 'soft', bread: 'soft', crab: 'soft', herring: 'soft',
 };
 // Частые события не должны сливаться в «кашу»: минимальный промежуток между одинаковыми звуками, с.
-const MIN_GAP = { chop: 0.04, stir: 0.3, peelSkin: 0.14, grate: 0.05, scuff: 0.25 };
+const MIN_GAP = { chop: 0.04, stir: 0.3, peelSkin: 0.14, grate: 0.05, scuff: 0.25, scrub: 0.12, crack: 0.08 };
 
 export class Sound {
   constructor() {
@@ -145,6 +145,15 @@ export class Sound {
         break;
       case 'peelSkin':
         this._noise(0.12, { vol: 0.1, freq: 3000 * j, q: 0.7 });
+        break;
+      case 'crack':
+        // скорлупа о доску: короткий сухой щелчок
+        this._noise(0.035, { vol: 0.45, freq: 3200 * j, q: 2.5 });
+        this._tone(900 * j, 0.03, { type: 'square', vol: 0.05 });
+        break;
+      case 'scrub':
+        // губка или тряпка: шорох
+        this._noise(0.12, { vol: 0.12, freq: 1800 * j, q: 0.6 });
         break;
       case 'scuff':
         this._noise(0.08, { vol: 0.12, freq: 700, q: 0.8 });

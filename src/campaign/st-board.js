@@ -20,7 +20,7 @@ export const boardMethods = {
         const state = this.stepState(dishId, s.id);
         if (state === 'skipped') continue;
         const key = `${dishId}:${s.id}`;
-        out.push({ key, dishId, stepId: s.id, product: s.product, qty: s.qty ?? 1, type: s.type, shape: s.shape, state, started: !!this.board.items[key], block: state === 'ready' ? null : this.stepBlock(dishId, s.id) });
+        out.push({ key, dishId, stepId: s.id, product: s.product, qty: s.qty ?? 1, type: s.type, shape: s.shape, state, started: !!this.board.items[key], block: state === 'ready' ? (this.board.items[key] ? null : this._carryBlock(dishId, s)) : this.stepBlock(dishId, s.id) });
       }
     }
     return out;
@@ -47,12 +47,13 @@ export const boardMethods = {
     const [dishId, stepId] = key.split(':');
     const step = this.stepDef(dishId, stepId);
     if (!step) return false;
-    const block = this.stepBlock(dishId, stepId) || this._hotBlock(step.product) || this._boardDirtyBlock(step.product);
+    const block = this.stepBlock(dishId, stepId) || this._hotBlock(step.product) || this._boardDirtyBlock(step.product) || this._carryBlock(dishId, step);
     if (block) {
       this.setHint(block);
       return false;
     }
     if (!this._reserveStep(dishId, stepId)) return false;
+    if (step.raw) this.carry = null; // из рук — на доску
     const prod = PRODUCTS[step.product];
     const qty = step.qty ?? 1; // один заход — вся порция рецепта: копии лежат рядом
     // size — сторона кубика по рецепту, см (оливье 1, канапе 2,5)
@@ -70,7 +71,12 @@ export const boardMethods = {
       it.initVolume = it.body.area();
       it.angle = 0;
       it.angleTarget = 0;
-      if (step.type === 'peel') it.peel = this._peelMask(it.pieces);
+      if (step.type === 'peel') {
+        // яйцо чистят пальцами: сначала постучать о доску (трещины), потом снимать скорлупу
+        it.hand = !!PRODUCTS[step.product]?.peelByHand;
+        it.peel = this._peelMask(it.pieces, it.hand);
+        if (it.hand) it.cracks = it.pieces.map(() => 0);
+      }
     }
     this.board.items[key] = it;
     this.board.current = key;
@@ -80,6 +86,15 @@ export const boardMethods = {
       this._emit('tutorial', { topic: step.type === 'grate' ? 'grate' : step.type === 'peel' ? 'peel' : step.shape === 'round' ? 'round' : 'cube' });
     }
     return true;
+  },
+
+  // Сырой продукт для чистки сначала берут в руки из холодильника или кладовой.
+  _carryBlock(dishId, step) {
+    if (!step.raw || this.practice) return null;
+    const c = this.carry;
+    if (c && c.dishId === dishId && c.stepId === step.id) return null;
+    const where = PRODUCTS[step.product]?.storage === 'fridge' ? 'холодильника' : 'кладовой';
+    return c ? `Руки заняты: ${this.productName(c.product).toLowerCase()}` : `Сначала достань ${this.productName(step.product).toLowerCase()} из ${where}`;
   },
 
   // Доска после сельди или свёклы: другой продукт на ней не режем, пока не помоешь.
@@ -218,8 +233,8 @@ export const boardMethods = {
   },
 
   // Маска чистки: по эллипсу на каждый продукт, в метрах от центра доски.
-  _peelMask(pieces) {
-    const c = this.cfg.peel;
+  _peelMask(pieces, hand = false) {
+    const c = hand ? { ...this.cfg.peel, ...this.cfg.peel.hand } : this.cfg.peel;
     const U = BOARD_UNIT;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of pieces) {
@@ -240,14 +255,41 @@ export const boardMethods = {
       this.board.peelLast = null;
       return 'up';
     }
-    if (type === 'down') this.board.peelLast = { x, z };
+    if (it.hand) {
+      // яйцо: сначала постучать (нажатие на целом яйце — удар о доску), трещины — потом чистка пальцами
+      const k = this._peelZone(it, x, z);
+      if (type === 'down' && k >= 0 && it.cracks[k] < this.cfg.peel.hand.taps) {
+        it.cracks[k]++;
+        this._emit('eggCrack', { key: it.key, index: k, taps: it.cracks[k] });
+        if (it.cracks.every((n) => n >= this.cfg.peel.hand.taps)) this.setHint('Скорлупа треснула — снимай её пальцами: зажми и веди по яйцу', 2.5);
+        this.board.peelLast = null;
+        return 'crack';
+      }
+      if (type === 'down' && k >= 0) this.board.peelLast = { x, z };
+      if (!this.pointerDown) return 'hover';
+      if (k >= 0 && it.cracks[k] < this.cfg.peel.hand.taps) {
+        this.setHint('Сначала постучи яйцом о доску — нажми на него пару раз, скорлупа треснет', 2);
+        this.board.peelLast = null;
+        return 'hover';
+      }
+    } else if (type === 'down') this.board.peelLast = { x, z };
     if (!this.pointerDown) return 'hover';
     const last = this.board.peelLast ?? { x, z };
-    const gain = it.peel.strokeLine(last, { x, z }, this.cfg.peel.amount, { spread: false });
+    const gain = it.peel.strokeLine(last, { x, z }, it.hand ? this.cfg.peel.hand.amount : this.cfg.peel.amount, { spread: false });
     this.board.peelLast = { x, z };
     if (gain > 0) this._emit('peel', { key: it.key, x, z, coverage: it.peel.coverage() });
     if (it.peel.coverage() >= this.cfg.peel.complete) this._peelComplete(it);
     return gain > 0 ? 'peel' : 'hover';
+  },
+
+  // В каком яйце точка (по зонам маски чистки); −1 — мимо.
+  _peelZone(it, x, z) {
+    const zs = it.peel.zones ?? [];
+    for (let k = 0; k < zs.length; k++) {
+      const q = zs[k];
+      if (((x - q.x) / (q.rx * 1.15)) ** 2 + ((z - q.z) / (q.rz * 1.15)) ** 2 <= 1) return k;
+    }
+    return -1;
   },
 
   _peelComplete(it) {
@@ -258,6 +300,15 @@ export const boardMethods = {
     delete this.board.items[it.key];
     this.board.current = null;
     this._emit('peeled', { key: it.key, product: it.product });
+    const step = this.stepDef(it.dishId, it.stepId);
+    if (step?.raw) {
+      // почищенный сырой продукт — снова в руках: неси к плите
+      const boil = this.dishes[it.dishId].recipe.steps.find((b) => b.type === 'boil' && (b.requires ?? []).includes(it.stepId));
+      this.carry = { product: it.product, qty: it.qty, dishId: it.dishId, stepId: boil?.id ?? null, boilStep: boil?.id ?? null, peeled: true };
+      this.setHint(`${PRODUCTS[it.product]?.peelDone?.[it.qty > 1 ? 1 : 0] ?? 'Почищено'} — неси к плите и положи в кастрюлю`, 3);
+      this._afterStepProgress(it.dishId);
+      return;
+    }
     this.setHint(`${PRODUCTS[it.product]?.peelDone?.[it.qty > 1 ? 1 : 0] ?? 'Почищено'} — теперь можно резать`, 2.5);
     // очищенное остаётся на доске: следующий шаг с этим продуктом начинается сразу
     const next = this.dishes[it.dishId].recipe.steps.find((st) => (st.requires ?? []).includes(it.stepId) && st.type !== 'peel' && this.stepState(it.dishId, st.id) === 'ready' && ['cut', 'grate'].includes(st.type));

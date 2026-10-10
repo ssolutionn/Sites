@@ -246,6 +246,16 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 .glass .pause-ico { border-left-color: var(--on-glass); border-right-color: var(--on-glass); }
 .st-label .ic { font-size: 16px; line-height: 1; }
 .burners2 { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* плита 0.9: четыре конфорки в ряд, как крутилки на плите */
+.burners4 { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.burners4 .burner { margin: 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px; min-width: 0; }
+.burners4 .burner b { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--on-glass-2); white-space: nowrap; }
+.burners4 .burner .bstat { font-size: 11.5px; line-height: 1.25; }
+.burners4 .burner button { padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.burners4 .knob { width: 50px; height: 50px; }
+.burners4 .burner.dirty { background: rgba(201, 178, 122, 0.22); box-shadow: inset 0 0 0 1px rgba(201, 178, 122, 0.5); }
+.burners4 .burner .warn { color: #ffd88a; }
+.chip2.hands { background: rgba(255, 214, 120, 0.22); }
 .burners2 .burner { margin: 0; flex-direction: column; align-items: flex-start; gap: 6px; }
 .burners2 .burner b { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--on-glass-2); }
 .burners2 .burner .small { color: var(--on-glass); font-weight: 800; }

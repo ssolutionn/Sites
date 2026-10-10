@@ -1,14 +1,12 @@
 // Плита 0.7: крутилки огня. Вода греется от огня, на слабом не закипает, на сильном пена убегает.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KitchenSession, arrive, waitAction, run } from './helpers-campaign.js';
+import { KitchenSession, arrive, waitAction, run, startBoil } from './helpers-campaign.js';
 import { CAMPAIGN } from '../src/campaign/data.js';
 
 function potOn(heat) {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
-  arrive(s, 'stove');
-  assert.ok(s.placePot(0, 'olivier:boil', heat));
-  waitAction(s);
+  startBoil(s, 'olivier:boil', { burner: 0, heat });
   return s;
 }
 

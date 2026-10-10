@@ -174,6 +174,12 @@ function ui(fn) {
 function peelIt(it) {
   const b = bounds(it.pieces);
   const U = BOARD_UNIT;
+  // яйцо: сначала постучать каждым о доску (клик), потом снимать скорлупу пальцами
+  if (it.hand) for (const q of it.peel.zones) for (let k = 0; k < s.cfg.peel.hand.taps; k++) {
+    think(PACE.aimClick * 0.4);
+    s.pointer('down', q.x, q.z);
+    s.pointer('up', q.x, q.z);
+  }
   for (let pass = 0; pass < 4 && s.board.items[it.key]; pass++) {
     const pts = [];
     const rows = 12;
@@ -255,15 +261,21 @@ function taste(dish) {
   }
   ui(() => s.seasonDone(dish));
 }
-// Плита: поставить всё, что можно, на свободные конфорки.
+// Плита: всё, что сегодня варить, — достать (сырой картофель сначала почистить на доске) и положить в кастрюлю, огонь 6.
 function placeAll() {
-  go('stove');
-  tip('stove');
-  // поставить и повернуть крутилку на 6
-  while (s.stoveTasks().length && s.usableBurners().some((b) => b.state === 'empty')) {
-    const i = s.usableBurners().find((b) => b.state === 'empty').i;
-    ui(() => s.placePot(i, null, 0));
+  for (let guard = 0; guard < 8; guard++) {
+    const free = s.usableBurners().find((b) => b.state === 'empty' && !b.dirty);
+    const t = s.fridgeTasks()[0];
+    if (!t || !free) break;
+    go('fridge');
+    tip('fridge');
+    ui(() => s.fridgeTake(t.dishId, t.stepId));
+    if (t.dest === 'board') board(`${t.dishId}:${t.stepId}`);
+    go('stove');
+    tip('stove');
+    const i = s.usableBurners().find((b) => b.state === 'empty' && !b.dirty).i;
     ui(() => s.setHeat(i, 6));
+    ui(() => s.placePot(i, null, null));
   }
 }
 function catCheck() {
@@ -397,7 +409,7 @@ const days = [
     readPhone();
     fixHome();
     boiled('potato');
-    board('olivier:peelPotato');
+    board('olivier:potato');
     season('olivier');
     stir();
     taste('olivier');

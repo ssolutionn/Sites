@@ -11,7 +11,7 @@ import { dishScore, dayScore } from '../src/campaign/scoring.js';
 import { initialPieces, cutAcross, totalVolume, rotatePieces } from '../src/game/cutting.js';
 import { TRAY, SINK, CANAPE_PILES, FRUIT_PILES, CLAYOUT } from '../src/campaign/layout.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
-import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag, seasonTo, tasteDone, knife, peel } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, cutRounds, stir, zigzag, seasonTo, tasteDone, knife, peel, startBoil } from './helpers-campaign.js';
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps * Math.max(1, Math.abs(b)), `${a} ≈ ${b}`);
 let serial = 50000;
@@ -328,9 +328,7 @@ test('помехи: кража не стартует без колбасы на 
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
   run(s, 40);
   assert.equal(s.cat.state, 'home');
-  arrive(s, 'stove');
-  s.placePot();
-  waitAction(s);
+  startBoil(s, 'olivier:boil');
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
   let maxUrgent = 0;
@@ -344,9 +342,8 @@ test('помехи: кража не стартует без колбасы на 
 
 test('помехи: пропуск выкипания — одна лужа и один штраф, лужа блокирует проход до уборки', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  startBoil(s, 'olivier:boil');
   arrive(s, 'stove');
-  s.placePot();
-  waitAction(s);
   s._startOverflow();
   run(s, 20);
   assert.equal(s.puddles.length, 1);
@@ -376,9 +373,7 @@ test('помехи: радио, выключенное игроком, не ло
 // ---------- 6. Время ----------
 test('время: картофель кампании готов через 2:00 даже при пропуске кадров', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
-  arrive(s, 'stove');
-  s.placePot();
-  waitAction(s);
+  startBoil(s, 'olivier:boil');
   const t0 = s.stove.startT;
   // огонь 6: вода закипает ~24 с, потом 96 с варки — около 2:00
   assert.ok(Math.abs(s.stove.readyAt - t0 - 120) < 1, `${s.stove.readyAt - t0}`);
@@ -501,11 +496,8 @@ test('сброс: новая попытка не содержит старых �
 // ---------- Сквозные дни ----------
 test('день 1: оливье от плиты до перемешивания, затем завершение дня', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 3 });
-  arrive(s, 'stove');
-  assert.ok(s.placePot()); // картофель — первая конфорка
-  waitAction(s);
-  assert.ok(s.placePot()); // яйца — вторая
-  waitAction(s);
+  startBoil(s, 'olivier:boil'); // картофель: достать из кладовой, почистить сырым, в кастрюлю — первая конфорка
+  startBoil(s, 'olivier:boilEgg'); // яйца — вторая
   assert.equal(s.burners[1].product, 'egg');
   for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:pickle']) {
     arrive(s, 'board');
@@ -544,8 +536,7 @@ test('день 1: оливье от плиты до перемешивания, 
   waitAction(s);
   run(s, CAMPAIGN.cool.time + 0.5);
   arrive(s, 'board');
-  assert.ok(s.boardSelect('olivier:peelPotato'), s.hint?.text);
-  peel(s);
+  assert.ok(s.boardSelect('olivier:potato'), s.hint?.text);
   cutCubes(s);
   assert.ok(s.boardTransfer(), s.hint?.text);
   arrive(s, 'bowl');

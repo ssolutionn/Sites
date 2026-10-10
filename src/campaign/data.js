@@ -19,8 +19,14 @@ export const CAMPAIGN = {
   boilTimes: { potato: 96, egg: 36, beet: 126 }, // сколько секунд варится после закипания (на огне 6 закипает за ~24 с: итого 2:00 и 1:00); конфорок две
   // Крутилка огня 0–9: вода греется на heatRate·огонь °C/с и остывает на loss·(T−20); на 2 и ниже не закипает.
   // Огонь ≥ foamHeat дольше foamAfter секунд кипения — пена убегает; simmer — «убавить огонь».
-  stove: { heatRate: 0.7, loss: 0.02, boilAt: 99.5, simmer: 4, foamHeat: 7, foamAfter: 8, placeHeat: 6, eventHeat: 6, maxHeat: 9 },
-  burners: 2,
+  // overcook — сколько секунд после «готово» можно не снимать с огня, потом продукт переваривается (−overcookPenalty к подготовке).
+  // Убежала пена — конфорку залило: wipe — сколько метров «потереть» тряпкой; пока не вытерта, на ней не варят.
+  stove: {
+    heatRate: 0.7, loss: 0.02, boilAt: 99.5, simmer: 4, foamHeat: 7, foamAfter: 8, placeHeat: 6, eventHeat: 6, maxHeat: 9,
+    overcook: { egg: 40, potato: 60, beet: 90, default: 60 }, overcookPenalty: 10,
+    wipe: { need: 0.55, maxStep: 0.12, reverseBonus: 1.6 },
+  },
+  burners: 4, // как на настоящей плите: четыре конфорки, четыре крутилки
   cool: { time: 25, sinkCool: 1.5, underTap: 2.5 }, // сваренное горячее: ждать или остудить под холодной водой (держать кран открытым underTap с)
   minCutFraction: 0.2,
   maxPiecesPerProduct: 150,
@@ -33,6 +39,7 @@ export const CAMPAIGN = {
   roundTarget: { thickness: 1, min: 0.64, max: 1.44, minCut: 0.36 }, // кружочки, см
 
   durations: {
+    take: 0.8, // достать продукт из холодильника в руки
     placePot: 1,
     takePot: 1,
     reduceHeat: 1,
@@ -63,7 +70,8 @@ export const CAMPAIGN = {
   // Канапе: стопка 3–4 кусочка на хлебе; шпажку протягивают вниз на pierceDepth (м), не круче pierceAngle (°) вбок
   canape: { minStack: 3, stackMax: 4, pierceDepth: 0.05, pierceAngle: 25 },
   // Чистка ножом: кисть — ширина снятой полоски кожуры (м), complete — сколько поверхности очистить
-  peel: { cols: 26, rows: 22, brush: 0.017, amount: 0.7, complete: 0.86 },
+  // чистка: ножом (картофель) — полосками; яйцо — пальцами: taps ударов о доску на каждое, потом скорлупа снимается крупнее
+  peel: { cols: 26, rows: 22, brush: 0.017, amount: 0.7, complete: 0.86, hand: { taps: 2, brush: 0.022, amount: 0.9 } },
   grate: { cyclesPerPortion: 8, zoneTop: -0.035, zoneBottom: 0.035, maxJump: 0.12 },
   spread: { cols: 16, rows: 12, brush: 0.016, complete: 0.8 },
   marinade: { cols: 18, rows: 12, brush: 0.022, complete: 0.75 },
@@ -114,12 +122,12 @@ export const CAMPAIGN = {
 // --- Продукты ---
 // unit — игровые порции; storage — где хранится; cut — профиль для доски.
 export const PRODUCTS = {
-  potato: { name: 'Картофель', price: 40, unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 8, d: 6, profile: 'oval' }, grate: true, peel: 0x9a7448, peelDone: ['Картофелина почищена', 'Картошка почищена'], note: 'варится в мундире, потом чистим' },
+  potato: { name: 'Картофель', price: 40, unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 8, d: 6, profile: 'oval' }, grate: true, peel: 0x9a7448, peelDone: ['Картофелина почищена', 'Картошка почищена'], note: 'для оливье чистим сырым и варим; в шубу — в мундире' },
   carrot: { name: 'Морковь', price: 30, unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 13, d: 3.4, profile: 'carrot' }, grate: true, note: 'варёная' },
   sausage: { name: 'Колбаса', price: 180, unit: 'порц.', storage: 'fridge', color: 0xe7909a, cut: { w: 8, d: 6, profile: 'rectangle' }, round: { length: 10, radius: 1.8 } },
   cucumber: { name: 'Огурец свежий', price: 60, unit: 'шт.', storage: 'fridge', color: 0x8cc84b, cut: { w: 12, d: 3.4, profile: 'oval' }, round: { length: 10, radius: 1.5 } },
   pickle: { name: 'Огурец солёный', price: 70, unit: 'шт.', storage: 'fridge', color: 0x8a9a3e, cut: { w: 9, d: 3.2, profile: 'oval' }, note: 'для оливье — солёные или маринованные' },
-  egg: { name: 'Яйцо', price: 15, unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 5.6, d: 4.2, profile: 'egg', trim: 0.14 }, peel: 0xe6cba0, peelDone: ['Яйцо почищено', 'Яйца почищены'], note: 'варится в кастрюле, потом чистим' },
+  egg: { name: 'Яйцо', price: 15, unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 5.6, d: 4.2, profile: 'egg', trim: 0.14 }, peel: 0xe6cba0, peelByHand: true, peelDone: ['Яйцо почищено', 'Яйца почищены'], note: 'варится в кастрюле, потом чистим руками' },
   peas: { name: 'Горошек', price: 90, unit: 'банка', storage: 'pantry', color: 0x6dbb3a },
   mayo: { name: 'Майонез', price: 110, unit: 'порц.', storage: 'fridge', color: 0xfffbea },
   crab: { name: 'Крабовые палочки', price: 150, unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 10, d: 4, profile: 'rectangle' } },
@@ -186,15 +194,16 @@ export const RECIPES = {
     uses: ['bowl'],
     look: 'Разноцветные мелкие кусочки в кремовой заправке',
     steps: [
-      { id: 'boil', type: 'boil', product: 'potato', qty: 2, label: 'Поставить картофель вариться' },
+      // решение владельца (0.9): картофель для оливье сначала чистим сырым, потом варим (в уроке — и про «в мундире»)
+      { id: 'peelPotato', type: 'peel', product: 'potato', qty: 2, raw: true, label: 'Почистить 2 сырые картофелины' },
+      { id: 'boil', type: 'boil', product: 'potato', qty: 2, requires: ['peelPotato'], label: 'Сварить очищенный картофель' },
       { id: 'boilEgg', type: 'boil', product: 'egg', qty: 2, label: 'Поставить яйца вариться' },
       { id: 'carrot', type: 'cut', product: 'carrot', qty: 2, shape: 'cube', dest: 'bowl', label: 'Нарезать 2 морковки кубиками' },
       { id: 'sausage', type: 'cut', product: 'sausage', shape: 'cube', dest: 'bowl', label: 'Нарезать колбасу кубиками' },
       { id: 'pickle', type: 'cut', product: 'pickle', qty: 2, shape: 'cube', dest: 'bowl', label: 'Нарезать 2 солёных огурца кубиками' },
       { id: 'peelEgg', type: 'peel', product: 'egg', qty: 2, requires: ['boilEgg'], label: 'Почистить 2 яйца' },
       { id: 'egg', type: 'cut', product: 'egg', qty: 2, shape: 'cube', dest: 'bowl', requires: ['peelEgg'], label: 'Нарезать 2 яйца кубиками' },
-      { id: 'peelPotato', type: 'peel', product: 'potato', qty: 2, requires: ['boil'], label: 'Почистить 2 картофелины' },
-      { id: 'potato', type: 'cut', product: 'potato', qty: 2, shape: 'cube', dest: 'bowl', requires: ['peelPotato'], label: 'Нарезать 2 картофелины кубиками' },
+      { id: 'potato', type: 'cut', product: 'potato', qty: 2, shape: 'cube', dest: 'bowl', requires: ['boil'], label: 'Нарезать 2 картофелины кубиками' },
       { id: 'peas', type: 'add', product: 'peas', label: 'Открыть горошек и добавить' },
       { id: 'mayo', type: 'add', product: 'mayo', label: 'Заправить майонезом' },
       { id: 'season', type: 'season', requires: ['carrot', 'sausage', 'pickle', 'egg', 'potato', 'peas', 'mayo'], label: 'Посолить и поперчить' },

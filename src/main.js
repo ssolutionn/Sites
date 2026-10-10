@@ -115,6 +115,7 @@ function boot() {
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
     unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
     stir: 'stir', peel: 'peelSkin', cutDenied: 'scuff', // перемешивание, чистка и отказ ножа раньше молчали
+    taken: 'select', returned: 'select', eggCrack: 'crack', overcooked: 'deny', stoveClean: 'fixed', wipe: 'scrub', wash: 'scrub', // 0.9: руки, яйцо, плита, мытьё
     feedLike: 'select', // лайк в ленте «Андрея»; новые посты приходят без звука — только значок
   };
 
@@ -439,7 +440,7 @@ function boot() {
     const r = canvas.getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
   }
-  const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'radio']);
+  const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'radio', 'stove']);
   function closeupActive() {
     return session && CLOSE.has(session.panel) && !session.heroine.target && sv.camT >= 0.95;
   }

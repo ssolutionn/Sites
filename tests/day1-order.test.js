@@ -1,16 +1,13 @@
 // 0.8: порядок работы в дне 1 свободный — игра принимает несколько разумных последовательностей, а не одну цепочку.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KitchenSession, run, arrive, waitAction, cutCubes, stir, seasonTo, tasteDone, peel } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, stir, seasonTo, tasteDone, peel, startBoil } from './helpers-campaign.js';
 
 const guard = (s) => { if (s.cat.state === 'theft') s.shoo(); };
 
 function pots(s) {
-  arrive(s, 'stove');
-  assert.ok(s.placePot(), s.hint?.text); // картофель
-  waitAction(s);
-  assert.ok(s.placePot(), s.hint?.text); // яйца
-  waitAction(s);
+  startBoil(s, 'olivier:boil'); // картофель: из кладовой, почистить сырым, в кастрюлю
+  startBoil(s, 'olivier:boilEgg'); // яйца: из холодильника в кастрюлю
 }
 function cut(s, key) {
   arrive(s, 'board');
@@ -63,7 +60,7 @@ test('порядок А: кастрюли → овощи, пока варятс�
   peelThenCut(s, 'olivier:peelEgg');
   ready(s, 0);
   takeAndCool(s, 0, 'potato');
-  peelThenCut(s, 'olivier:peelPotato');
+  cut(s, 'olivier:potato');
   add(s, 'peas');
   add(s, 'mayo');
   finishSalad(s);
@@ -78,7 +75,7 @@ test('порядок Б: сначала вся сырая нарезка, пот
   peelThenCut(s, 'olivier:peelEgg');
   ready(s, 0);
   takeAndCool(s, 0, 'potato');
-  peelThenCut(s, 'olivier:peelPotato');
+  cut(s, 'olivier:potato');
   add(s, 'peas');
   add(s, 'mayo');
   finishSalad(s);
@@ -95,6 +92,6 @@ test('порядок В: горошек и майонез в миску зара
   peelThenCut(s, 'olivier:peelEgg');
   ready(s, 0);
   takeAndCool(s, 0, 'potato');
-  peelThenCut(s, 'olivier:peelPotato');
+  cut(s, 'olivier:potato');
   finishSalad(s);
 });

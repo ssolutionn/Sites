@@ -1,6 +1,7 @@
 // Плита, духовка, раковина, лужи, радио, гирлянда, кот, пакет доставки, праздничный стол.
 import { CoverageMask } from './coverage.js';
-import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS } from './layout.js';
+import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS, STOVE } from './layout.js';
+import { Scrubber } from './mechanics.js';
 import { PRODUCTS, DISH_ORDER } from './data.js';
 import { TEMPTING, BOILED } from './st-extra.js';
 
@@ -34,18 +35,93 @@ export const homeMethods = {
     return this.cfg.boilTimes?.[product] ?? this.cfg.potatoReadyAfter;
   },
 
+  // ---------- холодильник и кладовая: что сегодня варить, сначала берут в руки ----------
   /**
-   * Поставить кастрюлю на свободную конфорку. heat — где стоит крутилка (0 — огонь выключен, его включают крутилкой).
+   * Что можно достать сейчас: варёные продукты (яйца, свёкла) — сразу к плите; картофель для оливье — сначала
+   * на доску почистить сырым (шаг peel с raw), потом к плите. { dishId, stepId, boilStep, product, qty, dest }
+   */
+  fridgeTasks() {
+    const out = [];
+    for (const [dishId, dish] of Object.entries(this.dishes)) {
+      if (dish.done) continue;
+      const steps = dish.recipe.steps;
+      for (const st of steps) {
+        if (dish.steps[st.id]?.done) continue;
+        const state = this.stepState(dishId, st.id);
+        if (state === 'locked' || state === 'skipped') continue;
+        let boil = null, dest = null;
+        if (st.type === 'peel' && st.raw) {
+          boil = steps.find((b) => b.type === 'boil' && b.product === st.product && (b.requires ?? []).includes(st.id));
+          if (this.board.items[`${dishId}:${st.id}`]) continue;
+          dest = 'board';
+        } else if (st.type === 'boil') {
+          if (steps.some((r) => r.type === 'peel' && r.raw && (st.requires ?? []).includes(r.id))) continue; // приходит с доски
+          if (this.burners.some((b) => b.owner === dishId && b.step === st.id && b.state !== 'empty')) continue;
+          boil = st;
+          dest = 'stove';
+        } else continue;
+        if (this.carry && this.carry.dishId === dishId && (this.carry.stepId === st.id || this.carry.boilStep === boil?.id)) continue;
+        out.push({ dishId, stepId: st.id, boilStep: boil?.id ?? null, product: st.product, qty: st.qty ?? 1, dest });
+      }
+    }
+    return out;
+  },
+
+  /** Достать продукт для шага в руки. Руки одни: сначала положи то, что держишь. */
+  fridgeTake(dishId, stepId) {
+    if (!this._isIdleAt('fridge') || this.action) return false;
+    const task = this.fridgeTasks().find((t) => t.dishId === dishId && t.stepId === stepId);
+    if (!task) return false;
+    if (this.carry) {
+      this.setHint(`Руки заняты: ${this.productName(this.carry.product).toLowerCase()} — сначала отнеси`, 2.5);
+      return false;
+    }
+    const block = this.stepBlock(dishId, task.boilStep ?? stepId);
+    if (block && !/^Сначала:/.test(block)) {
+      this.setHint(block);
+      return false;
+    }
+    if (task.boilStep && !this._reserveStep(dishId, task.boilStep)) return false;
+    return this._startAction('take', this.cfg.durations.take ?? 0.8, () => {
+      this.carry = { product: task.product, qty: task.qty, dishId, stepId, boilStep: task.boilStep, peeled: false };
+      const name = this.productName(task.product);
+      const where = PRODUCTS[task.product]?.storage === 'fridge' ? 'холодильника' : 'кладовой';
+      this._emit('taken', { product: task.product, dest: task.dest });
+      this.setHint(task.dest === 'board' ? `${name} из ${where} — неси к доске и почисти` : `${name} из ${where} — неси к плите и положи в кастрюлю`, 3.5);
+    });
+  },
+
+  /** Положить продукт из рук обратно (передумала). */
+  fridgeReturn() {
+    if (!this._isIdleAt('fridge') || !this.carry || this.carry.peeled) return false;
+    this.inventory.release?.(this._opId(this.carry.dishId, this.carry.boilStep ?? this.carry.stepId));
+    this.carry = null;
+    this._emit('returned', {});
+    return true;
+  },
+
+  /**
+   * Положить продукт из рук в кастрюлю с водой на свободную конфорку.
+   * heat — где стоит крутилка; null — оставить как есть (огонь, включённый заранее, не гаснет).
    */
   placePot(burner = null, stepKey = null, heat = this.cfg.stove.placeHeat) {
     if (!this._isIdleAt('stove') || this.action) return false;
-    const tasks = this.stoveTasks();
-    const task = stepKey ? tasks.find((t) => `${t.dishId}:${t.stepId}` === stepKey) : tasks[0];
-    if (!task) return false;
-    const free = this.usableBurners().filter((b) => b.state === 'empty');
-    const b = burner != null ? free.find((x) => x.i === burner) : free[0];
+    const c = this.carry;
+    if (!c?.boilStep) {
+      const t = this.stoveTasks()[0];
+      this.setHint(t ? `Сначала достань ${this.productName(t.product).toLowerCase()} из холодильника` : 'Сегодня варить нечего', 2.5);
+      return false;
+    }
+    const task = { dishId: c.dishId, stepId: c.boilStep, product: c.product };
+    const usable = this.usableBurners().filter((b) => b.state === 'empty');
+    const free = usable.filter((b) => !b.dirty);
+    const b = burner != null ? usable.find((x) => x.i === burner) : free[0];
     if (!b) {
-      this.setHint(this.mods.oneBurner ? 'Конфорка занята — дождись, пока сварится' : 'Обе конфорки заняты', 2);
+      this.setHint(usable.length ? 'Конфорки залиты — сначала вытри плиту' : this.mods.oneBurner ? 'Конфорка занята — дождись, пока сварится' : 'Все конфорки заняты', 2);
+      return false;
+    }
+    if (b.dirty) {
+      this.setHint('Эту конфорку залило — сначала вытри её тряпкой', 2.5);
       return false;
     }
     const block = this.stepBlock(task.dishId, task.stepId);
@@ -56,11 +132,13 @@ export const homeMethods = {
     if (!this._reserveStep(task.dishId, task.stepId)) return false;
     return this._startAction('placePot', this.cfg.durations.placePot, () => {
       // state 'boiling' — кастрюля на плите (вода греется или кипит); water — cold | heating | boil
-      const nb = { i: b.i, state: 'boiling', owner: task.dishId, step: task.stepId, product: task.product, startT: this.t, readyAt: 0, overflow: null, heat: Math.max(0, Math.min(this.cfg.stove.maxHeat, heat | 0)), temp: 20, cooked: 0, foamT: 0, water: 'cold' };
+      const h0 = heat == null ? b.heat ?? 0 : heat;
+      const nb = { ...emptyBurnerFields(b.i), state: 'boiling', owner: task.dishId, step: task.stepId, product: task.product, startT: this.t, heat: Math.max(0, Math.min(this.cfg.stove.maxHeat, h0 | 0)) };
       this.burners[b.i] = nb;
       nb.readyAt = this._potEta(nb);
+      this.carry = null;
       this._emit('potPlaced', { dishId: task.dishId, burner: b.i, product: task.product });
-      if (nb.heat === 0) this.setHint('Кастрюля на плите. Включи огонь — поверни крутилку: 7–9 быстро закипит, потом убавь до 4–5', 4.5);
+      if (nb.heat === 0) this.setHint('В кастрюле. Включи огонь — поверни крутилку: 7–9 быстро закипит, потом убавь до 4–5', 4.5);
       else {
         const time = nb.readyAt - this.t;
         const m = Math.floor(time / 60), sec = String(Math.round(time % 60)).padStart(2, '0');
@@ -118,7 +196,7 @@ export const homeMethods = {
           s.cooked += h;
           if (was !== 'boil') {
             this._emit('potBoils', { burner: s.i, product: s.product });
-            if (s.heat >= c.foamHeat) this.setHint('Закипело! Убавь огонь до 4–5, иначе убежит', 3);
+            if (s.heat >= c.foamHeat) this.setHint('Закипело! Поверни крутилку до 4–5, иначе убежит', 3);
           }
           // сильный огонь на кипении — поднимается пена
           if (s.heat >= c.foamHeat) {
@@ -129,8 +207,24 @@ export const homeMethods = {
         s.readyAt = this._potEta(s);
         if (s.cooked >= this.boilTime(s.product)) s.readyAt = this.t;
       }
+      // готово, а огонь не выключили и кастрюлю не сняли — продукт переваривается
+      if (s.state === 'ready' && (s.heat ?? 0) > 0 && !s.overcooked) {
+        s.overT += h;
+        const lim = c.overcook?.[s.product] ?? c.overcook?.default ?? Infinity;
+        if (s.overT >= lim) {
+          s.overcooked = true;
+          const dish = this.dishes[s.owner];
+          if (dish) {
+            dish.penalty.prep += c.overcookPenalty ?? 10;
+            dish.penalty.overcook = s.product;
+          }
+          this._emit('overcooked', { burner: s.i, product: s.product });
+          this.setHint(`${BOILED[s.product]?.over ?? this.productName(s.product) + ' переварилось'} — сними с огня`, 3.5);
+        }
+      }
       if (s.state === 'boiling' && this.t >= s.readyAt) {
         s.state = 'ready';
+        s.overT = 0;
         if (s.overflow) {
           s.overflow = null;
           this._removeAlert(this._potKey(s.i));
@@ -144,6 +238,7 @@ export const homeMethods = {
         this._removeAlert(this._potKey(s.i));
         if (this.action?.type === 'reduceHeat') this._cancelAction();
         this._addPuddle('pot', CLAYOUT.potPuddle);
+        s.dirty = true; // пеной залило конфорку: после варки её надо вытереть
         this.penalties.push({ kind: 'spill', points: this.cfg.scoring.order.spillEvent, label: 'Кастрюля выкипела' });
         const dish = this.dishes[s.owner];
         if (dish && !dish.penalty.prepSpill) {
@@ -152,6 +247,7 @@ export const homeMethods = {
         }
         this.stats.spills++;
         this._emit('spill', { burner: s.i });
+        this.setHint('Убежало! Залило плиту и пол — потом вытри конфорку и лужу', 3.5);
       }
     }
   },
@@ -161,7 +257,7 @@ export const homeMethods = {
     if (!b) return;
     const w = rand(this.rng, this.cfg.events.potWindow);
     b.overflow = { deadline: this.t + w };
-    this._alert(this._potKey(b.i), `Кастрюля выкипает (${this.productName(b.product).toLowerCase()})! Убавь огонь`, { deadline: this.t + w, window: w, station: 'stove' });
+    this._alert(this._potKey(b.i), `Кастрюля выкипает (${this.productName(b.product).toLowerCase()})! Поверни крутилку ниже 6`, { deadline: this.t + w, window: w, station: 'stove' });
     this._markUrgent();
     this._emit('potBoil', { burner: b.i });
   },
@@ -182,6 +278,50 @@ export const homeMethods = {
     });
   },
 
+  // ---------- вытереть залитую конфорку: тереть тряпкой по пятну ----------
+  _burnerAt(x, z) {
+    let best = null;
+    for (let i = 0; i < this.burners.length; i++) {
+      const p = STOVE.burners[i];
+      if (!p) continue;
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d <= STOVE.r * 1.5 && (!best || d < best.d)) best = { i, d };
+    }
+    return best ? this.burners[best.i] : null;
+  },
+
+  _stovePointer(type, x, z) {
+    if (type === 'up') {
+      this.stoveWipe?.scrub.release();
+      return 'up';
+    }
+    if (type === 'down') {
+      const b = this._burnerAt(x, z);
+      if (!b?.dirty) {
+        this.stoveWipe = null;
+        return 'ignored';
+      }
+      if (b.state !== 'empty') {
+        this.setHint('Сначала сними кастрюлю, потом вытри конфорку', 2);
+        return 'blocked';
+      }
+      if (this.stoveWipe?.i !== b.i) this.stoveWipe = { i: b.i, scrub: new Scrubber(this.cfg.stove.wipe) };
+    }
+    const w = this.stoveWipe;
+    if (!w || !this.pointerDown) return 'hover';
+    const p = STOVE.burners[w.i];
+    const inside = Math.hypot(x - p.x, z - p.z) <= STOVE.r * 1.6;
+    const g = w.scrub.move(x, z, inside);
+    if (g > 0) this._emit('wipe', { cov: w.scrub.progress, burner: w.i });
+    if (w.scrub.complete) {
+      this.burners[w.i].dirty = false;
+      this.stoveWipe = null;
+      this._emit('stoveClean', { burner: w.i });
+      this.setHint('Конфорка чистая', 1.5);
+    }
+    return inside ? 'wipe' : 'off';
+  },
+
   takePot(i = null) {
     if (!this._isIdleAt('stove') || this.action) return false;
     const b = i != null ? this.burners[i] : this.burners.find((x) => x.state === 'ready') ?? this.burners.find((x) => x.state === 'boiling');
@@ -194,7 +334,8 @@ export const homeMethods = {
     return this._startAction('takePot', this.cfg.durations.takePot, () => {
       if (b.state !== 'ready') return;
       const { owner, step, product } = b;
-      this.burners[b.i] = { ...b, state: 'empty', owner: null, step: null, readyAt: 0, overflow: null, startT: b.startT, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold' };
+      // сняла кастрюлю — выключила огонь; залитая конфорка остаётся залитой
+      this.burners[b.i] = { ...emptyBurnerFields(b.i), startT: b.startT, heat: 0, dirty: !!b.dirty };
       this._removeAlert('potReady' + (b.i || ''));
       this._completeStep(owner, step, 1);
       if (!this.practice) this.hot[product] = this.t + this.cfg.cool.time;
@@ -547,3 +688,8 @@ export const homeMethods = {
     return true;
   },
 };
+
+// Поля пустой конфорки (как emptyBurner в session.js) — без циклического импорта.
+function emptyBurnerFields(i) {
+  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0, overcooked: false };
+}
