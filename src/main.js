@@ -7,7 +7,8 @@ import { markInProgress, applyDecorPurchase } from './campaign/persist.js';
 import { CLAYOUT, TABLE_SLOTS } from './campaign/layout.js';
 import { SceneView } from './view/scene.js';
 import { CampaignView } from './view/campaign-view.js';
-import { loadLogo } from './view/textures.js';
+import { loadLogo, setWindowPhase } from './view/textures.js';
+import { dayPhase } from './campaign/clock.js';
 import { CampaignUI } from './ui/campaign-ui.js';
 import { Sound } from './audio/sound.js';
 import { RadioMusic } from './audio/radio-music.js';
@@ -58,6 +59,10 @@ function boot() {
     return;
   }
   loadLogo();
+  // за окном — то же время суток, что у игрока; сверяемся раз в минуту
+  const syncWindow = () => setWindowPhase(dayPhase(new Date().getHours()));
+  syncWindow();
+  setInterval(syncWindow, 60000);
   const sound = new Sound();
   const radioMusic = new RadioMusic(sound);
   const save = new SaveStore();

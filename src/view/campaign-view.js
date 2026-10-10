@@ -928,7 +928,10 @@ export class CampaignView {
     const bd = s.equipment.board;
     this.boardDirt.visible = !!bd && !bd.clean;
     if (this.boardDirt.visible) this.boardDirt.material.color.setHex(bd.by === 'beet' ? 0x7a1d3c : 0x8a7a66);
-    if (s.cat.state !== 'eat' && this.kibble.visible && s.catNeeds.hunger > 5) this.kibble.visible = false;
+    // миска кота: сыт — в миске остаётся корм (меньше, чем голоднее), проголодался — миска пустая, пора кормить
+    const full = Math.max(0, Math.min(1, (45 - s.catNeeds.hunger) / 45));
+    this.kibble.visible = s.cat.state === 'eat' || full > 0.05;
+    this.kibble.scale.set(1, 0.35 + 0.65 * (s.cat.state === 'eat' ? 1 : full), 1);
     if (s.cat.state === 'play') {
       this.playT = (this.playT ?? 0) + dt;
       const cb = CLAYOUT.catBowl;

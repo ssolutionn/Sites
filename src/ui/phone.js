@@ -1,5 +1,6 @@
 // Телефон героини: цельный смартфон с новогодним домашним экраном и пятью приложениями.
 // Только отображение и команды через act(...): состояние живёт в KitchenSession.
+import { clockText, wallAgo } from '../campaign/clock.js';
 import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER } from '../campaign/data.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { NEUTRAL, LOGO_URL } from '../view/textures.js';
@@ -23,18 +24,17 @@ export const APPS = [
   { id: 'timers', name: 'Таймеры', icon: '⏲', cls: 'app-timers' },
 ];
 
-// Время на часах телефона: игровая секунда — минута, день начинается в 14:00.
-function phoneClock(t) {
-  const m = 14 * 60 + Math.floor(t);
-  return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+// Часы телефона — настоящее время игрока (0.9). t — игровая секунда события, now — игровая секунда сейчас:
+// событие из прошлого показывается на столько минут раньше, сколько прошло в игре.
+function phoneClock(t, now = t) {
+  return clockText(wallAgo(new Date(), now - t));
 }
 
-// Время поста в ленте: сегодня — часы, вчера — «вчера, 15:30», раньше — дата (день 1 = 25 декабря).
-function feedWhen(day, at, today) {
-  const clock = phoneClock(at);
-  if (day === today) return clock;
-  if (day === today - 1) return `вчера, ${clock}`;
-  return `${24 + day} дек., ${clock}`;
+// Время поста в ленте: сегодня — часы, вчера — «вчера», раньше — дата (день 1 = 25 декабря).
+function feedWhen(day, at, today, now) {
+  if (day === today) return phoneClock(at, now);
+  if (day === today - 1) return 'вчера';
+  return `${24 + day} дек.`;
 }
 
 const btn = (label, act, args = [], cls = '', disabled = false, title = '') => `<button class="${cls}" data-act="${act}" data-args='${esc(JSON.stringify(args))}' ${disabled ? 'disabled' : ''} title="${esc(title)}">${label}</button>`;
@@ -248,7 +248,7 @@ export class PhoneUI {
     const head = this._head('Андрей', 'ловит даже на кухне');
     if (tab === 'chats' && this.sub) {
       const msgs = s.phone.messages.filter((m) => m.from === this.sub);
-      return `${this._head(esc(this.sub), 'в сети', 'andrey||chats')}<div class="app-body chat">${msgs.map((m) => `<div class="bubble">${esc(m.text)}${m.photo ? '<div class="photo-card"><div class="sun"></div><div class="palm">🌴</div><div class="cap">Вид с балкона</div></div>' : ''}<small>${phoneClock(m.t)}</small></div>`).join('')}<div class="typing">${esc(this.sub)} печатает…</div></div>`;
+      return `${this._head(esc(this.sub), 'в сети', 'andrey||chats')}<div class="app-body chat">${msgs.map((m) => `<div class="bubble">${esc(m.text)}${m.photo ? '<div class="photo-card"><div class="sun"></div><div class="palm">🌴</div><div class="cap">Вид с балкона</div></div>' : ''}<small>${phoneClock(m.t, s.t)}</small></div>`).join('')}<div class="typing">${esc(this.sub)} печатает…</div></div>`;
     }
     if (tab === 'chats') {
       const by = {};
@@ -256,7 +256,7 @@ export class PhoneUI {
       const ava = { Верка: '🌴', Гости: '🎉', Доставка: '🛵' };
       const rows = Object.values(by)
         .reverse()
-        .map((m) => `<button class="chat-row" data-nav="andrey|${esc(m.from)}|chats"><span class="ava">${ava[m.from] ?? '🙂'}</span><span class="cr"><b>${esc(m.from)}</b><small>${esc(m.text)}</small></span><span class="ct">${phoneClock(m.t)}</span></button>`)
+        .map((m) => `<button class="chat-row" data-nav="andrey|${esc(m.from)}|chats"><span class="ava">${ava[m.from] ?? '🙂'}</span><span class="cr"><b>${esc(m.from)}</b><small>${esc(m.text)}</small></span><span class="ct">${phoneClock(m.t, s.t)}</span></button>`)
         .join('');
       return `${head}${seg}<div class="app-body">${rows || '<div class="empty">Пока тихо. Сообщения придут сюда.</div>'}</div>`;
     }
@@ -280,7 +280,7 @@ export class PhoneUI {
     const coms = it.comments.map((c) => `<div class="com"><b>${esc(FEED_AUTHORS[c.who]?.name ?? c.who)}</b>${esc(c.text)}</div>`).join('');
     const more = it.talk > it.comments.length ? `<div class="com-more">Все комментарии (${it.talk})</div>` : '';
     return `<article class="post ${isNew ? 'new' : ''}" data-post="${esc(it.key)}">
-      <div class="post-h"><span class="ava" style="--ava:${a.color ?? '#8f84ff'}">${a.ava}</span><span class="who"><b>${esc(a.name)}${a.badge ? ' <i class="tick">✓</i>' : ''}</b>${a.note ? `<small>${esc(a.note)}</small>` : ''}</span><span class="when">${isNew ? '<i class="new-dot">новое</i>' : ''}${feedWhen(it.day, it.at, today)}</span></div>
+      <div class="post-h"><span class="ava" style="--ava:${a.color ?? '#8f84ff'}">${a.ava}</span><span class="who"><b>${esc(a.name)}${a.badge ? ' <i class="tick">✓</i>' : ''}</b>${a.note ? `<small>${esc(a.note)}</small>` : ''}</span><span class="when">${isNew ? '<i class="new-dot">новое</i>' : ''}${feedWhen(it.day, it.at, today, s.t)}</span></div>
       ${it.text ? `<p class="post-t">${esc(it.text)}</p>` : ''}${poll}${pic ? `<div class="post-pic">${pic}</div>` : ''}
       <div class="post-f">${like}<span class="talk">💬 ${it.talk}</span></div>${coms}${more}</article>`;
   }

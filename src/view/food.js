@@ -124,14 +124,13 @@ export class MaskTexture {
 
 // Плоскость с маской поверх поверхности (ширина/глубина в метрах).
 export function maskPlane(maskTex, w, d, y, ellipse = false) {
+  // Строка 0 маски — z < 0 в логике, это верх картинки (v = 1). После поворота на −90° по X локальная +Y смотрит в −Z мира,
+  // поэтому v = 1 должна быть у вершины с y = +0.5 (раньше uv переворачивали — и мазок шёл зеркально по глубине).
   const geo = ellipse ? new THREE.CircleGeometry(0.5, 40) : new THREE.PlaneGeometry(1, 1);
   if (ellipse) {
     const uv = geo.attributes.uv;
     const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) + 0.5, 0.5 - pos.getY(i));
-  } else {
-    const uv = geo.attributes.uv;
-    for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+    for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) + 0.5, pos.getY(i) + 0.5);
   }
   const mat = new THREE.MeshStandardMaterial({ map: maskTex.texture, transparent: true, roughness: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   const o = new THREE.Mesh(geo, mat);

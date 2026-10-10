@@ -111,6 +111,47 @@ function tree(ctx, x, y, s, color) {
 
 export const tex = {};
 
+// Время суток за окном (clock.js → dayPhase): небо, дома и сколько окон горит.
+const WINDOW_LOOK = {
+  morning: { sky: ['#6f80b8', '#f4c39c'], house: '#4d5a84', lit: '#ffd77a', litEvery: 5, snow: 0.55 },
+  day: { sky: ['#8fbfe8', '#e2f0fb'], house: '#8f9db3', lit: '#c9d6e4', litEvery: 9, snow: 0.7 },
+  evening: { sky: ['#283a7a', '#f09a6a'], house: '#2a3262', lit: '#ffd77a', litEvery: 3, snow: 0.6 },
+  night: { sky: ['#1b2a5a', '#3e5aa0'], house: '#16204a', lit: '#ffd77a', litEvery: 4, snow: 0.5 },
+};
+let windowPhase = 'night';
+
+function drawWindow(ctx, w, h, phase) {
+  const L = WINDOW_LOOK[phase] ?? WINDOW_LOOK.night;
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, L.sky[0]);
+  g.addColorStop(1, L.sky[1]);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 9; i++) {
+    const bx = i * 30;
+    const bh = 60 + ((i * 53) % 90);
+    ctx.fillStyle = L.house;
+    ctx.fillRect(bx, h - bh, 26, bh);
+    ctx.fillStyle = L.lit;
+    for (let k = 0; k < 8; k++) if ((i * 7 + k * 3) % L.litEvery === 0) ctx.fillRect(bx + 4 + (k % 3) * 7, h - bh + 8 + Math.floor(k / 3) * 14, 4, 6);
+  }
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 70; i++) {
+    ctx.globalAlpha = L.snow + ((i * 17) % 50) / 100;
+    ctx.beginPath();
+    ctx.arc((i * 97) % w, (i * 61) % h, 1.5 + (i % 3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Перерисовать окно под время суток ('morning' | 'day' | 'evening' | 'night'). */
+export function setWindowPhase(phase) {
+  if (phase === windowPhase) return;
+  windowPhase = phase;
+  tex.window?.userData.redraw?.();
+}
+
 // Мелкая зернистость поверх заливки: детерминированная, чтобы картинка не менялась от запуска к запуску.
 function grain(ctx, w, h, n, colors, size = [1, 2], seed = 7) {
   let x = seed;
@@ -331,30 +372,8 @@ export function buildTextures() {
   // Логотип для магнита/вывески
   tex.logo = canvasTexture(256, 256, (ctx, w, h, t) => drawLogo(ctx, w / 2, h / 2, 120, t));
 
-  // Ночное окно со снегом и огнями
-  tex.window = canvasTexture(256, 256, (ctx, w, h) => {
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, '#1b2a5a');
-    g.addColorStop(1, '#3e5aa0');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 9; i++) {
-      const bx = i * 30;
-      const bh = 60 + ((i * 53) % 90);
-      ctx.fillStyle = '#16204a';
-      ctx.fillRect(bx, h - bh, 26, bh);
-      ctx.fillStyle = '#ffd77a';
-      for (let k = 0; k < 8; k++) if ((i * 7 + k * 3) % 4 === 0) ctx.fillRect(bx + 4 + (k % 3) * 7, h - bh + 8 + Math.floor(k / 3) * 14, 4, 6);
-    }
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 70; i++) {
-      ctx.globalAlpha = 0.5 + ((i * 17) % 50) / 100;
-      ctx.beginPath();
-      ctx.arc((i * 97) % w, (i * 61) % h, 1.5 + (i % 3), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  });
+  // Окно: время суток как у игрока (0.9) — утро, день, вечер или ночь; снег всегда
+  tex.window = canvasTexture(256, 256, (ctx, w, h) => drawWindow(ctx, w, h, windowPhase));
 
   // Этикетки
   tex.peasLabel = canvasTexture(256, 128, (ctx, w, h) => {

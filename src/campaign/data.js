@@ -83,7 +83,8 @@ export const CAMPAIGN = {
   season: { salt: [2, 4], pepper: [1, 2] }, // скрытая «норма» блюда в щепотках
 
   // Кот как система: голод растёт, сытый кот спит, голодный ищет еду без присмотра
-  cat: { hungerStart: 35, rate: 0.42, rateFirstDay: 0.3, theftAt: 70, warnAt: 50, calm: 30, playTime: 45, afterShoo: -12 },
+  // голод растёт медленнее, чем в 0.8 (владелец: «кот много хочет есть»): от 35 до «голоден» (50) ~1,5 мин, до кражи (70) ~3 мин
+  cat: { hungerStart: 35, rate: 0.18, rateFirstDay: 0.14, theftAt: 70, warnAt: 50, calm: 30, playTime: 45, afterShoo: -12 },
 
   // Деньги и доставка
   money: {
