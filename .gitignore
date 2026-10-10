@@ -4,6 +4,8 @@ dist/
 scripts/shots/
 *.zip
 novogodnyaya-sueta-*-review.md
+# пакет для внешнего ревью: node scripts/review-bundle.mjs
+/review/
 # === IDE and Editor ===
 .vs/
 .vscode/settings.json
