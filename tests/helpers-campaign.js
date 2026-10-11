@@ -177,3 +177,19 @@ export function peel(s) {
 }
 
 export { KitchenSession };
+
+// 0.10: открыть подарок руками — бант потянуть, бумагу сорвать трением, крышку сдвинуть (локальные метры подарка).
+export function unwrapGift(s, index) {
+  if (!s.startGift(index)) return false;
+  const g = s.cfg.gift;
+  s.pointer('down', 0, 0);
+  for (let k = 1; k <= 8; k++) s.pointer('move', (g.bowPull * 1.3 * k) / 8, 0);
+  s.pointer('up', g.bowPull * 1.3, 0);
+  s.pointer('down', -0.08, 0);
+  for (let k = 0; k < 40 && s.gift?.stage === 'paper'; k++) s.pointer('move', k % 2 ? 0.08 : -0.08, (k % 5) * 0.01);
+  s.pointer('up', 0, 0);
+  s.pointer('down', 0, 0);
+  for (let k = 1; k <= 6 && s.gift; k++) s.pointer('move', 0, (g.lidSlide * 1.3 * k) / 6);
+  s.pointer('up', 0, g.lidSlide * 1.3);
+  return !s.gift;
+}

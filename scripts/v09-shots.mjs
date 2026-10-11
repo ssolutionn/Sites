@@ -328,11 +328,19 @@ try {
     await S(() => { const sv = window.__sueta.save; sv.data.bonus = 200; sv.write(); window.__sueta.session.bonus.points = window.__sueta.session.bonus.banked = 200; });
     await station('tree');
     await wait(800); await tip();
-    check('у ёлки три подарка', (await S(() => document.querySelectorAll('button[data-act="openGift"]').length)) === 3);
+    check('у ёлки три подарка', (await S(() => document.querySelectorAll('button[data-act="startGift"]').length)) === 3);
     await shot('tree_closeup_gifts');
+    // 0.10: подарок открывают руками (бант, бумага, крышка) — здесь жесты через API, мышью — v10-shots gift
     for (let k = 0; k < 3; k++) {
-      await S(() => document.querySelector('button[data-act="openGift"]')?.click());
-      await waitFor(() => !window.__sueta.session.action, 10000); await wait(300);
+      await S(() => document.querySelector('button[data-act="startGift"]')?.click());
+      await waitFor(() => !!window.__sueta.session.gift, 10000);
+      await S(() => {
+        const s = window.__sueta.session, g = s.cfg.gift;
+        s.pointer('down', 0, 0); for (let i = 1; i <= 8; i++) s.pointer('move', (g.bowPull * 1.3 * i) / 8, 0); s.pointer('up', 0, 0);
+        s.pointer('down', -0.08, 0); for (let i = 0; i < 40 && s.gift?.stage === 'paper'; i++) s.pointer('move', i % 2 ? 0.08 : -0.08, 0); s.pointer('up', 0, 0);
+        s.pointer('down', 0, 0); for (let i = 1; i <= 6 && s.gift; i++) s.pointer('move', 0, (g.lidSlide * 1.3 * i) / 6); s.pointer('up', 0, 0);
+      });
+      await waitFor(() => !window.__sueta.session.gift, 10000); await wait(300);
     }
     check('подарки открыты', (await sess('s.giftsLeft().length')) === 0);
     check('открытые подарки сохранены сразу', (await S(() => JSON.stringify(window.__sueta.save.data.gifts))) === '{"2":[0,1,2]}', await S(() => JSON.stringify(window.__sueta.save.data.gifts)));
@@ -343,7 +351,7 @@ try {
     // повесить: выбрать в доке, кликнуть по ветке
     const pos = (i) => S((i) => { const { sv, view } = window.__sueta; const c = view.treeSlotScreen(i); return c; }, i);
     for (const slot of [1, 3, 7, 12].slice(0, box)) {
-      const chip = page.locator('button[data-act="pickToy"]').first();
+      const chip = page.locator('#panel [data-drag-toy]').first();
       if (!(await chip.count())) break;
       await chip.click(); await wait(200);
       const q = await pos(slot);

@@ -231,6 +231,72 @@ try {
     check('мимо ёлки — игрушка вернулась в коробку', (await sess('s.treeHand === null && s.toysInBox().length')) === inBox);
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('gift')) {
+    // подарок руками: бант — зажать и потянуть; бумага — тереть туда-сюда; крышка — сдвинуть. Всё мышью.
+    await openDay(2);
+    await closeTip();
+    await station('tree');
+    await wait(800);
+    await closeTip();
+    await page.locator('#panel button[data-act="startGift"]').first().click();
+    await waitFor(() => { const g = window.__sueta.session.gift, sv = window.__sueta.sv; return !!g && sv.camMode === 'c-gift' + g.index && sv.camT >= 1; }, 30000);
+    await wait(600);
+    await closeTip();
+    const L = (x, z) => S(([x, z]) => window.__sueta.view.localToScreen('tree', x, z), [x, z]);
+    const G = await sess('s.cfg.gift');
+    await shot('gift_bow');
+    // бант
+    let p = await L(0, 0);
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.down();
+    for (let k = 1; k <= 8; k++) { const q = await L((G.bowPull * 1.4 * k) / 8, 0.02 * k / 8); await page.mouse.move(q.x, q.y); }
+    await page.mouse.up();
+    await waitFor(() => window.__sueta.session.gift?.stage === 'paper', 10000);
+    check('бант развязан жестом', await sess('s.gift?.stage === "paper"'), await sess('s.gift?.stage'));
+    // бумага — туда-сюда по коробке
+    const a = await L(-0.09, 0.02), b = await L(0.09, -0.02);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    for (let k = 0; k < 2; k++) { const q = k % 2 ? a : b; await page.mouse.move(q.x, q.y, { steps: 6 }); }
+    const mid = await sess('s.gift?.stage === "paper" ? s.gift.tear.progress : 1');
+    check('бумага рвётся по мере трения (часть уже содрана)', mid > 0.15 && mid < 1, `${mid}`);
+    await wait(300);
+    await shot('gift_paper');
+    for (let k = 0; k < 12 && (await sess('s.gift?.stage === "paper"')); k++) { const q = k % 2 ? a : b; await page.mouse.move(q.x, q.y, { steps: 6 }); }
+    await page.mouse.up();
+    check('бумага сорвана', await sess('s.gift?.stage === "lid"'), await sess('s.gift?.stage'));
+    // крышка
+    p = await L(0, 0);
+    const lidPath = [];
+    for (let k = 1; k <= 8; k++) lidPath.push(await L(0.03 * k / 8, (G.lidSlide * 1.4 * k) / 8));
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.down();
+    for (const q of lidPath) await page.mouse.move(q.x, q.y);
+    await page.mouse.up();
+    await waitFor(() => !window.__sueta.session.gift, 10000);
+    check('крышка снята — подарок открыт', await sess('!s.gift && s.giftsLeft().length === 2'), await sess('s.giftsLeft().join()'));
+    await wait(500);
+    await shot('gift_open');
+    check('открытый подарок сохранён', await S(() => (window.__sueta.save.data.gifts['2'] ?? []).length === 1), await S(() => JSON.stringify(window.__sueta.save.data.gifts)));
+    // мимо банта — подсказка; Esc посреди — подарок отложен, прогресс цел
+    await page.locator('#panel button[data-act="startGift"]').first().click();
+    await waitFor(() => { const g = window.__sueta.session.gift, sv = window.__sueta.sv; return !!g && sv.camMode === 'c-gift' + g.index && sv.camT >= 1; }, 30000);
+    await wait(800); // камера перелетела к следующему подарку
+    const far = await L(G.box * 0.9, G.box * 0.9);
+    await page.mouse.click(far.x, far.y); await wait(300);
+    check('мимо банта — подсказка', await sess('/бант/i.test(s.hint?.text ?? "")'), await sess('s.hint?.text'));
+    p = await L(0, 0);
+    const bowPath = [];
+    for (let k = 1; k <= 8; k++) bowPath.push(await L((G.bowPull * 1.4 * k) / 8, 0));
+    await page.mouse.move(p.x, p.y); await page.mouse.down();
+    for (const q of bowPath) await page.mouse.move(q.x, q.y);
+    await page.mouse.up();
+    await page.keyboard.press('Escape'); await wait(500);
+    check('Esc — подарок отложен, остались у ёлки', await sess('!s.gift && s.panel === "tree"'));
+    await waitFor(() => /%/.test([...document.querySelectorAll('#panel button[data-act="startGift"]')].map((b) => b.textContent).join(' ')), 10000);
+    check('на кнопке подарка видно начатое', await S(() => /%/.test([...document.querySelectorAll('#panel button[data-act="startGift"]')].map((b) => b.textContent).join(' '))));
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); fail++; await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`);
 await browser.close();

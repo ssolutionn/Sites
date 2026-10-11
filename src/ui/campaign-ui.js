@@ -92,6 +92,7 @@ export const TIPS = {
   catbowl: 'Миска кота: «Покормить» обнуляет голод. «Мячик» занимает кота на 45 секунд.',
   money: 'У дня есть бюджет. Экспресс быстрее, но дороже. «Сходить самой» бесплатно, но героиня уходит на 35 секунд — плита и кот без присмотра.',
   boardDirty: 'После сельди или свёклы доска грязная: тот же продукт резать можно, другой — только после мытья у раковины. Режь пахучее последним!',
+  giftOpen: 'Подарок открывают руками: зажми бант и потяни, потом рви бумагу — води по коробке туда-сюда, потом зажми крышку и сдвинь. Отпустишь или отложишь (Esc) — начатое не пропадёт.',
   treeDecor: 'Наряжаем ёлку: зажми игрушку в коробке внизу и перетащи на ветку — свободные ветки светятся. Висящую игрушку можно перетащить на другую ветку. Весь набор на ёлке — бонусные баллы.',
   wish: 'Гости прислали пожелание. Оно видно в рецепте (Q) и влияет на оценку блюда.',
   'tray:chicken': 'Маринад: кисточкой (зажми кнопку) проведи по курице. Видимые части — грудка, ножки, крылья. Спинку покрывать не нужно.',
@@ -665,6 +666,9 @@ export class CampaignUI {
           this.openPhone();
         }
         break;
+      case 'giftStart':
+        this.tip('giftOpen');
+        break;
       case 'close':
         if (e.station === 'phone') this.el.phone.classList.add('hidden');
         // отложенный совет — через мгновение после выхода из станции
@@ -1216,7 +1220,7 @@ export class CampaignUI {
       case 'garland':
         return `${base}|${s.garland.broken}`;
       case 'tree':
-        return `${base}|${s.star.broken}|${s.giftsLeft().join()}|${s.toys.map((x) => `${x.uid}:${x.slot}:${+x.fallen}`).join()}|${s.treeHand}`;
+        return `${base}|${s.star.broken}|${s.giftsLeft().map((i) => `${i}:${Math.round(s.giftProgress(i) * 3)}`).join()}|${s.toys.map((x) => `${x.uid}:${x.slot}:${+x.fallen}`).join()}|${s.treeHand}|${s.gift ? `${s.gift.index}:${s.gift.stage}` : ''}|${s.giftShow ? 'show' : ''}`;
       case 'bag':
         return `${base}|${s.delivery.bag?.items.map((i) => +i.placed).join('')}`;
       case 'fridge':
@@ -1340,6 +1344,7 @@ export class CampaignUI {
       case 'garland':
         return s.garland.broken ? `Контакт: ${Math.round((s.garland.progress / CAMPAIGN.durations.garlandHold) * 100)} %` : '';
       case 'tree':
+        if (s.gift) return `Подарок открыт на ${Math.round(s.giftProgress(s.gift.index) * 100)} %`;
         return s.star.broken ? `Контакт: ${Math.round((s.star.progress / CAMPAIGN.durations.starHold) * 100)} %` : '';
       case 'stove':
         return '<span>Сильный огонь — быстрее закипит, но может убежать. Закипело — убавь до 4–5.</span>';
@@ -1471,9 +1476,23 @@ export class CampaignUI {
       case 'garland':
         return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" title="Удерживай кнопку мыши или пробел" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
       case 'tree': {
+        // 0.10: подарок в руках — три движения по шагам; «←» (Esc) — отложить, прогресс сохранится
+        if (s.gift) {
+          const order = ['bow', 'paper', 'lid'];
+          const cur = order.indexOf(s.gift.stage);
+          const steps = [['🎀', 'Бант'], ['📜', 'Бумага'], ['📦', 'Крышка']]
+            .map(([ic, nm], i) => `<span class="gift-step ${i < cur ? 'done' : i === cur ? 'on' : ''}">${i < cur ? '✓' : ic} ${nm}</span>`)
+            .join('<span class="gift-sep">›</span>');
+          const what = { bow: 'зажми бант и потяни', paper: 'рви бумагу: води по коробке туда-сюда', lid: 'зажми крышку и сдвинь с коробки' }[s.gift.stage];
+          return `<h2>🎁 Подарок ${s.gift.index + 1}<span class="sub">${what}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Отложить подарок (Esc)')}<div class="dock-items gift-steps">${steps}</div></div>${live}`;
+        }
         // ёлка (0.9): звезда, подарки дня, игрушки из коробки — выбрать и кликнуть по ветке
         const star = s.star.broken ? `<button class="primary big hold-btn" title="Удерживай кнопку мыши или пробел" data-hold="star" data-act="hold">⭐ Поправить звезду (удерживай)</button>` : '';
-        const gifts = s.giftsLeft().map((i) => this._btn(`🎁 Подарок ${i + 1}`, 'openGift', [i], 'primary gift-btn', busy, 'Открыть подарок')).join('');
+        // 0.10: подарок открывают руками — кнопка только берёт его в руки; начатый показывает, сколько осталось
+        const gifts = s.giftsLeft().map((i) => {
+          const p = s.giftProgress(i);
+          return this._btn(`🎁 Подарок ${i + 1}${p > 0 ? ` · ${Math.round(p * 100)} %` : ''}`, 'startGift', [i], 'primary gift-btn', busy, p > 0 ? 'Продолжить открывать' : 'Взять в руки и открыть');
+        }).join('');
         const fallen = s.toys.filter((x) => x.fallen).length;
         const pick = fallen ? this._btn(`🧸 Поднять игрушки (${fallen})`, 'pickUpToys', [], 'danger', busy) : '';
         // 0.10: фишку зажимают и тянут на ветку (data-drag-toy); клик — взять в руку, клик по ветке — повесить

@@ -299,6 +299,7 @@ export function buildKitchen(scene) {
   // подарки (0.9: их открывают — campaign-view.js прячет открытые; клик по ним ведёт к ёлке)
   const giftColors = [0xd7262b, 0x2e7d32, 0xfdd835];
   k.gifts = [];
+  k.giftColors = giftColors; // 0.10: тот же цвет у подарка, который открывают руками (campaign-view.js)
   const giftRibbon = toon(0xffffff);
   for (let i = 0; i < 3; i++) {
     const gift = new THREE.Group();

@@ -9,6 +9,9 @@ export const CAMPAIGN = {
   maxFrameDt: 0.25,
   subStep: 0.05,
   walkSpeed: 2.2,
+  // 0.10: подарок открывают руками (st-tree.js, локальные метры подарка 24×24 см): бант — зажать в радиусе bowR и
+  // потянуть на bowPull; бумага — тереть по коробке (|x|,|z| ≤ box) путь tearPath; крышка — сдвинуть на lidSlide.
+  gift: { bowR: 0.07, bowPull: 0.1, maxStep: 0.2, box: 0.13, tearPath: 0.6, lidSlide: 0.12, reveal: 1.6 }, // reveal — сколько секунд камера держит открытый подарок
   keys: { reach: 0.75, frontZ: 1.7, urgentBias: 0.3 }, // 0.10: WASD — ходьба той же скоростью, к камере не дальше frontZ (ниже — ноги уходят за кадр 16:9); пробел — станция в пределах reach м, срочная «ближе» на urgentBias
   knifeDuration: 0.22, // кружочки: нож прошёл росчерком — короткий удар до доски
   // Доска: единица u = 1 см продукта, целевой кубик оливье — 1 см (st-board.js, raster-cut.js)
@@ -61,7 +64,6 @@ export const CAMPAIGN = {
     dilute: 3.5, // разбавить пересоленное
     feedCat: 1.5,
     playCat: 1,
-    openGift: 1, // развязать бант и открыть подарок
     pickToys: 1.2, // поднять сбитые котом игрушки
   },
 

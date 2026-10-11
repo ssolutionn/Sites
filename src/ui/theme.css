@@ -196,6 +196,11 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 #panel.station-panel .set-chip.done { background: rgba(240, 190, 80, 0.28); color: var(--gold); }
 #panel.station-panel .toy-chip { cursor: grab; touch-action: none; }
 #drag-ghost .toy-ghost { font-size: 30px; line-height: 1; }
+#panel.station-panel .gift-steps { align-items: center; gap: 6px; }
+#panel.station-panel .gift-step { padding: 6px 12px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.08); color: var(--on-glass-2); font-weight: 800; font-size: 14px; }
+#panel.station-panel .gift-step.on { background: var(--gold); color: var(--ink); }
+#panel.station-panel .gift-step.done { color: var(--gold); }
+#panel.station-panel .gift-sep { color: var(--on-glass-2); font-weight: 900; }
 #panel.station-panel button { background: rgba(255, 255, 255, 0.1); color: var(--on-glass); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); font-size: 14px; padding: 8px 14px; }
 #panel.station-panel button:hover { background: rgba(255, 255, 255, 0.18); }
 #panel.station-panel button.primary { background: linear-gradient(180deg, #36a06e, var(--pine-hi)); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18); color: #fff; }

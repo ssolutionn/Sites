@@ -6,6 +6,7 @@ import { batchStaticChildren } from './static-batch.js';
 import { screenGestureHit } from './pointer-target.js';
 import { toyModel, ghostify } from './toys.js';
 
+const GIFT_TOP = 0.2; // 0.10: верх подарка, который открывают руками (крышка под бумагой)
 const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
 import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, TREE_SLOTS } from '../campaign/layout.js';
 import { CAMPAIGN, PRODUCTS, DISH_ORDER, TOYS } from '../campaign/data.js';
@@ -467,6 +468,15 @@ export class CampaignView {
         pos.set(TREE.x + 0.05 + 1.27 * back, 1.4, TREE.z + 3.58 * back);
         return true;
       }
+      case 'c-gift0':
+      case 'c-gift1':
+      case 'c-gift2': {
+        // подарок сверху-спереди: бант, бумага и крышка крупно, место сдвинуть крышку — в кадре
+        const c = this._giftPos();
+        look.set(c.x, GIFT_TOP - 0.03, c.z + 0.03);
+        pos.set(c.x + 0.06, GIFT_TOP + 0.62 * back, c.z + 0.5 * back);
+        return true;
+      }
       case 'c-final': {
         const T = CLAYOUT.table;
         const a = this.time * 0.15;
@@ -485,6 +495,8 @@ export class CampaignView {
     if (!session || session.heroine.away) return 'c-overview';
     const p = session.panel;
     if (p === 'board') return 'board';
+    // 0.10: подарок в руках — крупно; номер в режиме, чтобы к следующему подарку камера перелетала плавно
+    if (p === 'tree' && (session.gift || session.giftShow)) return 'c-gift' + (session.gift ?? session.giftShow).index;
     if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove' || p === 'radio' || p === 'tree') return 'c-' + p;
     return 'c-overview';
   }
@@ -534,6 +546,12 @@ export class CampaignView {
       case 'stove': {
         const c = this.k.stoveCenter;
         return { c: c.clone(), y: c.y };
+      }
+      case 'tree': {
+        // 0.10: подарок в руках — плоскость его крышки, центр — середина банта
+        if (!this.session?.gift) return null;
+        const c = this._giftPos();
+        return { c: new THREE.Vector3(c.x, GIFT_TOP, c.z), y: GIFT_TOP };
       }
       case 'radio': {
         // вертикальная лицевая панель: x — вправо, z — вниз по панели (как на экране)
@@ -614,6 +632,10 @@ export class CampaignView {
     this.k.pot.puddle.scale.setScalar(0.001);
     this.potMove = null;
     this.particles?.clear();
+    if (this.giftRig) this.giftRig.visible = false;
+    this.giftPrize?.removeFromParent();
+    this.giftPrize = null;
+    this.toySwing?.clear();
     this.kibble.visible = false;
     this.ball.position.copy(this.ballHome);
     this.facing = Math.PI;
@@ -630,6 +652,22 @@ export class CampaignView {
           const at = this.k.tree.group.localToWorld(new THREE.Vector3(sl.x, sl.y, sl.z));
           this.particles.emit(at, TOYS[e.id]?.color ?? 0xffffff, 8, { spread: 0.04, up: 0.35, life: 0.8, size: 0.01, gravity: 0.4 });
           this.particles.emit(at, 0xffe08a, 8, { spread: 0.05, up: 0.5, life: 1, size: 0.008, gravity: -0.1 });
+        }
+        break;
+      }
+      case 'giftOpened': {
+        // 0.10: крышка снята — конфетти; баллы — золотые искры, игрушка — подпрыгивает над коробкой
+        const c = this._giftPos();
+        const at = new THREE.Vector3(c.x, GIFT_TOP + 0.05, c.z);
+        for (const col of [0xffe08a, 0xd7262b, 0x3fae49, 0x2f7fd0, 0xffffff]) this.particles.emit(at, col, 10, { spread: 0.08, up: 1.1, life: 1.3, size: 0.01, gravity: 2.4 });
+        if (e.prize?.kind === 'points') this.particles.emit(at, 0xf4c542, 24, { spread: 0.05, up: 1.4, life: 1.2, size: 0.014, gravity: 2.8 });
+        else if (e.prize?.id) {
+          this.giftPrize?.removeFromParent();
+          this.giftPrize = toyModel(e.prize.id);
+          this.giftPrize.scale.setScalar(TOY_SCALE);
+          this.giftPrize.position.copy(at);
+          this.giftPrize.userData.born = null;
+          this.root.add(this.giftPrize);
         }
         break;
       }
@@ -781,6 +819,19 @@ export class CampaignView {
     return best;
   }
 
+  /** Подарок под ёлкой под мышью (номер) или null — клик по нему берёт подарок в руки (0.10). */
+  giftAt(ndc) {
+    if (!ndc || !this.k.gifts?.length) return null;
+    const rc = this.sv._ray(ndc);
+    let best = null, bd = Infinity;
+    this.k.gifts.forEach((g, i) => {
+      if (!g.visible) return;
+      const h = rc.intersectObject(g, true)[0];
+      if (h && h.distance < bd) [best, bd] = [i, h.distance];
+    });
+    return best;
+  }
+
   /** Место на ёлке на экране (пиксели) — для проверок мышью. */
   treeSlotScreen(i) {
     const sl = TREE_SLOTS[i];
@@ -788,6 +839,113 @@ export class CampaignView {
     this.k.tree.group.localToWorld(v).project(this.sv.camera);
     const r = this.sv.renderer.domElement.getBoundingClientRect();
     return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+  }
+
+  // ---------- подарок руками (0.10) ----------
+  _giftPos() {
+    const i = this.session?.gift?.index ?? this.session?.giftShow?.index ?? 0;
+    return this.k.gifts?.[i]?.position ?? new THREE.Vector3(TREE.x + 0.6, 0, TREE.z + 0.5);
+  }
+
+  // Подарок, который открывают: вместо цельной модели под ёлкой — коробка, бумага по граням, лента, бант, крышка.
+  _buildGiftRig() {
+    const g = new THREE.Group();
+    const card = F.m(0xc9a26b, 0.8);
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.235, 0.165, 0.235), card);
+    inner.position.y = 0.0825;
+    // тёмное нутро: без него снятая крышка открывает «сплошной кирпич», а не пустую коробку
+    const hollow = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.004, 0.21), F.m(0x4a321a, 0.9));
+    hollow.position.y = 0.166;
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.03, 0.25), F.m(0xb98f58, 0.75));
+    lid.position.y = 0.18;
+    const paperMat = F.m(0xd7262b, 0.6);
+    const P = (w, h, d, x, y, z) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), paperMat);
+      m.position.set(x, y, z);
+      return m;
+    };
+    // порядок, в котором рвётся бумага: перед, правый бок, левый, верх, зад
+    const paper = [P(0.252, 0.2, 0.006, 0, 0.1, 0.123), P(0.006, 0.2, 0.252, 0.123, 0.1, 0), P(0.006, 0.2, 0.252, -0.123, 0.1, 0), P(0.252, 0.006, 0.252, 0, 0.2, 0), P(0.252, 0.2, 0.006, 0, 0.1, -0.123)];
+    const ribbonMat = F.m(0xffffff, 0.5);
+    const ribbons = new THREE.Group();
+    ribbons.add(new THREE.Mesh(new THREE.BoxGeometry(0.258, 0.206, 0.04), ribbonMat), new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.206, 0.258), ribbonMat));
+    ribbons.children.forEach((m) => (m.position.y = 0.1));
+    const bow = new THREE.Group();
+    for (const sgn of [-1, 1]) {
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.011, 8, 16), ribbonMat);
+      loop.rotation.set(Math.PI / 2, 0, sgn * 0.6);
+      loop.position.x = sgn * 0.025;
+      bow.add(loop);
+    }
+    bow.position.y = 0.214;
+    g.add(inner, hollow, lid, ...paper, ribbons, bow);
+    g.userData = { inner, lid, paper, paperMat, ribbons, bow, torn: 0 };
+    g.visible = false;
+    this.root.add(g);
+    return g;
+  }
+
+  _syncGift(s, t) {
+    // игрушка из подарка подпрыгивает и вращается, пока виден подарок
+    if (this.giftPrize) {
+      this.giftPrize.userData.born ??= t;
+      const a = t - this.giftPrize.userData.born;
+      const c = this._giftPos();
+      this.giftPrize.position.set(c.x, GIFT_TOP + 0.04 + Math.sin(Math.min(1, a / 0.6) * Math.PI * 0.5) * 0.14, c.z);
+      this.giftPrize.rotation.y = a * 3;
+      if (a > 1.6) {
+        this.giftPrize.removeFromParent();
+        this.giftPrize = null;
+      }
+    }
+    const g = s.panel === 'tree' ? s.gift : null;
+    const show = g ?? (s.giftShow && s.t < s.giftShow.until ? s.giftShow : null);
+    if (!show) {
+      if (this.giftRig) this.giftRig.visible = false;
+      return;
+    }
+    this.giftRig ??= this._buildGiftRig();
+    const rig = this.giftRig, u = rig.userData, c = this._giftPos();
+    const color = this.k.giftColors?.[show.index] ?? 0xd7262b;
+    if (u.index !== show.index) {
+      u.index = show.index;
+      u.paperMat.color.setHex(color);
+      u.torn = -1;
+    }
+    rig.visible = true;
+    rig.position.set(c.x, 0, c.z);
+    if (this.k.gifts?.[show.index]) this.k.gifts[show.index].visible = false;
+    const G = s.cfg.gift;
+    const stage = g?.stage ?? 'open';
+    // бант: тянется к руке и худеет; развязан — лента и бант исчезают
+    const bowP = stage === 'bow' ? Math.min(1, g.bow / G.bowPull) : 1;
+    u.bow.visible = u.ribbons.visible = stage === 'bow';
+    if (stage === 'bow') {
+      const h = g.grab ? { x: Math.max(-0.1, Math.min(0.1, g.grab.x)), z: Math.max(-0.1, Math.min(0.1, g.grab.z)) } : { x: 0, z: 0 };
+      u.bow.position.set(h.x * 0.6, 0.214 + bowP * 0.02, h.z * 0.6);
+      u.bow.scale.setScalar(1 - bowP * 0.45);
+      u.bow.rotation.y = bowP * 1.2;
+    }
+    // бумага: грани исчезают по мере трения, каждая — с клочками её цвета
+    const tearP = stage === 'bow' ? 0 : stage === 'paper' ? g.tear.progress : 1;
+    const torn = Math.min(u.paper.length, Math.floor(tearP * u.paper.length + 1e-6));
+    u.paper.forEach((m, i) => (m.visible = i >= torn));
+    if (u.torn >= 0 && torn > u.torn) {
+      const m = u.paper[torn - 1];
+      const at = rig.localToWorld(m.position.clone());
+      this.particles.emit(at, color, 12, { spread: 0.06, up: 0.6, life: 0.9, size: 0.012, gravity: 2.2 });
+    }
+    u.torn = torn;
+    // крышка: едет за рукой, приподнимается; открыт — лежит на полу рядом с коробкой
+    if (stage === 'open') {
+      u.lid.position.set(-0.25, 0.016, 0.15); // влево-вперёд: справа стоит соседний подарок
+      u.lid.rotation.set(0, 0.35, 0);
+    } else {
+      const lid = stage === 'lid' ? g.lid : { x: 0, z: 0 };
+      const k = Math.min(1, Math.hypot(lid.x, lid.z) / G.lidSlide);
+      u.lid.position.set(lid.x, 0.18 + k * 0.03, lid.z);
+      u.lid.rotation.set(lid.z * 1.5, 0, -lid.x * 1.5);
+    }
   }
 
   _syncTree(s, t) {
@@ -1203,6 +1361,7 @@ export class CampaignView {
     });
     g.light.intensity = broken && !fixing ? 0.9 : 2.2;
     this._syncTree(s, t);
+    this._syncGift(s, t);
     // кот безобразничает: ёлка качается, гирлянда дёргается
     const mis = s.cat.state === 'mischief' ? s.cat.kind : null;
     if (this.k.tree) this.k.tree.group.rotation.z = mis === 'star' || mis === 'toys' ? Math.sin(t * 17) * 0.035 : 0;

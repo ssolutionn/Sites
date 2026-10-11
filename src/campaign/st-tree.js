@@ -3,6 +3,7 @@
 import { TOYS, GIFTS, TOY_SETS, BAZAAR } from './data.js';
 import { TREE_SLOTS } from './layout.js';
 import { createRng } from '../game/rng.js';
+import { Scrubber } from './mechanics.js';
 
 export const TOY_IDS = Object.keys(TOYS);
 
@@ -33,6 +34,9 @@ export const treeMethods = {
     this.treeHand = null; // uid игрушки в руке
     const noGifts = this.practice || this.challenge;
     this.gifts = { opened: new Set(noGifts ? Array.from({ length: GIFTS.perDay }, (_, i) => i) : giftsOpened) };
+    this.giftShow = null;
+    this.gift = null; // 0.10: подарок в руках — { index, stage: 'bow' | 'paper' | 'lid', bow, tear, lid, grab, hold }
+    this.giftWork = {}; // начатые подарки: прогресс не сгорает, если отложить (Esc) и вернуться
   },
 
   /** Номера ещё не открытых подарков этого дня. */
@@ -40,19 +44,121 @@ export const treeMethods = {
     return Array.from({ length: GIFTS.perDay }, (_, i) => i).filter((i) => !this.gifts.opened.has(i));
   },
 
-  /** Открыть подарок под ёлкой (у ёлки). */
-  openGift(index) {
-    if (!this._isIdleAt('tree') || this.action) return false;
+  /** Взять подарок в руки (0.10) — крупный план подарка. Начатый раньше продолжается с того же места. */
+  startGift(index) {
+    if (!this._isIdleAt('tree') || this.action || this.gift) return false;
+    this.giftShow = null;
     if (!this.giftsLeft().includes(index)) return false;
-    return this._startAction('gift', this.cfg.durations.openGift, () => {
-      if (this.gifts.opened.has(index)) return;
-      this.gifts.opened.add(index);
-      const prize = giftPrize(this.day.id, index);
-      let uid = null;
-      if (prize.kind === 'points') this._earn(prize.n, 'Подарок под ёлкой', { banked: true });
-      else uid = this._addToy(prize.id);
-      this._emit('giftOpened', { dayId: this.day.id, index, prize, uid });
-    });
+    if (this.treeHand != null) this.treeHand = null; // игрушку из руки — обратно в коробку
+    const g = this.cfg.gift;
+    this.gift = this.giftWork[index] ??= { index, stage: 'bow', bow: 0, tear: new Scrubber({ need: g.tearPath, maxStep: g.maxStep }), lid: { x: 0, z: 0 }, grab: null, hold: null };
+    this._emit('giftStart', { index, stage: this.gift.stage });
+    return true;
+  },
+
+  /** Отложить подарок (Esc, «←»): он снова под ёлкой, прогресс сохранён. */
+  leaveGift() {
+    const g = this.gift;
+    if (!g) return false;
+    g.grab = null;
+    g.hold = null;
+    g.tear.release();
+    this.gift = null;
+    this._emit('giftLeave', { index: g.index });
+    return true;
+  },
+
+  /** Насколько открыт подарок: 0…1 по трём движениям (для полосы и чипа в доке). */
+  giftProgress(index) {
+    const g = this.giftWork[index];
+    if (!g) return 0;
+    const c = this.cfg.gift;
+    const part = g.stage === 'bow' ? Math.min(1, g.bow / c.bowPull) : g.stage === 'paper' ? g.tear.progress : Math.min(1, Math.hypot(g.lid.x, g.lid.z) / c.lidSlide);
+    return ({ bow: 0, paper: 1, lid: 2 }[g.stage] + part) / 3;
+  },
+
+  // Жесты подарка в локальных метрах (центр — середина крышки). Каждое движение — своим нажатием: дотянула бант
+  // и продолжаешь вести — бумага ещё не рвётся, нужно нажать заново. Отпустила — прогресс остался.
+  _giftPointer(type, x, z) {
+    const g = this.gift, c = this.cfg.gift;
+    const inBox = Math.abs(x) <= c.box && Math.abs(z) <= c.box;
+    if (type === 'up') {
+      g.grab = null;
+      g.hold = null;
+      g.tear.release();
+      return 'up';
+    }
+    if (type === 'down') {
+      g.hold = g.stage;
+      if (g.stage === 'bow') {
+        if (Math.hypot(x, z) > c.bowR) {
+          this.setHint('Сначала бант: зажми его посередине и потяни', 1.8);
+          g.hold = null;
+          return 'bow-miss';
+        }
+        g.grab = { x, z };
+        return 'grab';
+      }
+      if (g.stage === 'lid') {
+        if (!inBox) {
+          this.setHint('Зажми крышку и сдвинь её с коробки', 1.8);
+          g.hold = null;
+          return 'lid-miss';
+        }
+        g.grab = { x: x - g.lid.x, z: z - g.lid.z };
+        return 'grab';
+      }
+    }
+    if (g.hold !== g.stage) return 'idle';
+    if (g.stage === 'bow' && g.grab) {
+      const d = Math.min(Math.hypot(x - g.grab.x, z - g.grab.z), c.maxStep);
+      g.grab = { x, z };
+      g.bow += d;
+      this._giftTick(g, Math.min(1, g.bow / c.bowPull));
+      if (g.bow >= c.bowPull - 1e-9) this._giftStage(g, 'paper', 'giftBow');
+      return 'pull';
+    }
+    if (g.stage === 'paper') {
+      g.tear.move(x, z, inBox);
+      this._giftTick(g, g.tear.progress);
+      if (g.tear.complete) this._giftStage(g, 'lid', 'giftPaper');
+      return 'tear';
+    }
+    if (g.stage === 'lid' && g.grab) {
+      g.lid = { x: x - g.grab.x, z: z - g.grab.z };
+      this._giftTick(g, Math.min(1, Math.hypot(g.lid.x, g.lid.z) / c.lidSlide));
+      if (Math.hypot(g.lid.x, g.lid.z) >= c.lidSlide - 1e-9) this._finishGift(g.index);
+      return 'slide';
+    }
+    return 'idle';
+  },
+
+  // Отклик непрерывного жеста — щелчок на каждой четверти движения, а не сплошной гул.
+  _giftTick(g, p) {
+    const step = Math.floor(p * 4);
+    if (step > (g.tick ?? 0) && step < 4) this._emit('giftTick', { index: g.index, stage: g.stage, p });
+    g.tick = Math.max(g.tick ?? 0, step);
+  },
+
+  _giftStage(g, next, ev) {
+    g.stage = next;
+    g.grab = null;
+    g.tick = 0;
+    g.tear.release();
+    this._emit(ev, { index: g.index });
+  },
+
+  _finishGift(index) {
+    this.gift = null;
+    this.giftShow = { index, until: this.t + this.cfg.gift.reveal }; // камера ещё держит открытый подарок с призом
+    delete this.giftWork[index];
+    if (this.gifts.opened.has(index)) return;
+    this.gifts.opened.add(index);
+    const prize = giftPrize(this.day.id, index);
+    let uid = null;
+    if (prize.kind === 'points') this._earn(prize.n, 'Подарок под ёлкой', { banked: true });
+    else uid = this._addToy(prize.id);
+    this._emit('giftOpened', { dayId: this.day.id, index, prize, uid });
   },
 
   _addToy(id) {
@@ -130,7 +236,7 @@ export const treeMethods = {
 
   /** Взять игрушку из коробки в руку (повторно — положить обратно). */
   pickToy(uid) {
-    if (!this._isIdleAt('tree')) return false;
+    if (!this._isIdleAt('tree') || this.gift) return false;
     const t = this.toys.find((x) => x.uid === uid);
     if (!t || t.slot != null || t.fallen) return false;
     this.treeHand = this.treeHand === uid ? null : uid;
@@ -143,7 +249,7 @@ export const treeMethods = {
    * (перевесить можно следующим кликом).
    */
   treeClick(slot) {
-    if (!this._isIdleAt('tree') || this.action || !TREE_SLOTS[slot]) return false;
+    if (!this._isIdleAt('tree') || this.action || this.gift || !TREE_SLOTS[slot]) return false;
     const there = this.toys.find((t) => t.slot === slot);
     if (this.treeHand != null) {
       if (there) {

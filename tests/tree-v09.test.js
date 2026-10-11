@@ -2,7 +2,7 @@
 // их вешают на ёлку; кот от скуки сбивает игрушки. Всё это сохраняется между днями.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KitchenSession, arrive, waitAction, run } from './helpers-campaign.js';
+import { KitchenSession, arrive, waitAction, run, unwrapGift } from './helpers-campaign.js';
 import { CAMPAIGN, DAYS, GIFTS, TOYS } from '../src/campaign/data.js';
 import { TREE_SLOTS } from '../src/campaign/layout.js';
 import { giftPrize } from '../src/campaign/st-tree.js';
@@ -24,12 +24,9 @@ test('три подарка в день: открыть у ёлки, баллы 
   const s = new KitchenSession({ dayIndex: 0, seed: 1, bonus: 0 });
   arrive(s, 'tree');
   assert.deepEqual(s.giftsLeft(), [0, 1, 2]);
-  for (const i of [0, 1, 2]) {
-    assert.ok(s.openGift(i));
-    waitAction(s);
-  }
+  for (const i of [0, 1, 2]) assert.ok(unwrapGift(s, i)); // 0.10: руками — бант, бумага, крышка
   assert.deepEqual(s.giftsLeft(), []);
-  assert.equal(s.openGift(0), false);
+  assert.equal(s.startGift(0), false);
   const prizes = [0, 1, 2].map((i) => giftPrize(1, i));
   const pts = prizes.filter((p) => p.kind === 'points').reduce((a, p) => a + p.n, 0);
   assert.equal(s.bonus.points, pts);

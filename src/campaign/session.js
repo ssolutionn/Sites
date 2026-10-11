@@ -486,7 +486,7 @@ export class KitchenSession {
   /** Что держит пробел на открытой станции: гирлянда, звезда на ёлке или радио (когда сломаны). */
   holdKind() {
     if (this.panel === 'garland' && this.garland.broken) return 'garland';
-    if (this.panel === 'tree' && this.star.broken) return 'star';
+    if (this.panel === 'tree' && this.star.broken && !this.gift) return 'star';
     if (this.panel === 'radio' && this.radio.broken) return 'radio';
     return null;
   }
@@ -538,6 +538,8 @@ export class KitchenSession {
   }
 
   _leaveStation() {
+    if (this.gift) this.leaveGift();
+    this.giftShow = null;
     this._cancelAction();
     this._releaseHolds();
     this.pointerUp();
@@ -607,6 +609,11 @@ export class KitchenSession {
 
   closePanel() {
     if (!this.panel) return;
+    // подарок в руках: «назад» — отложить его под ёлку, а не уходить от ёлки
+    if (this.panel === 'tree' && this.gift) {
+      this.leaveGift();
+      return;
+    }
     this._cancelAction();
     this._releaseHolds();
     this.pointerUp();
@@ -655,7 +662,7 @@ export class KitchenSession {
     if (this.action) return false;
     if (kind === 'radio' && (!this._isIdleAt('radio') || !this.radio.broken)) return false;
     if (kind === 'garland' && (!this._isIdleAt('garland') || !this.garland.broken)) return false;
-    if (kind === 'star' && (!this._isIdleAt('tree') || !this.star.broken)) return false;
+    if (kind === 'star' && (!this._isIdleAt('tree') || !this.star.broken || this.gift)) return false;
     if (!(kind in this.holds)) return false;
     this.holds[kind] = true;
     return true;
@@ -726,6 +733,8 @@ export class KitchenSession {
         return this._radioPointer(type, x, z);
       case 'stove':
         return this._stovePointer(type, x, z);
+      case 'tree':
+        return this.gift ? this._giftPointer(type, x, z) : 'ignored';
       default:
         return 'ignored';
     }

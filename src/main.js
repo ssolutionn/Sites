@@ -120,7 +120,7 @@ async function boot() {
 
   const SOUND_OF = {
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
-    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'jingle', toyTaken: 'select', toysPicked: 'added', toyReturned: 'rotate', setComplete: 'success',
+    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'jingle', toyTaken: 'select', toysPicked: 'added', toyReturned: 'rotate', setComplete: 'success', giftStart: 'select', giftTick: 'rustle', giftBow: 'added', giftPaper: 'bag',
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
@@ -471,9 +471,12 @@ async function boot() {
     return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
   }
   const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'radio', 'stove']);
+  // рабочий крупный план: станции с жестами и подарок в руках у ёлки (0.10)
+  const handsOn = () => session && (CLOSE.has(session.panel) || (session.panel === 'tree' && !!session.gift));
   function closeupActive() {
-    return session && CLOSE.has(session.panel) && !session.heroine.target && sv.camT >= 0.95;
+    return handsOn() && !session.heroine.target && sv.camT >= 0.95;
   }
+  const GIFT_DENY = new Set(['bow-miss', 'lid-miss']);
   canvas.addEventListener('pointermove', (e) => {
     lastNdc = ndcOf(e);
     if (closeupActive()) {
@@ -490,7 +493,7 @@ async function boot() {
         return;
       }
     }
-    if (session?.panel === 'tree') {
+    if (session?.panel === 'tree' && !session.gift) {
       view.treeHover = view.treeSlotAt(lastNdc);
       canvas.style.cursor = view.treeHover != null ? 'pointer' : '';
       return;
@@ -506,7 +509,7 @@ async function boot() {
     if (!session || mode !== 'kitchen') return;
     const ndc = ndcOf(e);
     lastNdc = ndc;
-    if (session.panel && CLOSE.has(session.panel)) {
+    if (handsOn()) {
       // клик во время перехода камеры не режет в неожиданной точке
       if (!closeupActive()) return;
       canvas.setPointerCapture?.(e.pointerId);
@@ -515,12 +518,18 @@ async function boot() {
       lastLocal = p;
       view.pointerLocal = p;
       const r = session.pointer('down', p.x, p.z);
-      if (r === 'too-close' || r === 'limit') sound.play('deny');
+      if (r === 'too-close' || r === 'limit' || GIFT_DENY.has(r)) sound.play('deny');
       return;
     }
     if (session.panel === 'table' || session.panel === 'phone') return;
     // ёлка крупным планом: клик по ветке — повесить игрушку из руки; зажать висящую — снять и тянуть на другую ветку
     if (session.panel === 'tree' && sv.camT >= 0.95) {
+      // подарок под ёлкой — взять в руки и открыть
+      const gift = view.giftAt(ndc);
+      if (gift != null && session.giftsLeft().includes(gift)) {
+        act('startGift', gift);
+        return;
+      }
       const slot = view.treeSlotAt(ndc);
       if (slot == null) return;
       const empty = session.treeHand == null;

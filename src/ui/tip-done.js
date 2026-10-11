@@ -28,7 +28,7 @@ export const TIP_DONE = {
   radioTune: ['radioTuned'],
   garland: ['garlandFixed'],
   star: ['starFixed'],
-  gifts: ['giftOpened'],
+  gifts: ['giftStart', 'giftOpened'],
   catBored: ['catPlay', 'catMischief'],
   stove: ['potPlaced', 'heat'],
   fridge: ['taken'],
@@ -41,6 +41,7 @@ export const TIP_DONE = {
   delivery: ['bagArrived'],
   money: ['orderPlaced'],
   treeDecor: ['toyHung'],
+  giftOpen: ['giftBow', 'giftOpened'],
 };
 
 /** Закрывает ли событие type подсказку topic. */
