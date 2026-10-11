@@ -24,7 +24,7 @@ const checks = [];
 const viaApi = []; // где пришлось обойти интерфейс вызовом session (честно перечисляется в итоге)
 const overlaps = new Set(); // элементы, перехватившие нажатие поверх canvas
 const check = (name, ok, extra = '') => { checks.push(`${ok ? 'OK  ' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`); console.log(checks.at(-1)); };
-const shot = (n) => page.screenshot({ path: `${out}/${n}_${W}.png` });
+const shot = (n) => page.screenshot({ path: `${out}/${n}_${W}.png`, timeout: 120000 }); // SwiftShader в облаке снимает кадр дольше 30 с
 const S = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
 async function waitFor(fn, timeout = 20000, arg) {
