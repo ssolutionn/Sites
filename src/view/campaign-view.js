@@ -1,11 +1,14 @@
 // Отображение дня кампании поверх общей сцены (кухня, героиня, кот, доска).
 // Только читает KitchenSession; ничего не начисляет.
 import * as THREE from 'three';
+import { instantiateModel } from './assets.js';
+import { batchStaticChildren } from './static-batch.js';
+import { screenGestureHit } from './pointer-target.js';
 import { toyModel, ghostify } from './toys.js';
 
 const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
 import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, TREE_SLOTS } from '../campaign/layout.js';
-import { PRODUCTS, DISH_ORDER } from '../campaign/data.js';
+import { CAMPAIGN, PRODUCTS, DISH_ORDER } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
 import { animateHeroine, setExpression } from './heroine.js';
@@ -170,8 +173,9 @@ export class CampaignView {
     this.root.add(fridgeHit);
     tag(fridgeHit, 'fridge');
     for (const o of k.gifts ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = 'tree', this.clickables.push(q))); // подарки ведут к ёлке
-    for (const id of ['radio', 'garland', 'tree', 'phone', 'bowl', 'board']) for (const o of k.stations[id] ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = id, this.clickables.push(q)));
     this.radioView = new RadioView(k.radio);
+    // Register the final radio meshes, after static parts have been batched.
+    for (const id of ['radio', 'garland', 'tree', 'phone', 'bowl', 'board']) for (const o of k.stations[id] ?? []) o.traverse((q) => q.isMesh && (q.userData.cstation = id, this.clickables.push(q)));
 
     // кукуруза у миски
     this.cornJar = F.jar(0xf4c430, 0x2f8f3a, 0.09, 0.034);
@@ -227,11 +231,12 @@ export class CampaignView {
       leg.position.set((x * T.w) / 2.4, (T.h - 0.04) / 2, (z * T.d) / 2.4);
       table.add(leg);
     }
+    const tableFlame = new THREE.MeshBasicMaterial({ color: 0xffd36b });
     for (const x of [-0.42, 0.42]) {
       const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 12), F.m(0xfff6e0, 0.6));
       candle.position.set(x, T.h + 0.066, 0.47);
       table.add(candle);
-      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.01, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd36b }));
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.01, 8, 6), tableFlame);
       flame.scale.y = 1.8;
       flame.position.set(x, T.h + 0.14, 0.47);
       table.add(flame);
@@ -239,6 +244,7 @@ export class CampaignView {
     this.tableLight = new THREE.PointLight(0xffc27a, 0.0, 2.5, 1.5);
     this.tableLight.position.set(0, T.h + 0.6, 0);
     table.add(this.tableLight);
+    batchStaticChildren(table);
     this.root.add(table);
     tag(table, 'table');
     this.tableDishes = new THREE.Group();
@@ -345,14 +351,16 @@ export class CampaignView {
     const cb = CLAYOUT.catBowl;
     this.catBowl = new THREE.Group();
     this.catBowl.position.set(cb.x, 0, cb.z);
-    const dish = new THREE.Mesh(new THREE.LatheGeometry([0.05, 0.075, 0.085, 0.09].map((r, i) => new THREE.Vector2(r, i * 0.014)), 24), F.m(0x2f7fd0, 0.4));
+    const dish = instantiateModel('cat_bowl') ?? new THREE.Mesh(new THREE.LatheGeometry([0.05, 0.075, 0.085, 0.09].map((r, i) => new THREE.Vector2(r, i * 0.014)), 24), F.m(0x2f7fd0, 0.4));
     this.catBowl.add(dish);
     this.kibble = new THREE.Group();
+    this.kibble.position.y = 0.014; // keep the shrinking portion above the bowl's inner floor
     for (let i = 0; i < 12; i++) {
       const b = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), F.m(0x9a5b2a, 0.7));
-      b.position.set(Math.cos(i * 2.1) * 0.035 * (i % 3) / 2, 0.03 + (i % 2) * 0.006, Math.sin(i * 2.1) * 0.035 * (i % 3) / 2);
+      b.position.set(Math.cos(i * 2.1) * 0.035 * (i % 3) / 2, 0.014 + (i % 2) * 0.006, Math.sin(i * 2.1) * 0.035 * (i % 3) / 2);
       this.kibble.add(b);
     }
+    batchStaticChildren(this.kibble);
     this.kibble.visible = false;
     this.catBowl.add(this.kibble);
     this.root.add(this.catBowl);
@@ -598,7 +606,7 @@ export class CampaignView {
       p.ringKey = '';
     }
     this.carryKey = null;
-    this.carryGroup.clear();
+    for (const child of this.carryGroup.children.slice()) F.disposeGroup(child);
     this.carryGroup.visible = false;
     this.k.pot.puddle.scale.setScalar(0.001);
     this.potMove = null;
@@ -730,7 +738,7 @@ export class CampaignView {
       segs: [
         { from, to: floor.clone(), dur: Math.max(0.8, from.distanceTo(floor) / 1.6) },
         { from: floor.clone(), to: top.clone(), dur: 0.35, arc: 0.3 },
-        { from: top.clone(), to: top.clone(), dur: 999, mode: 'reach', face },
+        { from: top.clone(), to: top.clone(), dur: 999, mode: kind === 'spill' ? 'knock' : 'reach', face },
       ],
     };
   }
@@ -835,7 +843,10 @@ export class CampaignView {
     if (!ndc) return false;
     const rc = this.sv._ray(ndc);
     const c = this.sv.cat.getWorldPosition(new THREE.Vector3()); // кот вложен в группу кухни со сдвигом — нужна мировая точка
-    return rc.ray.intersectsSphere(new THREE.Sphere(c.setY(c.y + 0.15), 0.34));
+    c.y += 0.15;
+    if (rc.ray.intersectsSphere(new THREE.Sphere(c,0.34))) return true;
+    // A distant cat needs enough screen space for the same deliberate hand wave.
+    return screenGestureHit(ndc,c.project(this.sv.camera),this.sv.camera.aspect,this.session?.cfg.cat.wave.hitRadius ?? CAMPAIGN.cat.wave.hitRadius);
   }
 
   _catTo(target, mode, face) {
@@ -897,7 +908,7 @@ export class CampaignView {
     cat.position.copy(p);
     if (seg.mode === 'sit' && cat.userData.loot.visible) cat.userData.loot.visible = false;
     const sleepy = seg.mode === 'sit' && this.session?.cat.state === 'home' && this.session.catCalm?.();
-    animateCat(cat, sleepy ? 'sleep' : seg.mode ?? 'walk', time, moving ? 1 : 0);
+    animateCat(cat, sleepy ? 'sleep' : seg.arc ? 'jump' : seg.mode ?? 'walk', time, moving ? 1 : 0);
   }
 
   // ---------- кадр ----------
@@ -944,6 +955,7 @@ export class CampaignView {
     const worried = s.urgentCount() > 0 || s.alerts.length >= 3;
     setExpression(sv.heroine, worried);
     const hp = this._pose(s);
+    sv.heroine.userData.carrying = !!s.carry;
     animateHeroine(sv.heroine, hp.pose, t, hp.progress);
     if (mode === 'final') {
       sv.heroine.visible = true;
@@ -1114,15 +1126,15 @@ export class CampaignView {
     const key = c ? `${c.product}:${c.qty}:${c.peeled ? 1 : 0}` : null;
     if (key !== this.carryKey) {
       this.carryKey = key;
-      this.carryGroup.clear();
+      for (const child of this.carryGroup.children.slice()) F.disposeGroup(child);
       if (c) {
         const P = PRODUCTS[c.product] ?? {};
         const col = c.peeled ? P.color ?? 0xf0d28a : c.product === 'egg' ? 0xf3ead8 : P.peel ?? P.color ?? 0xd0b080;
         const n = Math.min(4, c.qty ?? 1);
         const egg = c.product === 'egg';
         for (let i = 0; i < n; i++) {
-          const m = new THREE.Mesh(new THREE.SphereGeometry(egg ? 0.028 : 0.034, 10, 8), new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 }));
-          m.scale.set(egg ? 0.85 : 1.15, egg ? 1.1 : 0.85, 1);
+          const m = instantiateModel(c.peeled ? `${c.product}_peeled` : c.product) ?? new THREE.Mesh(new THREE.SphereGeometry(egg ? 0.028 : 0.034, 10, 8), new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 }));
+          if (!m.userData.modelId) m.scale.set(egg ? 0.85 : 1.15, egg ? 1.1 : 0.85, 1);
           m.position.set((i - (n - 1) / 2) * 0.06, 0.02 * (i % 2), 0);
           m.castShadow = true;
           this.carryGroup.add(m);
@@ -1720,8 +1732,9 @@ export class CampaignView {
         const egg = cool.product === 'egg';
         const col = PRODUCTS[cool.product]?.peel ?? PRODUCTS[cool.product]?.color ?? 0xe0c080;
         for (let i = 0; i < 5; i++) {
-          const m = new THREE.Mesh(new THREE.SphereGeometry(egg ? 0.024 : 0.032, 12, 9), new THREE.MeshStandardMaterial({ color: col, roughness: 0.6 }));
-          m.scale.set(egg ? 0.85 : 1.2, egg ? 1.15 : 0.85, 1);
+          const m = instantiateModel(cool.product === 'potato' ? 'potato_peeled' : cool.product) ?? new THREE.Mesh(new THREE.SphereGeometry(egg ? 0.024 : 0.032, 12, 9), new THREE.MeshStandardMaterial({ color: col, roughness: 0.6 }));
+          if (!m.userData.modelId) m.scale.set(egg ? 0.85 : 1.2, egg ? 1.15 : 0.85, 1);
+          else m.scale.setScalar(egg ? 1 : .7);
           m.position.set(Math.cos(i * 1.3) * 0.045, 0.035 + (i % 2) * 0.02, Math.sin(i * 1.3) * 0.045);
           g.add(m);
         }

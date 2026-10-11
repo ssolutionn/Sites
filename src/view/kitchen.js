@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { LAYOUT } from '../game/layout.js';
 import { tex, toon } from './textures.js';
+import { instantiateModel } from './assets.js';
+import { batchStaticChildren } from './static-batch.js';
 
 const GREEN_TOP = 0x3f9a4f;
 
@@ -35,20 +37,24 @@ export function buildKitchen(scene) {
   k.floor = floor;
 
   // стены
+  const walls = new THREE.Group();
+  walls.name = 'room_walls';
   const wallMat = toon(0xffffff, { map: tex.wall });
   const back = new THREE.Mesh(new THREE.PlaneGeometry(9, 3.4), wallMat);
   back.position.set(0, 1.7, -2.62);
   back.receiveShadow = true;
-  scene.add(back);
+  walls.add(back);
   const left = new THREE.Mesh(new THREE.PlaneGeometry(6, 3.4), wallMat);
   left.rotation.y = Math.PI / 2;
   left.position.set(-3.6, 1.7, 0.3);
   left.receiveShadow = true;
-  scene.add(left);
+  walls.add(left);
   const right = left.clone();
   right.rotation.y = -Math.PI / 2;
   right.position.x = 3.6;
-  scene.add(right);
+  walls.add(right);
+  batchStaticChildren(walls);
+  scene.add(walls);
   // плинтус
   const skirting = box(9, 0.08, 0.03, toon(0xb57a45), { cast: false });
   skirting.position.set(0, 0.04, -2.6);
@@ -75,6 +81,8 @@ export function buildKitchen(scene) {
 
   // задняя столешница
   const bc = LAYOUT.backCounter;
+  const backModel = instantiateModel('back_counter');
+  if (backModel) { backModel.position.set(.15, 0, bc.z); scene.add(backModel); } else {
   const backBase = box(5.6, bc.h - 0.05, bc.d, woodMat);
   backBase.position.set(0.15, (bc.h - 0.05) / 2, bc.z);
   scene.add(backBase);
@@ -88,14 +96,17 @@ export function buildKitchen(scene) {
     scene.add(hnd);
   }
 
+  }
+
   // плита
   const st = LAYOUT.stations.stove;
   const stove = new THREE.Group();
   const stoveTop = box(0.62, 0.03, 0.6, toon(0x2e2e34));
   stoveTop.position.set(0, bc.h + 0.005, 0);
   stove.add(stoveTop);
+  const burnerMat = toon(0x151518);
   for (const [x, z] of [[-0.15, -0.14], [0.15, -0.14], [-0.15, 0.14], [0.15, 0.14]]) {
-    const burner = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.012, 20), toon(0x151518));
+    const burner = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.012, 20), burnerMat);
     burner.position.set(x, bc.h + 0.025, z);
     stove.add(burner);
   }
@@ -118,6 +129,7 @@ export function buildKitchen(scene) {
     stove.add(knob);
     k.stoveKnobs.push(knob);
   }
+  batchStaticChildren(stove);
   stove.position.set(st.anchor.x, 0, bc.z);
   scene.add(stove);
   // вытяжка
@@ -199,6 +211,8 @@ export function buildKitchen(scene) {
 
   // холодильник с магнитом
   const fridge = new THREE.Group();
+  const fridgeModel = instantiateModel('fridge');
+  if (fridgeModel) fridge.add(fridgeModel); else {
   const fBody = box(0.85, 2.0, 0.75, toon(0xe9edf0));
   fBody.position.y = 1.0;
   fridge.add(fBody);
@@ -208,11 +222,13 @@ export function buildKitchen(scene) {
   const fHandle = box(0.03, 0.4, 0.04, metal);
   fHandle.position.set(-0.36, 1.55, 0.4);
   fridge.add(fHandle);
+
+  }
   const magnet = new THREE.Mesh(new THREE.CircleGeometry(0.11, 32), new THREE.MeshBasicMaterial({ map: tex.logo, transparent: true }));
-  magnet.position.set(0.1, 1.65, 0.381);
+  magnet.position.set(0.1, 1.65, fridgeModel ? .409 : .381);
   fridge.add(magnet);
   const note = box(0.14, 0.18, 0.005, toon(0xfff6b0));
-  note.position.set(0.15, 1.0, 0.38);
+  note.position.set(0.15, 1.0, fridgeModel ? .410 : .38);
   note.rotation.z = 0.08;
   fridge.add(note);
   fridge.position.set(3.05, 0, -2.15);
@@ -234,11 +250,12 @@ export function buildKitchen(scene) {
     treeG.add(cone);
   }
   const ornColors = [0xe53935, 0xfdd835, 0x1e88e5, 0xffffff, 0xff7043];
+  const ornamentMats = ornColors.map((c) => toon(c, { emissive: c, emissiveIntensity: .25 }));
   for (let i = 0; i < 18; i++) {
     const lvl = i % 4;
     const a = i * 2.4;
     const r = 0.45 - lvl * 0.1;
-    const o = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), toon(ornColors[i % ornColors.length], { emissive: ornColors[i % ornColors.length], emissiveIntensity: 0.25 }));
+    const o = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), ornamentMats[i % ornColors.length]);
     o.position.set(Math.cos(a) * r, 0.45 + lvl * 0.32, Math.sin(a) * r);
     treeG.add(o);
   }
@@ -273,6 +290,7 @@ export function buildKitchen(scene) {
   const topper = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.12, 8), toon(0xe6b548));
   topper.position.y = 1.83;
   treeG.add(topper);
+  batchStaticChildren(treeG, new Set([star]));
   treeG.position.set(-3.0, 0, -1.9);
   scene.add(treeG);
   k.tree = { group: treeG, star, glow: starGlow };
@@ -281,15 +299,17 @@ export function buildKitchen(scene) {
   // подарки (0.9: их открывают — campaign-view.js прячет открытые; клик по ним ведёт к ёлке)
   const giftColors = [0xd7262b, 0x2e7d32, 0xfdd835];
   k.gifts = [];
+  const giftRibbon = toon(0xffffff);
   for (let i = 0; i < 3; i++) {
     const gift = new THREE.Group();
     gift.add(box(0.24, 0.18, 0.24, toon(giftColors[i])));
-    gift.add(box(0.25, 0.19, 0.04, toon(0xffffff)));
-    gift.add(box(0.04, 0.19, 0.25, toon(0xffffff)));
-    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.012, 8, 16), toon(0xffffff));
+    gift.add(box(0.25, 0.19, 0.04, giftRibbon));
+    gift.add(box(0.04, 0.19, 0.25, giftRibbon));
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.012, 8, 16), giftRibbon);
     bow.position.y = 0.1;
     bow.rotation.x = Math.PI / 2;
     gift.add(bow);
+    batchStaticChildren(gift);
     gift.position.set(-2.65 + i * 0.28, 0.09, -1.45 + (i % 2) * 0.15);
     gift.rotation.y = i * 0.5;
     scene.add(gift);
@@ -337,6 +357,8 @@ export function buildKitchen(scene) {
 
   // остров
   const isl = LAYOUT.island;
+  const islandModel = instantiateModel('island');
+  if (islandModel) { islandModel.position.set(isl.x, 0, isl.z); scene.add(islandModel); } else {
   const islBase = box(isl.w, isl.h - 0.05, isl.d, woodMat);
   islBase.position.set(isl.x, (isl.h - 0.05) / 2, isl.z);
   scene.add(islBase);
@@ -348,17 +370,23 @@ export function buildKitchen(scene) {
     hnd.position.set(-1.35 + i * 0.9, 0.72, isl.z + isl.d / 2 + 0.01);
     scene.add(hnd);
   }
+
+  }
   k.islandTop = isl.h;
 
   // доска
   const bs = LAYOUT.stations.board.anchor;
   const board = new THREE.Group();
+  const boardModel = instantiateModel('board');
+  if (boardModel) board.add(boardModel); else {
   const boardMesh = box(0.6, 0.03, 0.4, toon(0xffffff, { map: tex.board, roughness: 0.62 }));
   boardMesh.position.y = 0.015;
   board.add(boardMesh);
   const boardEdge = box(0.6, 0.012, 0.4, toon(0xb67b45));
   boardEdge.position.y = 0.002;
   board.add(boardEdge);
+
+  }
   board.position.set(bs.x, isl.h, bs.z);
   scene.add(board);
   k.boardTop = isl.h + 0.03;
@@ -430,8 +458,9 @@ export function buildKitchen(scene) {
   const casing = box(.48,.27,.16,toon(0x9c5134));
   const face = box(.44,.23,.012,toon(0xf0ddaf)); face.position.z=.085;
   radio.add(casing,face);
+  const grilleMaterial = toon(0x4b392c);
   for(let i=0;i<9;i++) {
-    const grill=box(.009,.15,.010,toon(0x4b392c));grill.position.set(-.17+i*.019,0,.099);radio.add(grill);
+    const grill=box(.009,.15,.010,grilleMaterial);grill.position.set(-.17+i*.019,0,.099);radio.add(grill);
   }
   const scale=box(.12,.047,.010,toon(0x486c5b));scale.position.set(.135,.07,.10);radio.add(scale);
   const oldScale=[scale]; // в кампании шкалу заменяет RadioView (src/view/radio3d.js)
@@ -474,15 +503,20 @@ export function buildKitchen(scene) {
   k.plate = { group: plate, slices: plateSlices };
 
   // декор на острове: свечи и ветки
+  const candleDecor = new THREE.Group();
+  candleDecor.name = 'island_candles';
+  const candleMat = toon(0xd7262b), flameMat = new THREE.MeshBasicMaterial({ color: 0xffd36b });
   for (let i = 0; i < 2; i++) {
-    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12, 12), toon(0xd7262b));
+    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12, 12), candleMat);
     candle.position.set(0.2 + i * 0.07, isl.h + 0.06, 0.85);
-    scene.add(candle);
-    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd36b }));
+    candleDecor.add(candle);
+    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), flameMat);
     flame.scale.set(1, 1.8, 1);
     flame.position.set(0.2 + i * 0.07, isl.h + 0.14, 0.85);
-    scene.add(flame);
+    candleDecor.add(flame);
   }
+  batchStaticChildren(candleDecor);
+  scene.add(candleDecor);
 
   // кольца-подсветки станций на полу
   const ringGeo = new THREE.RingGeometry(0.2, 0.26, 40);

@@ -1,11 +1,11 @@
 # Экскурсия по коду «Симулятора новогодней суеты»
 
 Для внешнего ревьюера, который открывает репозиторий впервые. Репозиторий: https://github.com/ssolutionn/Sites,
-ветка `claude/technical-specification-mx99wl`, версия `0.9.0` (`package.json`). Написано по коду на 2026-10-11;
+ветка `codex/finish-v09`, версия `0.9.1` (`package.json`). Написано по коду на 2026-10-11;
 номера строк не приводятся, потому что код быстро меняется: ориентируйтесь на имена файлов и функций.
 
 Рядом: `docs/CHATGPT_BRIEF.md` — что за проект, правила и готовые запросы для ревьюера; `docs/IMPROVEMENTS.md` —
-наш собственный план улучшений до релиза; `docs/HANDOFF_PLAN.md` — исторический план 0.8; текущая приёмка — `docs/QA_v09.md`.
+наш собственный план улучшений до релиза; `docs/HANDOFF_PLAN.md` — исторический план 0.8; текущая приёмка — `docs/QA_v09.md` и `docs/QA_models_v091.md`.
 Пакет одним файлом и архивом собирает `node scripts/review-bundle.mjs`.
 
 ---
@@ -22,15 +22,18 @@
 
 | Команда | Что делает |
 |---|---|
-| `npm install` | ставит three, vite, electron, @electron/packager |
+| `git lfs pull`, затем `npm ci` | получает бинарные исходники и ставит зависимости по lockfile |
 | `npm run dev` | dev-сервер Vite, сам откроет браузер (обычно http://localhost:5173) |
-| `npm test` | `node --test tests/*.test.js` — около 190 тестов логики (сейчас 185), примерно 2 с, без браузера |
-| `npm run pacing` | `scripts/pacing-sim.mjs`: проходит все 7 дней через API сессии с допущениями о темпе игрока и печатает время по дням. Сейчас кампания занимает ≈45 мин у уверенного игрока и ≈59 мин при первом прохождении |
-| `npx vite build` (= `npm run build`) | сборка в `dist/` из трёх страниц: `index.html` (кампания), `classic.html` (старый режим «Оливье за 5 минут» из 0.3.1), `gallery.html` (3D-галерея героини и кота). Открывать через `npx vite preview`, а не двойным щелчком |
+| `npm test` | `node --test tests/*.test.js` — 258 тестов логики и представления, примерно 2 с, без браузера |
+| `npm run pacing` | `scripts/pacing-sim.mjs`: проходит все 7 дней через API сессии с допущениями о темпе игрока и печатает время по дням. Сейчас кампания занимает ≈49:41 у уверенного игрока и ≈64:21 при первом прохождении |
+| `npm run build` | проверка/копирование GLB и сборка в `dist/` из четырёх страниц: `index.html` (кампания), `classic.html` (старый режим «Оливье за 5 минут» из 0.3.1), `gallery.html` (пара персонажей), `model-gallery.html` (все 27 моделей и клипы). Открывать через `npx vite preview`, а не двойным щелчком |
 | `npm run desktop` | собрать и сразу открыть в Electron: `desktop/main.cjs` отдаёт `dist/` по своему протоколу `app://` |
 | `npm run desktop:mac` / `npm run desktop:win` | упаковка через `desktop/build.mjs` в `build/desktop-out/`. То же самое делает CI `.github/workflows/desktop-build.yml` на каждый push |
 | `npm run calibrate` | `scripts/calibrate-trims.mjs` — подбор допуска краевых обрезков (см. п. 5) |
-| `npm run export:models` | выгружает процедурных героиню и кота в `public/models/*.glb` |
+| `npm run export:models` | исторический экспорт процедурных героини и кота в `public/models/*.glb` |
+| `npm run models:sync` | проверяет 27 GLB и обновляет манифест/public-копию; также перед dev/build |
+| `npm run models:build` | пересоздаёт `.blend`, GLB и текстуры через Blender 4.3.2 |
+| `npm run models:preview` | создаёт самостоятельный HTML со всеми моделями |
 
 Браузерные сценарии `scripts/*.mjs` работают через Playwright, которого **нет в `package.json`**. Поставьте его отдельно
 (`npm i -D playwright && npx playwright install chromium`) или укажите путь в переменной `PW`. Пример:
@@ -251,3 +254,21 @@ KitchenSession  (session.js + st-board/bowl/tray/home/phone/extra/radio.js)  ←
 `tests/phone-v09.test.js`, `wash-v09.test.js`, `review-v09.test.js` проверяют новые функции и найденные регрессии. `scripts/v09-shots.mjs` включает телефон и мытьё; `campaign-e2e.mjs d1` обновлён под холодильник, сырую картошку, четыре крутилки и жест кота.
 
 Локальные навыки Codex подключены в `.agents/skills/` к исходникам `.claude/skills/`, описание — `.agents/SKILLS.md`. Решение владельца о будущем арте: сохранять мультяшный стиль кухни и персонажей, но делать продукты реалистичнее по форме, срезам, кожуре и фактуре.
+
+
+## 3D-ресурсы 0.9.1
+
+Исходники — `assets/` (Git LFS), контракт — `docs/asset-contract.md`, генераторы —
+`scripts/art/`. `scripts/model-contract.mjs` проверяет glTF, геометрию и бюджеты;
+`sync-models.mjs` переносит только GLB/манифест в игнорируемую `public/assets/models/`.
+`main.js` ждёт `loadModels` до создания сцены; `assets.js` клонирует сцену вместе
+со скелетом и предоставляет анимации/сокеты. `actor-poses.js` связывает состояние
+игры с клипом. Ошибка одной модели сохраняет её процедурный вариант.
+
+В игре используются 12 моделей из 27; 15 пока кандидаты. Динамические куски,
+кастрюли, основная миска, плита и мойка сохраняют своё процедурное устройство.
+`static-batch.js` объединяет только разрешённые статичные детали с одинаковым
+материалом. `pointer-target.js` добавляет экранный допуск жесту над котом.
+Подсказки опасности имеют приоритет перед автоматической подсказкой подарков.
+Проверки и пределы приёмки — `docs/QA_models_v091.md`; следующему разработчику —
+`README_FOR_CLAUDE.md`.

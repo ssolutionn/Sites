@@ -1,0 +1,316 @@
+{
+  "results": [
+    {
+      "id": "cat",
+      "clips": [
+        {
+          "clip": "eat",
+          "finite": true
+        },
+        {
+          "clip": "idle",
+          "finite": true
+        },
+        {
+          "clip": "jump_up",
+          "finite": true
+        },
+        {
+          "clip": "knock_over",
+          "finite": true
+        },
+        {
+          "clip": "meow",
+          "finite": true
+        },
+        {
+          "clip": "reach",
+          "finite": true
+        },
+        {
+          "clip": "sit",
+          "finite": true
+        },
+        {
+          "clip": "sleep",
+          "finite": true
+        },
+        {
+          "clip": "steal_run",
+          "finite": true
+        },
+        {
+          "clip": "walk",
+          "finite": true
+        }
+      ]
+    },
+    {
+      "id": "girl",
+      "clips": [
+        {
+          "clip": "carry",
+          "finite": true
+        },
+        {
+          "clip": "celebrate",
+          "finite": true
+        },
+        {
+          "clip": "cut",
+          "finite": true
+        },
+        {
+          "clip": "grate",
+          "finite": true
+        },
+        {
+          "clip": "idle",
+          "finite": true
+        },
+        {
+          "clip": "open_fridge",
+          "finite": true
+        },
+        {
+          "clip": "phone_answer",
+          "finite": true
+        },
+        {
+          "clip": "reach_up",
+          "finite": true
+        },
+        {
+          "clip": "shoo",
+          "finite": true
+        },
+        {
+          "clip": "stir",
+          "finite": true
+        },
+        {
+          "clip": "stove",
+          "finite": true
+        },
+        {
+          "clip": "taste",
+          "finite": true
+        },
+        {
+          "clip": "unpack",
+          "finite": true
+        },
+        {
+          "clip": "walk",
+          "finite": true
+        },
+        {
+          "clip": "wash",
+          "finite": true
+        },
+        {
+          "clip": "wipe",
+          "finite": true
+        },
+        {
+          "clip": "work",
+          "finite": true
+        }
+      ]
+    },
+    {
+      "id": "beet",
+      "clips": []
+    },
+    {
+      "id": "bread",
+      "clips": []
+    },
+    {
+      "id": "carrot",
+      "clips": []
+    },
+    {
+      "id": "cheese",
+      "clips": []
+    },
+    {
+      "id": "egg",
+      "clips": []
+    },
+    {
+      "id": "egg_peeled",
+      "clips": []
+    },
+    {
+      "id": "onion",
+      "clips": []
+    },
+    {
+      "id": "pickle",
+      "clips": []
+    },
+    {
+      "id": "potato",
+      "clips": []
+    },
+    {
+      "id": "potato_peeled",
+      "clips": []
+    },
+    {
+      "id": "sausage",
+      "clips": []
+    },
+    {
+      "id": "tomato",
+      "clips": []
+    },
+    {
+      "id": "back_counter",
+      "clips": []
+    },
+    {
+      "id": "fridge",
+      "clips": []
+    },
+    {
+      "id": "island",
+      "clips": []
+    },
+    {
+      "id": "sink",
+      "clips": []
+    },
+    {
+      "id": "stove",
+      "clips": []
+    },
+    {
+      "id": "board",
+      "clips": []
+    },
+    {
+      "id": "bowl",
+      "clips": []
+    },
+    {
+      "id": "cat_bowl",
+      "clips": []
+    },
+    {
+      "id": "grater",
+      "clips": []
+    },
+    {
+      "id": "heart_ornament",
+      "clips": []
+    },
+    {
+      "id": "knife",
+      "clips": []
+    },
+    {
+      "id": "pot",
+      "clips": []
+    },
+    {
+      "id": "star_ornament",
+      "clips": []
+    },
+    {
+      "mode": "models",
+      "models": {
+        "loaded": [
+          "girl",
+          "beet",
+          "egg",
+          "cat",
+          "fridge",
+          "potato_peeled",
+          "potato",
+          "back_counter",
+          "cat_bowl",
+          "island",
+          "knife",
+          "board"
+        ],
+        "failed": [],
+        "procedural": false
+      },
+      "girl": "gltf",
+      "cat": "gltf",
+      "roots": [
+        "girl_instance",
+        "cat_instance"
+      ],
+      "render": {
+        "frame": 43,
+        "calls": 138,
+        "triangles": 62854,
+        "points": 0,
+        "lines": 0
+      },
+      "fatal": ""
+    },
+    {
+      "mode": "procedural",
+      "models": {
+        "loaded": [],
+        "failed": [],
+        "procedural": true
+      },
+      "girl": "procedural",
+      "cat": "procedural",
+      "roots": [
+        "heroine",
+        "cat"
+      ],
+      "render": {
+        "frame": 45,
+        "calls": 263,
+        "triangles": 124500,
+        "points": 0,
+        "lines": 0
+      },
+      "fatal": ""
+    },
+    {
+      "mode": "damaged-girl",
+      "models": {
+        "loaded": [
+          "egg",
+          "beet",
+          "potato",
+          "cat",
+          "fridge",
+          "potato_peeled",
+          "back_counter",
+          "cat_bowl",
+          "island",
+          "knife",
+          "board"
+        ],
+        "failed": [
+          "girl"
+        ],
+        "procedural": false
+      },
+      "girl": "procedural",
+      "cat": "gltf",
+      "roots": [
+        "heroine",
+        "cat_instance"
+      ],
+      "render": {
+        "frame": 42,
+        "calls": 212,
+        "triangles": 109794,
+        "points": 0,
+        "lines": 0
+      },
+      "fatal": ""
+    }
+  ],
+  "errors": []
+}

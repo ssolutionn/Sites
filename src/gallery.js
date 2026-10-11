@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildHeroine,animateHeroine,setExpression } from './view/heroine.js';
 import { buildCat,animateCat } from './view/cat.js';
+import { loadModels } from './view/assets.js';
+
+async function bootGallery() {
+await loadModels({ procedural: new URLSearchParams(location.search).has('procedural') });
 const canvas=document.querySelector('#gallery');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
 const scene=new THREE.Scene();scene.background=new THREE.Color('#e9ede3');
@@ -18,3 +22,5 @@ let pose='idle';document.querySelectorAll('[data-pose]').forEach(button=>button.
 document.querySelector('#spin').addEventListener('click',e=>{controls.autoRotate=!controls.autoRotate;e.target.classList.toggle('active',controls.autoRotate);});
 function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();
 const clock=new THREE.Clock();function frame(){const t=clock.getElapsedTime();animateHeroine(girl,pose==='worried'?'idle':pose,t);setExpression(girl,pose==='worried');animateCat(cat,pose==='work'||pose==='worried'||pose==='shoo'?'reach':pose==='walk'?'walk':'sit',t,pose==='walk'?1:0);controls.update();renderer.render(scene,camera);requestAnimationFrame(frame);}frame();
+}
+bootGallery().catch((e) => { console.error(e); document.body.dataset.error = e.message; });

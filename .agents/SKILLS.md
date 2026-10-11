@@ -1,6 +1,6 @@
 # Навыки Codex для игры
 
-В `.agents/skills/` подключены восемь существующих пакетов из `.claude/skills/`.
+В `.agents/skills/` подключены одиннадцать существующих пакетов из `.claude/skills/`.
 Ссылки используют исходные инструкции и дополнительные файлы, поэтому Claude и Codex читают одну версию правил.
 
 | Навык | Применение |
@@ -13,6 +13,9 @@
 | `code-review` | Проверка изменений и регрессий |
 | `browser-visual-qa` | Проверка мышью в Chromium, снимки и ошибки консоли |
 | `release-checklist` | Проверки перед выпуском |
+| `blender` | Создание, экспорт и рендер моделей в установленном Blender |
+| `asset-pipeline` | Размеры, оси, материалы, бюджеты и загрузка GLB |
+| `character-animation` | Скелеты, клипы и связь поз с действиями игры |
 
 Это локальные навыки проекта. Плагины Go: Production Engineering, Codex Dev Workflows,
 Meshy, Build 3D Game Rooms, Development OS, Game Development Studio, Tripo 3D,

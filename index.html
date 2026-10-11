@@ -25,6 +25,15 @@
       <div id="overlay"></div>
       <div id="dev" class="hidden"></div>
       <div id="fatal" class="hidden"></div>
+      <div id="loading" role="status" aria-live="polite">
+        <div class="loading-card">
+          <div class="loading-symbol" aria-hidden="true">🎄</div>
+          <h1>Новогодняя суета</h1>
+          <p>Готовим уютную кухню…</p>
+          <progress id="loading-progress" max="100" aria-label="Подготовка кухни"></progress>
+          <p id="loading-detail">Скоро начнём готовить</p>
+        </div>
+      </div>
     </div>
     <noscript>Для игры нужен JavaScript.</noscript>
     <script type="module" src="./src/main.js"></script>

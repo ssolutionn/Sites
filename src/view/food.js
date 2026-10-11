@@ -662,6 +662,7 @@ function bitsMoundCaviar(parent) {
 export function disposeGroup(g) {
   g.traverse((o) => {
     if (o.isMesh || o.isInstancedMesh) {
+      if (o.userData.sharedAsset) return;
       o.geometry?.dispose();
       const mm = o.material;
       if (mm && ![...mats.values()].includes(mm)) {

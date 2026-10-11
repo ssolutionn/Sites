@@ -42,6 +42,10 @@ async function actBtn(name, argPart = null, timeout = 8000) {
   await l.waitFor({ state: 'visible', timeout }).catch((e) => { throw new Error(`${name}(${argPart}): ${e.message.split('\n')[0]}`); });
   await l.click();
 }
+async function dismissTips() {
+  const tip = page.locator('#tip button:visible');
+  if (await tip.count()) await tip.click();
+}
 async function closePanel() {
   const cur = await sess('s.panel');
   if (!cur) return;
@@ -51,6 +55,7 @@ async function closePanel() {
   if (!(await waitFor(() => !window.__sueta.session.panel, 4000))) { viaApi.push(`closePanel(${cur})`); await S(() => window.__sueta.session.closePanel()); }
 }
 async function goStation(text, id) {
+  await dismissTips();
   const cur = await sess('s.panel');
   if (cur === id) return true;
   await closePanel();
@@ -79,6 +84,7 @@ async function finishBtn() { await page.locator('#btn-finish:visible, button[dat
 async function local(x, z) { return S(([x, z]) => { const v = window.__sueta.view; const s = window.__sueta.session; return s.panel ? v.localToScreen(s.panel, x, z) : null; }, [x, z]); }
 async function click(x, z) { const p = await local(x, z); await page.mouse.move(p.x, p.y); await wait(40); await page.mouse.down(); await page.mouse.up(); }
 async function drag(points, steps = 4) {
+  await dismissTips();
   let p = await local(points[0][0], points[0][1]);
   if (!p) return;
   await page.mouse.move(p.x, p.y); await page.mouse.down();
@@ -102,6 +108,7 @@ async function blockerAt(x, y) {
 }
 // Росчерк ножа мышью: нажал — провёл — отпустил. Координаты в единицах доски (1 = кубик).
 async function knife(x0, z0, x1, z1, steps = 8) {
+  await dismissTips();
   const a = await local(x0 * U, z0 * U), b = await local(x1 * U, z1 * U);
   if (!a || !b) return false;
   const blk = await blockerAt(a.x, a.y);
@@ -134,25 +141,39 @@ async function boardCover() {
   }, U);
 }
 async function shooCat() {
+  await dismissTips();
   const previous = await sess('s.panel');
   await closePanel();
-  await waitFor(() => window.__sueta.sv.camT >= 1, 10000);
-  await waitFor(() => { const cv = window.__sueta.view.catVis; return cv.segs[cv.seg]?.dur > 100; }, 20000);
+  if (!(await waitFor(() => window.__sueta.sv.camT >= 1, 60000))) throw new Error('Камера не вышла в обзор');
+  if (!(await waitFor(() => { const cv = window.__sueta.view.catVis; return cv.segs[cv.seg]?.dur > 100 || window.__sueta.session.cat.state !== 'theft'; }, 60000))) throw new Error('Кот не дошёл до доски');
   const p = await S(() => { const sv = window.__sueta.sv; const v = sv.cat.getWorldPosition(sv.cat.position.clone()); v.y += 0.15; v.project(sv.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; });
   for (let i = 0; i < 8; i++) { await page.mouse.move(p.x + (i % 2 ? 40 : -40), p.y); await wait(30); }
   await noAction();
   if (previous) await goStation('', previous);
 }
 async function guardCat() {
+  await dismissTips();
   if (await sess("s.cat.state === 'theft'")) { await shot('d1_cat'); await shooCat(); }
-  if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) { await actBtn('takeReplacement').catch(() => {}); await noAction(); }
+  if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) { await actBtn('takeReplacement'); await noAction(); }
+}
+// The cat's replacement is placed beside the original. Cut its actual bounds,
+// transformed by the current board angle; do not assume the old product centre.
+async function cutReplacement() {
+  const fresh = await sess('(() => { const it = s.boardCur(); if (!it?.body) return []; const groups = new Map(); for (const p of it.pieces) { if (!it.body.copies[p.copy].fresh) continue; const b = groups.get(p.copy) ?? { x0: p.x, x1: p.x + p.w, z0: p.z, z1: p.z + p.d }; b.x0 = Math.min(b.x0,p.x); b.x1 = Math.max(b.x1,p.x+p.w); b.z0 = Math.min(b.z0,p.z); b.z1 = Math.max(b.z1,p.z+p.d); groups.set(p.copy,b); } return [...groups.values()]; })()');
+  const angle = await sess('s.boardCur()?.angle ?? 0');
+  const point = (x,z) => [x*Math.cos(angle)+z*Math.sin(angle), -x*Math.sin(angle)+z*Math.cos(angle)];
+  for (const b of fresh) {
+    for (let x = b.x0+1; x < b.x1-.3; x += 1) await knife(...point(x,b.z0-.7), ...point(x,b.z1+.7),4);
+    for (let z = b.z0+1; z < b.z1-.3; z += 1) await knife(...point(b.x0-.7,z), ...point(b.x1+.7,z),4);
+  }
 }
 // Кубики как в жизни: полоски сверху вниз через 1 см, тап D — доска на четверть оборота,
 // снова сверху вниз. Нож режет там, где прошла мышь (сетка raster-cut.js).
 async function turnBoard(key = 'KeyD') {
+  await dismissTips();
   const a0 = await sess('s.boardCur()?.angle ?? 0');
   await page.keyboard.down(key); await wait(60); await page.keyboard.up(key);
-  await waitFor((a0) => Math.abs((window.__sueta.session.boardCur()?.angle ?? 0) - a0) > 1.5, 8000, a0);
+  if (!(await waitFor(() => { const it = window.__sueta.session.boardCur(); return it?.angleTarget != null && Math.abs(it.angle - it.angleTarget) < .001; }, 30000))) throw new Error('Доска не закончила поворот');
   await wait(200);
 }
 async function cutCubes({ rotate = true, chop = false } = {}) {
@@ -171,6 +192,8 @@ async function cutCubes({ rotate = true, chop = false } = {}) {
   } else {
     for (const cz of zs) for (let z = cz - sh.d / 2 + 1; z < cz + sh.d / 2 - 0.3; z += 1) { await guardCat(); await knife(-sh.w / 2 - 0.9, z, sh.w / 2 + 0.9, z, 4); }
   }
+  await guardCat();
+  await cutReplacement();
 }
 // Кружочки: только поперёк, сверху вниз, шаг ~0,5 кубика.
 async function cutRounds() {
@@ -196,6 +219,7 @@ async function boardProduct(stepId, name, how = {}) {
   await shot(`d1_board_${stepId}`);
   await cutCubes(how);
   await guardCat();
+  await cutReplacement();
   const q = await sess('s.boardQuality(s.boardCur())');
   const ang = await sess('s.boardCur().angle ?? 0');
   check(`${name}: кубики 1 см${how.chop ? ' рубкой' : how.rotate === false ? ' без поворота' : ' с поворотом доски (D)'}`, q.score > 0.6 && (how.rotate === false || Math.abs(Math.abs(ang) - Math.PI / 2) < 0.05), `${Math.round(q.score * 100)} %, кубиков ${q.neat}, доска ${Math.round((ang * 180) / Math.PI)}°`);

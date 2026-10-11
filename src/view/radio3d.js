@@ -1,6 +1,7 @@
 // Радио в крупном плане: подсвеченная шкала частот, стрелка, ручка настройки с рифлением и риской.
 // Только читает session.radioTuning(); состояние не меняет. Дизайн: design/gdd/interaction-spec.md §3.8.
 import * as THREE from 'three';
+import { batchStaticChildren } from './static-batch.js';
 import { RADIO, RADIO_STATIONS } from '../campaign/radio-data.js';
 import { knobAngle, needlePos } from '../campaign/st-radio.js';
 
@@ -57,6 +58,7 @@ export class RadioView {
     const mark = new THREE.Mesh(new THREE.BoxGeometry(0.0032, 0.0016, 0.0135), new THREE.MeshBasicMaterial({ color: 0xf6e7c1 }));
     mark.position.set(0, 0.0136, -0.0118);
     dial.add(cap, mark);
+    batchStaticChildren(dial);
     r.led.position.set(RADIO.led.x, RADIO.led.y, F.z + 0.008);
 
     // гравировка под ручкой
@@ -70,6 +72,7 @@ export class RadioView {
     g.add(label);
     this._drawLabel();
 
+    batchStaticChildren(g, new Set([this.needle, r.dial, r.led]));
     this.shown = null;
     this.key = null;
     // шрифт игры догрузится позже — перерисовать надписи

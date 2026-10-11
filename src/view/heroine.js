@@ -1,8 +1,11 @@
 // Sculpted, texture-free festive character. All detail survives a GLB export.
 import * as THREE from 'three';
+import { instantiateActor, animateActor } from './assets.js';
 import { material, mesh, ellipsoid, curve, line, snowflake, taperedLimb, group, mergeStaticMeshes } from './model-utils.js';
 
 export function buildHeroine() {
+  const actor = instantiateActor('girl');
+  if (actor) return actor;
   const root = group(null, 'heroine');
   const body = group(root, 'heroine_body');
   const skin = material(0xf1b992, .58), skinShadow = material(0xd98d71);
@@ -209,6 +212,7 @@ export function buildHeroine() {
 }
 // Позы: на основе игрового состояния, время — только игровое/анимационное.
 export function animateHeroine(h, pose, time, progress = 0) {
+  if (h.userData.rig === 'gltf') return animateActor(h, pose, time, progress);
   const { body, legs, arms, head, brows, mouth, knife, phoneProp } = h.userData;
   const [L, R] = arms;
   // базовые значения
@@ -339,6 +343,7 @@ export function animateHeroine(h, pose, time, progress = 0) {
 
 // Выражение лица: worried — брови домиком, рот «о».
 export function setExpression(h, worried) {
+  if (h.userData.rig === 'gltf') { h.userData.worried = worried; return; }
   const { brows, mouth, mouthO } = h.userData;
   for (const b of brows) b.mesh.rotation.z = Math.PI / 2 + (worried ? -0.35 * b.side : 0.08 * b.side);
   mouth.visible = !worried;

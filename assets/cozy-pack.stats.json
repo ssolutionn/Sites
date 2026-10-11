@@ -1,0 +1,382 @@
+[
+  {
+    "id": "carrot",
+    "category": "food",
+    "triangles": 656,
+    "materials": 1,
+    "bytes": 233124,
+    "dimensions_blender": [
+      0.2801670804619789,
+      0.05199999734759331,
+      0.05194830521941185
+    ],
+    "clips": []
+  },
+  {
+    "id": "potato",
+    "category": "food",
+    "triangles": 520,
+    "materials": 1,
+    "bytes": 230428,
+    "dimensions_blender": [
+      0.11400003358721733,
+      0.06800003722310066,
+      0.057999998331069946
+    ],
+    "clips": []
+  },
+  {
+    "id": "potato_peeled",
+    "category": "food",
+    "triangles": 520,
+    "materials": 1,
+    "bytes": 229948,
+    "dimensions_blender": [
+      0.11400003358721733,
+      0.06800003722310066,
+      0.057999998331069946
+    ],
+    "clips": []
+  },
+  {
+    "id": "egg",
+    "category": "food",
+    "triangles": 756,
+    "materials": 1,
+    "bytes": 235380,
+    "dimensions_blender": [
+      0.044309720396995544,
+      0.044309720396995544,
+      0.057999998331069946
+    ],
+    "clips": []
+  },
+  {
+    "id": "egg_peeled",
+    "category": "food",
+    "triangles": 756,
+    "materials": 1,
+    "bytes": 234996,
+    "dimensions_blender": [
+      0.044309720396995544,
+      0.044309720396995544,
+      0.057999998331069946
+    ],
+    "clips": []
+  },
+  {
+    "id": "pickle",
+    "category": "food",
+    "triangles": 520,
+    "materials": 1,
+    "bytes": 237860,
+    "dimensions_blender": [
+      0.14600003510713577,
+      0.04400002025067806,
+      0.041999999433755875
+    ],
+    "clips": []
+  },
+  {
+    "id": "beet",
+    "category": "food",
+    "triangles": 592,
+    "materials": 1,
+    "bytes": 234036,
+    "dimensions_blender": [
+      0.11109042167663574,
+      0.08000003919005394,
+      0.07898681610822678
+    ],
+    "clips": []
+  },
+  {
+    "id": "onion",
+    "category": "food",
+    "triangles": 560,
+    "materials": 1,
+    "bytes": 229076,
+    "dimensions_blender": [
+      0.08800002560019493,
+      0.08000003919005394,
+      0.07898681610822678
+    ],
+    "clips": []
+  },
+  {
+    "id": "tomato",
+    "category": "food",
+    "triangles": 600,
+    "materials": 1,
+    "bytes": 232224,
+    "dimensions_blender": [
+      0.08800002560019493,
+      0.08000003919005394,
+      0.07898681610822678
+    ],
+    "clips": []
+  },
+  {
+    "id": "sausage",
+    "category": "food",
+    "triangles": 412,
+    "materials": 1,
+    "bytes": 227724,
+    "dimensions_blender": [
+      0.18129999935626984,
+      0.06599999964237213,
+      0.06599999964237213
+    ],
+    "clips": []
+  },
+  {
+    "id": "cheese",
+    "category": "food",
+    "triangles": 188,
+    "materials": 1,
+    "bytes": 218892,
+    "dimensions_blender": [
+      0.10999999940395355,
+      0.06499999761581421,
+      0.04399999976158142
+    ],
+    "clips": []
+  },
+  {
+    "id": "bread",
+    "category": "food",
+    "triangles": 520,
+    "materials": 1,
+    "bytes": 283996,
+    "dimensions_blender": [
+      0.27000008523464203,
+      0.10600004717707634,
+      0.10999999940395355
+    ],
+    "clips": []
+  },
+  {
+    "id": "island",
+    "category": "kitchen",
+    "triangles": 2180,
+    "materials": 2,
+    "bytes": 298380,
+    "dimensions_blender": [
+      3.700000047683716,
+      0.9579025208950043,
+      0.9000000059604645
+    ],
+    "clips": []
+  },
+  {
+    "id": "back_counter",
+    "category": "kitchen",
+    "triangles": 3512,
+    "materials": 2,
+    "bytes": 350740,
+    "dimensions_blender": [
+      5.699999809265137,
+      0.7879025340080261,
+      0.9000000059604645
+    ],
+    "clips": []
+  },
+  {
+    "id": "fridge",
+    "category": "kitchen",
+    "triangles": 760,
+    "materials": 2,
+    "bytes": 36264,
+    "dimensions_blender": [
+      0.8500000238418579,
+      0.8204298317432404,
+      2.0
+    ],
+    "clips": []
+  },
+  {
+    "id": "stove",
+    "category": "kitchen",
+    "triangles": 3100,
+    "materials": 2,
+    "bytes": 121384,
+    "dimensions_blender": [
+      0.6200000047683716,
+      0.6479738354682922,
+      0.925000011920929
+    ],
+    "clips": []
+  },
+  {
+    "id": "sink",
+    "category": "kitchen",
+    "triangles": 1400,
+    "materials": 2,
+    "bytes": 46192,
+    "dimensions_blender": [
+      0.5199999809265137,
+      0.38999998569488525,
+      0.34526652097702026
+    ],
+    "clips": []
+  },
+  {
+    "id": "girl",
+    "category": "characters/girl",
+    "triangles": 25880,
+    "materials": 4,
+    "bytes": 1490708,
+    "dimensions_blender": [
+      1.000169038772583,
+      0.29899992048740387,
+      1.7860354147851467
+    ],
+    "clips": [
+      "idle",
+      "walk",
+      "stir",
+      "work",
+      "wash",
+      "wipe",
+      "grate",
+      "stove",
+      "unpack",
+      "cut",
+      "carry",
+      "shoo",
+      "celebrate",
+      "phone_answer",
+      "open_fridge",
+      "taste",
+      "reach_up"
+    ]
+  },
+  {
+    "id": "cat",
+    "category": "characters/cat",
+    "triangles": 9974,
+    "materials": 2,
+    "bytes": 961764,
+    "dimensions_blender": [
+      0.33000004291534424,
+      0.7224484086036682,
+      0.5080279260873795
+    ],
+    "clips": [
+      "idle",
+      "walk",
+      "steal_run",
+      "sit",
+      "sleep",
+      "eat",
+      "reach",
+      "knock_over",
+      "meow",
+      "jump_up"
+    ]
+  },
+  {
+    "id": "board",
+    "category": "props",
+    "triangles": 188,
+    "materials": 1,
+    "bytes": 219208,
+    "dimensions_blender": [
+      0.6000000238418579,
+      0.4000000059604645,
+      0.029999999329447746
+    ],
+    "clips": []
+  },
+  {
+    "id": "knife",
+    "category": "props",
+    "triangles": 357,
+    "materials": 2,
+    "bytes": 17216,
+    "dimensions_blender": [
+      0.025100000202655792,
+      0.2549999877810478,
+      0.03849999979138374
+    ],
+    "clips": []
+  },
+  {
+    "id": "bowl",
+    "category": "props",
+    "triangles": 1356,
+    "materials": 2,
+    "bytes": 48088,
+    "dimensions_blender": [
+      0.41999998688697815,
+      0.41999998688697815,
+      0.13899999856948853
+    ],
+    "clips": []
+  },
+  {
+    "id": "cat_bowl",
+    "category": "props",
+    "triangles": 1356,
+    "materials": 2,
+    "bytes": 48104,
+    "dimensions_blender": [
+      0.20999999344348907,
+      0.20999999344348907,
+      0.03700000047683716
+    ],
+    "clips": []
+  },
+  {
+    "id": "pot",
+    "category": "props",
+    "triangles": 1664,
+    "materials": 2,
+    "bytes": 57900,
+    "dimensions_blender": [
+      0.4099644124507904,
+      0.30399999022483826,
+      0.23000000417232513
+    ],
+    "clips": []
+  },
+  {
+    "id": "grater",
+    "category": "props",
+    "triangles": 1128,
+    "materials": 2,
+    "bytes": 61524,
+    "dimensions_blender": [
+      0.07500000298023224,
+      0.05425000190734863,
+      0.12956568598747253
+    ],
+    "clips": []
+  },
+  {
+    "id": "star_ornament",
+    "category": "props",
+    "triangles": 220,
+    "materials": 1,
+    "bytes": 9124,
+    "dimensions_blender": [
+      0.08559508621692657,
+      0.02199999988079071,
+      0.09470480680465698
+    ],
+    "clips": []
+  },
+  {
+    "id": "heart_ornament",
+    "category": "props",
+    "triangles": 784,
+    "materials": 1,
+    "bytes": 29980,
+    "dimensions_blender": [
+      0.06599999964237213,
+      0.017999999225139618,
+      0.09529903531074524
+    ],
+    "clips": []
+  }
+]

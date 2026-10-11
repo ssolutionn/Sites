@@ -15,6 +15,7 @@ import { RadioMusic } from './audio/radio-music.js';
 import { RADIO } from './campaign/radio-data.js';
 import { clampFreq } from './campaign/st-radio.js';
 import { StreamVotes, dailyChallenge } from './stream.js';
+import { loadModels, modelStatus } from './view/assets.js';
 
 const params = new URLSearchParams(location.search);
 const devMode = params.has('dev');
@@ -23,6 +24,7 @@ let booted = false;
 const STREAM_ENABLED = false;
 
 function fatal(title, details = '') {
+  document.getElementById('loading')?.classList.add('hidden');
   const f = document.getElementById('fatal');
   f.classList.remove('hidden');
   f.innerHTML = `<div class="card"><h2 style="margin-top:0">${title}</h2><p>${details}</p>
@@ -44,12 +46,18 @@ function webglAvailable() {
   }
 }
 
-function boot() {
+async function boot() {
   if (!webglAvailable()) {
     fatal('WebGL недоступен', 'Браузер не может показать 3D-кухню: WebGL выключен или не поддерживается.');
     return;
   }
   const canvas = document.getElementById('scene');
+  await loadModels({ procedural: params.has('procedural'), onProgress:({completed,total}) => {
+    if (!total) return;
+    const percent = Math.round(completed/total*100);
+    document.getElementById('loading-progress').value = percent;
+    document.getElementById('loading-detail').textContent = `Готово на ${percent} %`;
+  } });
   let sv, view;
   try {
     sv = new SceneView(canvas);
@@ -651,17 +659,19 @@ function boot() {
   if (save.data.settings.inProgress) {
     const i = DAYS.findIndex((d) => d.id === save.data.settings.inProgress);
     if (i >= 0) {
+      document.getElementById('loading').classList.add('hidden');
       booted = true;
       startDay(i, true);
       requestAnimationFrame(frame);
-      window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save, radio: radioMusic };
+      window.__sueta = { models: modelStatus(), get session() { return session; }, get mode() { return mode; }, sv, view, app, save, radio: radioMusic };
       return;
     }
   }
   ui.showMenu(save);
+  document.getElementById('loading').classList.add('hidden');
   booted = true;
   requestAnimationFrame(frame);
-  window.__sueta = { get session() { return session; }, get mode() { return mode; }, sv, view, app, save, stats, radio: radioMusic };
+  window.__sueta = { models: modelStatus(), get session() { return session; }, get mode() { return mode; }, sv, view, app, save, stats, radio: radioMusic };
 }
 
 boot();

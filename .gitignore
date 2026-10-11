@@ -177,3 +177,7 @@ $RECYCLE.BIN/
 /test-results/
 mac-parts/
 .claude/worktrees/
+
+# Generated from checked Blender exports by models:sync
+/public/assets/models/
+*.blend1

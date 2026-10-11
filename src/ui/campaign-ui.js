@@ -604,8 +604,9 @@ export class CampaignUI {
   /** Совет о происшествии вне станции, где игрок сейчас работает, не перекрывает работу — ждёт выхода из крупного плана. */
   tipWhenFree(topic) {
     const s = this.app.session;
-    if (s?.panel && CLOSEUP_STATIONS.has(s.panel) && !this.tipShown.has(topic)) {
-      if (!this.pendingTips.includes(topic)) this.pendingTips.push(topic);
+    const catBusy = s && ['theft','spill','mischief'].includes(s.cat.state) && !['catTheft','catSpill','catWave'].includes(topic);
+    if (catBusy || (s?.panel && CLOSEUP_STATIONS.has(s.panel))) {
+      if (!this.tipShown.has(topic) && !this.pendingTips.includes(topic)) this.pendingTips.push(topic);
       return;
     }
     this.tip(topic);
@@ -655,7 +656,7 @@ export class CampaignUI {
         this.toast('<b>Все блюда дня готовы!</b> Нажми «Завершить день».', 'good', 5);
         break;
       case 'catStart':
-        this.tip(e.kind === 'spill' ? 'catSpill' : 'catTheft');
+        this.tip(e.kind === 'spill' ? 'catSpill' : e.kind === 'theft' ? 'catTheft' : 'catWave');
         break;
       case 'potBoil':
         this.tip('pot');
@@ -735,9 +736,6 @@ export class CampaignUI {
         break;
       case 'catShooed':
         this.toast('Брысь! Кот убежал', 'good');
-        break;
-      case 'catStart':
-        if (e.kind !== 'theft') this.tip('catWave'); // у кражи своя подсказка (catTheft)
         break;
       case 'catBored':
         this.tipWhenFree('catBored');
@@ -847,6 +845,9 @@ export class CampaignUI {
       if (this.tipT <= 0) this.el.tip.classList.add('hidden');
     }
     if (!s || (mode !== 'kitchen' && mode !== 'paused')) return;
+    if (mode === 'kitchen' && !s.panel && !['theft','spill','mischief'].includes(s.cat.state) && this.el.tip.classList.contains('hidden') && this.pendingTips.length) this.tip(this.pendingTips.shift());
+    // Keep the cat and the sweep of the hand visible beside the distant tree.
+    this.el.tip.classList.toggle('cat-tip', /^cat/.test(this.lastTip ?? '') && !s.panel && ['theft','spill','mischief'].includes(s.cat.state));
     if (this.noteT > 0) {
       this.noteT -= dt;
       if (this.noteT <= 0) this.el.note.classList.add('hidden');

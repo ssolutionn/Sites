@@ -1,8 +1,11 @@
 // Orange tabby sculpt, with fully modeled coat markings and curved whiskers.
 import * as THREE from 'three';
+import { instantiateActor, animateActor } from './assets.js';
 import { material, mesh, ellipsoid, curve, line, taperedLimb, group, mergeStaticMeshes } from './model-utils.js';
 
 export function buildCat(){
+  const actor = instantiateActor('cat');
+  if (actor) return actor;
   const root=group(null,'cat'),body=group(root,'cat_body');
   const orange=material(0xe89648,.82),furLight=material(0xf1ac61,.84);
   const cream=material(0xffefd2,.92),stripe=material(0xae582d,.83);
@@ -101,6 +104,7 @@ export function buildCat(){
   return root;
 }
 export function animateCat(cat, mode, time, speed = 0) {
+  if (cat.userData.rig === 'gltf') return animateActor(cat, mode, time, 0, speed);
   const { body, head, legs, tailPivot } = cat.userData;
   const ph = time * 14;
   const walking = speed > 0.01;
@@ -109,7 +113,7 @@ export function animateCat(cat, mode, time, speed = 0) {
   body.rotation.x = 0;
   body.position.y = walking ? Math.abs(Math.sin(ph)) * 0.015 : 0;
   head.rotation.x = 0;
-  if (mode === 'reach') {
+  if (mode === 'reach' || mode === 'knock') {
     // встаёт и тянет лапу
     body.rotation.x = -0.55;
     body.position.y = 0.06;

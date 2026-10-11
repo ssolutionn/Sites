@@ -1,7 +1,7 @@
 {
   "name": "novogodnyaya-sueta",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "description": "Симулятор новогодней суеты: семь дней, десять блюд, готовка руками, кот и ёлка",
   "scripts": {
@@ -14,7 +14,12 @@
     "calibrate": "node scripts/calibrate-trims.mjs",
     "desktop:mac": "node desktop/build.mjs darwin arm64,x64",
     "desktop:win": "node desktop/build.mjs win32 x64",
-    "desktop": "vite build && electron desktop/main.cjs"
+    "desktop": "npm run build && electron desktop/main.cjs",
+    "models:sync": "node scripts/sync-models.mjs",
+    "predev": "npm run models:sync",
+    "prebuild": "npm run models:sync",
+    "models:build": "bash scripts/art/build-pack.sh",
+    "models:preview": "node scripts/build-model-preview.mjs production/previews/3d-preview.html"
   },
   "dependencies": {
     "three": "0.186.1"
@@ -22,6 +27,8 @@
   "devDependencies": {
     "@electron/packager": "^20.3.0",
     "electron": "^44.7.0",
+    "esbuild": "^0.28.2",
+    "gltf-validator": "^2.0.0-dev.3.10",
     "vite": "8.3.2"
   },
   "engines": {

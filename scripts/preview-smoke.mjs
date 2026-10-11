@@ -1,0 +1,40 @@
+// Offline preview + loading screen; requires the same Playwright adapter as models-smoke.
+import assert from 'node:assert/strict';
+import {readFile, mkdir} from 'node:fs/promises';
+const {chromium}=await import(process.env.PW??'playwright');
+const base=process.argv[2]??'http://localhost:4180/';
+const out=process.env.OUT??'production/qa/evidence/cozy-3d';
+await mkdir(out,{recursive:true});
+const b=await chromium.launch({args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+let release;
+try {
+  const p=await b.newPage({viewport:{width:1000,height:800}}), errors=[], external=[];
+  p.on('pageerror',e=>errors.push(e.message));
+  p.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+  p.on('request',r=>{if(/^https?:/.test(r.url()))external.push(r.url());});
+  await p.setContent(await readFile('production/previews/3d-preview.html','utf8'),{timeout:120000});
+  await p.waitForFunction(()=>!!window.__models,null,{timeout:120000});
+  await p.evaluate(()=>{const r=window.__models.renderer;r.shadowMap.enabled=false;r.setPixelRatio(1);r.setSize(640,512,false);});
+  const pack=await p.evaluate(()=>window.__models.status);
+  assert.equal(pack.loaded.length,27);assert.deepEqual(pack.failed,[]);
+  await p.locator('#clip').selectOption('walk');
+  assert.equal(await p.evaluate(()=>window.__models.action.getClip().name),'walk');
+  await p.locator('#asset').selectOption('cat');
+  await p.waitForFunction(()=>window.__models.current.userData.modelId==='cat',null,{timeout:120000});
+  await p.locator('#clip').selectOption('sit');
+  await p.screenshot({path:`${out}/offline_cat.png`});
+  assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
+  console.log('PASS offline: 27 models, walk/sit, no HTTP requests or console errors');
+  await p.close();
+  const q=await b.newPage({viewport:{width:1280,height:720}}), startupErrors=[];
+  q.on('pageerror',e=>startupErrors.push(e.message));
+  const pending=new Promise(r=>release=r);
+  await q.route('**/characters/girl/girl.glb',async r=>{await pending;await r.continue();});
+  await q.goto(base,{waitUntil:'domcontentloaded',timeout:120000});
+  await q.waitForFunction(()=>document.querySelector('#loading-progress').value>0,null,{timeout:120000});
+  assert.equal(await q.locator('#loading').isVisible(),true);
+  await q.screenshot({path:`${out}/loading.png`});
+  release();await q.waitForFunction(()=>!!window.__sueta,null,{timeout:120000});
+  assert.equal(await q.locator('#loading').isVisible(),false);assert.deepEqual(startupErrors,[]);
+  console.log('PASS startup: progress during a delayed load, menu when ready');
+} finally {release?.();await b.close();}

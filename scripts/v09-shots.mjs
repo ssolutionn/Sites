@@ -32,7 +32,10 @@ async function openDay(n) {
   await S(() => window.__sueta.sv.renderer.setSize(640, 360, false));
 }
 async function station(st) {
-  await S((st) => window.__sueta.session.goTo(st), st);
+  await tip();
+  await waitFor(() => !window.__sueta.session.action && !window.__sueta.session.heroine.away);
+  const moved = await S((st) => window.__sueta.session.goTo(st), st);
+  if (!moved) throw new Error(`Не удалось перейти к станции ${st}`);
   await waitFor((st) => window.__sueta.session.panel === st && window.__sueta.sv.camT >= 1, 60000, st);
   await tip();
 }
@@ -73,7 +76,7 @@ try {
     await page.locator('form[data-composer="commentPost"] button[type="submit"]').click();
     await waitFor(() => [...document.querySelectorAll('.comments > .com.own')].some((e) => e.textContent.includes('Мой комментарий: вкусно!')));
     check('комментарий опубликован в открытой ветке', await page.locator('.comments > .com.own').count() === 1);
-    await page.locator('.comments > .com.own').scrollIntoViewIfNeeded();
+    await S(() => document.querySelector('.comments > .com.own')?.scrollIntoView({ block: 'center' }));
     await shot('phone_comments');
     const clock = await S(() => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
     check('телефон показывает время устройства по минутам', await page.locator('.ph-status b').innerText() === clock);
@@ -270,11 +273,16 @@ try {
   if (want('cat')) {
     // кот на экране (центр + 15 см) в пикселях
     const catPx = () => S(() => { const { sv } = window.__sueta; const v = sv.cat.getWorldPosition(sv.cat.position.clone()); v.y += 0.15; v.project(sv.camera); const r = document.querySelector('canvas').getBoundingClientRect(); return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height }; });
-    const catSettled = () => waitFor(() => { const cv = window.__sueta.view.catVis; return !!cv && cv.segs[cv.seg]?.dur > 100; }, 20000);
+    const catSettled = () => waitFor(() => {
+      const { view,session,sv } = window.__sueta, cv = view.catVis;
+      const path = session.cat.state === 'mischief' ? 'mischief:' + session.cat.kind : session.cat.state;
+      return sv.camT >= 1 && cv.mode === path && cv.segs[cv.seg]?.dur > 100;
+    }, 60000);
     const waveAt = async (amp = 40) => { await catSettled(); const c = await catPx(); for (let k = 0; k < 8; k++) { await page.mouse.move(c.x + (k % 2 ? amp : -amp), c.y); await wait(30); } };
     // 10: кот заскучал → не поиграли → лезет на ёлку или к гирлянде; помахать мышью — убежал
     await openDay(2);
-    await S(() => { const s = window.__sueta.session; s.catNeeds.hunger = 0; s.catNeeds.boredom = 49.9; });
+    // Force the distant tree target: this reproduces the old, too-small wave hit area.
+    await S(() => { const s = window.__sueta.session; s.catNeeds.hunger = 0; s.catNeeds.boredom = 49.9; s.garland.broken = true; s.star.broken = false; });
     await waitFor(() => window.__sueta.session.alerts.some((a) => a.key === 'catBored'), 20000);
     check('кот просит поиграть', await sess("s.alerts.some((a) => a.key === 'catBored')"));
     await wait(400); await shot('cat_bored');
@@ -283,7 +291,8 @@ try {
     const kind = await sess('s.cat.kind');
     check('кот бесчинствует', !!kind, kind);
     check('на карточке нет кнопки «Прогнать»', await S(() => !document.querySelector('[data-a="shoo"]')));
-    await wait(2500); await tip();
+    await wait(2500);
+    check('подсказка про бесчинства, не про колбасу', await S(() => /безобразничает/.test(document.querySelector('#tip').textContent) && !/колбас/.test(document.querySelector('#tip').textContent)));
     await shot('cat_mischief_' + kind);
     await waveAt();
     await wait(400);

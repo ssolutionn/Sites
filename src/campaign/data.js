@@ -2,7 +2,7 @@
 // Это стартовые проектные параметры (раздел 2.2 ТЗ): меняются здесь, без правки логики.
 
 export const CAMPAIGN = {
-  version: '0.9.0',
+  version: '0.9.1',
   saveVersion: 1,
 
   // --- Время и общие параметры ---
@@ -94,7 +94,7 @@ export const CAMPAIGN = {
     // на wantPlayAt просит поиграть, на mischiefAt лезет на ёлку или к гирлянде; mischiefWindow — секунд, чтобы прогнать
     boredStart: 15, boredRate: 0.45, boredRateFirstDay: 0.3, wantPlayAt: 50, mischiefAt: 85, mischiefWindow: [12, 16], afterMischief: 25, afterShooMischief: -30,
     // прогнать — помахать мышью над котом в обзоре: reversals разворотов за window секунд, каждый не короче minAmp (доля высоты экрана)
-    wave: { reversals: 3, minAmp: 0.035, window: 2.5 },
+    wave: { reversals: 3, minAmp: 0.035, window: 2.5, hitRadius: 0.08 },
   },
   phone: { typingAhead: 3, replyDelay: 4, maxChatLength: 120, maxCommentLength: 140, commentPreview: 6, doubleTapMs: 350 },
   // сообщения «просто так» (chatter.js): первое через start с, дальше раз в every с; в первый день реже
