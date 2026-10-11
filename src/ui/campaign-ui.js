@@ -30,7 +30,7 @@ function saveNote(save) {
 }
 const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
-const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🔥', sink: '🚰', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', bag: '🛍', table: '🥂', puddle: '🧽' };
+const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🍗', sink: '🚰', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', bag: '🛍', table: '🥂', puddle: '🧽' };
 const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука', skewer: '🍡 Шпажка' };
 
 // Шкала пробы: где вкус относительно «в самый раз» — понятнее, чем слово «пресно».
@@ -1402,7 +1402,7 @@ export class CampaignUI {
         if (s.oven.state !== 'empty') rows.push(this._btn(s.oven.state === 'baking' ? 'Достать (ещё рано)' : '🧤 Достать курицу', 'ovenTake', [], s.oven.state === 'baking' ? 'ghost' : 'danger big', busy));
         rows.push(back);
         const stage = { empty: 'Духовка пустая', baking: 'Запекается…', ready: 'Готово — достань!', over: 'Перегревается!', burnt: 'Сгорела' }[s.oven.state];
-        return `<h2>🔥 Духовка<span class="sub">${stage}</span></h2><div class="row">${rows.join('')}</div><div class="row">${bar}</div>${live}<p class="note">${ch ? 'Готовность через 2:30; после сигнала есть окно, чтобы достать.' : 'Сегодня духовка не нужна.'}</p>`;
+        return `<h2>🍗 Духовка<span class="sub">${stage}</span></h2><div class="row">${rows.join('')}</div><div class="row">${bar}</div>${live}<p class="note">${ch ? 'Готовность через 2:30; после сигнала есть окно, чтобы достать.' : 'Сегодня духовка не нужна.'}</p>`;
       }
       case 'sink': {
         const dirty = s.dirtyItems();
@@ -1487,7 +1487,7 @@ export class CampaignUI {
     }
     if (lay === 'chicken') {
       const ch = s.dishes.chicken;
-      extra = ch.steps.marinade.done ? `<div class="row">${this._btn('🔥 Отнести в духовку', 'goTo', ['oven'], 'primary', busy)}</div>` : '';
+      extra = ch.steps.marinade.done ? `<div class="row">${this._btn('🍗 Отнести в духовку', 'goTo', ['oven'], 'primary', busy)}</div>` : '';
     }
     const conf = s.canConfirm(id);
     const confirm = lay === 'chicken' ? '' : s.practice ? this._btn('↺ Заново', 'resetPracticeTray', [], 'ghost') : this._btn('🎄 Готово — на стол', 'confirmDish', [id], conf.ok ? 'primary' : 'soft-disabled', busy, conf.reason ?? '');

@@ -100,6 +100,31 @@ try {
     check('пробел не нажимает кнопку с фокусом', (await tipVisible()) === tipBefore);
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('oven')) {
+    // плита и духовка: в день без запекания дверца — часть плиты; в день курицы — своё место со своей меткой
+    const toScreen = (p) => S((p) => { const sv = window.__sueta.sv; const v = new sv.camera.position.constructor(p[0], p[1], p[2]).project(sv.camera); const r = document.querySelector('canvas').getBoundingClientRect(); return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height }; }, p);
+    const door = [1.45, 0.42, -1.86], hob = [1.45, 0.92, -2.1];
+    const clickAt = async (p) => { const q = await toScreen(p); await page.mouse.click(q.x, q.y); };
+    const labelShown = (id) => S((icon) => [...document.querySelectorAll('.st-label')].some((l) => l.style.display !== 'none' && l.querySelector('.ic')?.textContent === icon), id);
+    await openDay(1);
+    await closeTip(); await wait(1500);
+    check('день 1: метки духовки нет', !(await labelShown('🍗')) && (await labelShown('♨️')));
+    await clickAt(door);
+    await waitFor(() => !!window.__sueta.session.panel, 30000);
+    check('день 1: клик по дверце ведёт к плите', await sess('s.panel === "stove"'), await sess('s.panel'));
+    await openDay(7);
+    await closeTip(); await wait(1500);
+    check('день 7: у духовки своя метка 🍗', await labelShown('🍗'));
+    await shot('oven_labels');
+    await clickAt(door);
+    await waitFor(() => !!window.__sueta.session.panel, 30000);
+    check('день 7: клик по дверце — духовка', await sess('s.panel === "oven"'), await sess('s.panel'));
+    await page.keyboard.press('Escape'); await wait(800);
+    await clickAt(hob);
+    await waitFor(() => window.__sueta.session.panel === 'stove', 30000);
+    check('день 7: клик по конфоркам — плита', await sess('s.panel === "stove"'), await sess('s.panel'));
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); fail++; await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`);
 await browser.close();

@@ -456,21 +456,27 @@ export class KitchenSession {
     if (id === 'bag') return !!this.delivery.bag;
     if (id === 'puddle') return this.puddles.length > 0;
     if (id === 'table') return !!(this.day.finalServe || this.phase === 'ready');
+    // духовка — дверца под конфорками той же плиты: отдельное место, только когда в ней что-то есть
+    // или сегодня есть что запекать; иначе метка, клик и пробел ведут к плите (владелец, 0.10)
+    if (id === 'oven') return this.oven.state !== 'empty' || Object.values(this.recipes).some((r) => r.steps.some((st) => stationOfStep(st) === 'oven'));
     return true;
   }
 
-  /** Ближайшая доступная станция в пределах руки (keys.reach) — её откроет пробел; null — рядом ничего. */
+  /** Ближайшая доступная станция в пределах руки (keys.reach) — её откроет пробел; null — рядом ничего.
+   *  Срочное (убегает кастрюля, курица готова) «ближе» на keys.urgentBias м: между плитой и духовкой выбирается оно. */
   nearStation() {
     const hr = this.heroine;
     if (this.practice || this.isOver() || hr.away || hr.target) return null;
-    let best = null, bestD = this.cfg.keys.reach + EPS;
+    let best = null, bestScore = Infinity;
     for (const id of [...Object.keys(CLAYOUT.stations), 'puddle']) {
       if (!this.stationAvailable(id)) continue;
       const st = this.stationStand(id);
       const d = Math.hypot(st.x - hr.x, st.z - hr.z);
-      if (d < bestD) {
+      if (d > this.cfg.keys.reach + EPS) continue;
+      const score = d - (this.alerts.some((a) => a.station === id && a.urgent) ? this.cfg.keys.urgentBias : 0);
+      if (score < bestScore) {
         best = id;
-        bestD = d;
+        bestScore = score;
       }
     }
     return best;

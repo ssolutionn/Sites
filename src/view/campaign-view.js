@@ -495,6 +495,8 @@ export class CampaignView {
     for (const h of hits) {
       if (!h.object.visible) continue;
       const id = h.object.userData.cstation;
+      // духовка без дела — просто дверца плиты: клик проходит к плите (0.10, владелец: «конфорка и духовка реагируют одинаково»)
+      if (id && this.session?.stationAvailable && !this.session.stationAvailable(id)) continue;
       if (id) return { station: id };
     }
     // лужа
