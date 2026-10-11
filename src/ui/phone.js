@@ -87,6 +87,16 @@ export class PhoneUI {
       }
       const quick = e.target.closest('[data-quick]');
       if (quick) this.send(quick.closest('[data-composer]'), quick.dataset.quick);
+      const rt = e.target.closest('[data-reply-to]');
+      if (rt) {
+        this.replyTo = { key: this.sub, who: rt.dataset.replyTo };
+        this.sig = null;
+        this.focusComposer = true;
+      }
+      if (e.target.closest('[data-reply-cancel]')) {
+        this.replyTo = null;
+        this.sig = null;
+      }
     });
     root.addEventListener('pointerup', (e) => {
       const pic = e.target.closest('[data-photo-like]');
@@ -124,8 +134,10 @@ export class PhoneUI {
 
   send(form, text) {
     if (!form) return;
-    if (this.act(form.dataset.composer, form.dataset.target, text)) {
+    const extra = form.dataset.reply ? [form.dataset.reply] : [];
+    if (this.act(form.dataset.composer, form.dataset.target, text, ...extra)) {
       this.drafts.delete(form.dataset.draft);
+      this.replyTo = null;
       this.sig = null;
     }
   }
@@ -135,8 +147,10 @@ export class PhoneUI {
     const chat = command === 'replyChat';
     const quick = chat ? QUICK_CHAT : QUICK_COMMENT;
     const limit = chat ? s.cfg.phone.maxChatLength : s.cfg.phone.maxCommentLength;
-    return `<form class="composer" data-composer="${command}" data-target="${esc(target)}" data-draft="${esc(key)}">
-      <div class="quick-replies">${quick.map((t) => `<button type="button" data-quick="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+    const to = !chat && this.replyTo?.key === target ? this.replyTo.who : null;
+    const toChip = to ? `<div class="reply-to">Ответ для <b>${esc(FEED_AUTHORS[to]?.name ?? to)}</b><button type="button" data-reply-cancel aria-label="Не отвечать">×</button></div>` : '';
+    return `<form class="composer" data-composer="${command}" data-target="${esc(target)}" data-draft="${esc(key)}"${to ? ` data-reply="${esc(to)}"` : ''}>
+      ${toChip}<div class="quick-replies">${quick.map((t) => `<button type="button" data-quick="${esc(t)}">${esc(t)}</button>`).join('')}</div>
       <div class="compose-row"><input aria-label="${chat ? 'Сообщение' : 'Комментарий'}" placeholder="${chat ? 'Написать сообщение…' : 'Написать комментарий…'}" maxlength="${limit}" value="${esc(this.drafts.get(key) ?? '')}" autocomplete="off" /><button type="submit" class="primary" aria-label="Отправить">↑</button></div></form>`;
   }
 
@@ -169,7 +183,7 @@ export class PhoneUI {
         if (fresh.length) this.act('markFeedRead');
         feedSig = s.feedItems().map((i) => `${i.key}:${i.likes}${i.liked ? '+' : ''}:${i.talk}`).join() + [...this.fresh].join();
       }
-      feedSig += `|${s.feedUnread()}|${[...s.typingFrom()].join()}`;
+      feedSig += `|${s.feedUnread()}|${[...s.typingFrom()].join()}|${this.sub ? s.commentTyping(this.sub) ?? '' : ''}`;
     }
     const o = s.delivery.order;
     const sig = [this.app, this.sub, this.tab, clockText(new Date()), s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, !!s.delivery.bag, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' ? Math.floor(s.t) : '', s.kitchenTimers.length, s.alerts.filter(a => a.urgent).slice(0, 1).map(a => a.text).join(), feedSig, this.app === 'home' ? [s.phone.unread, s.burners.map(b => b.state).join(), s.kitchenTimers.map(x => +(s.t >= x.end)).join()].join(':') : ''].join('§');
@@ -197,10 +211,22 @@ export class PhoneUI {
       const body = this.root.querySelector('.app-body');
       if (body) body.scrollTop = keep;
     }
+    // в открытой ветке новый комментарий (свой или ответ друга) — прокрутить к нему
+    const nCom = this.app === 'andrey' && this.sub && this.tab !== 'chats' ? s.postComments(this.sub).length + (s.commentTyping(this.sub) ? 1 : 0) : 0;
+    if (this.comSeen?.view === view && nCom > this.comSeen.n) {
+      const body = this.root.querySelector('.app-body');
+      if (body) body.scrollTop = body.scrollHeight;
+    }
+    this.comSeen = { view, n: nCom };
     if (focused) {
       const input = [...this.root.querySelectorAll('[data-composer]')].find((f) => f.dataset.draft === focused.key)?.querySelector('input');
       input?.focus({ preventScroll: true });
       input?.setSelectionRange(focused.start, focused.end);
+    }
+    // «Ответить» другу — сразу в поле ввода
+    if (this.focusComposer) {
+      this.focusComposer = false;
+      this.root.querySelector('.composer input')?.focus({ preventScroll: true });
     }
   }
 
@@ -307,8 +333,19 @@ export class PhoneUI {
     }
     if (this.sub) {
       const post = s.feedItems().find((it) => it.key === this.sub);
-      const comments = s.postComments(this.sub).map((c) => `<div class="com ${c.who === 'me' ? 'own' : ''}"><b>${esc(FEED_AUTHORS[c.who]?.name ?? c.who)}</b>${esc(c.text)}</div>`).join('');
-      return `${this._head('Комментарии', '', 'andrey||feed')}<div class="app-body feed comments">${post ? this._post(s, post, s.day.id, false) : ''}${comments || '<div class="empty">Напиши первый комментарий.</div>'}</div>${post ? this._composer(s, 'commentPost', this.sub) : ''}`;
+      if (s.phone.replyUnread[this.sub]) this.act('markCommentsRead', this.sub);
+      const name = (who) => FEED_AUTHORS[who]?.name ?? who;
+      // 0.10: ветка живая — друзья отвечают; «→ тебе» у ответа героине, «Ответить» у каждого друга
+      const comments = s.postComments(this.sub)
+        .map((c) => {
+          const to = c.to === 'me' ? '<i class="to">→ тебе</i>' : c.to ? `<i class="to">→ ${esc(name(c.to))}</i>` : '';
+          const reply = c.who !== 'me' && FEED_AUTHORS[c.who] ? `<button type="button" class="com-reply" data-reply-to="${esc(c.who)}">Ответить</button>` : '';
+          return `<div class="com ${c.who === 'me' ? 'own' : ''} ${c.to === 'me' ? 'to-me' : ''}"><b>${esc(name(c.who))}</b>${to}${esc(c.text)}${reply}</div>`;
+        })
+        .join('');
+      const typing = s.commentTyping(this.sub);
+      const typingRow = typing ? `<div class="typing">${esc(name(typing))} печатает…</div>` : '';
+      return `${this._head('Комментарии', '', 'andrey||feed')}<div class="app-body feed comments">${post ? this._post(s, post, s.day.id, false) : ''}${comments || '<div class="empty">Напиши первый комментарий.</div>'}${typingRow}</div>${post ? this._composer(s, 'commentPost', this.sub) : ''}`;
     }
     if (tab === 'chats') {
       const by = {};
@@ -342,7 +379,7 @@ export class PhoneUI {
     return `<article class="post ${isNew ? 'new' : ''}" data-post="${esc(it.key)}">
       <div class="post-h"><span class="ava" style="--ava:${a.color ?? '#8f84ff'}">${a.ava}</span><span class="who"><b>${esc(a.name)}${a.badge ? ' <i class="tick">✓</i>' : ''}</b>${a.note ? `<small>${esc(a.note)}</small>` : ''}</span><span class="when">${isNew ? '<i class="new-dot">новое</i>' : ''}${feedWhen(it.day, it.at, today, s.t)}</span></div>
       ${it.text ? `<p class="post-t">${esc(it.text)}</p>` : ''}${poll}${pic ? `<div class="post-pic" ${it.mine ? '' : `data-photo-like="${esc(it.id)}"`} title="Дважды нажми на фото, чтобы поставить лайк">${pic}</div>` : ''}
-      <div class="post-f">${like}<span class="talk">💬 ${it.talk}</span></div>${preview ? coms + more : ''}</article>`;
+      <div class="post-f">${like}<span class="talk">💬 ${it.talk}${s.phone.replyUnread[it.key] ? `<em class="new-reply">ответ</em>` : ''}</span></div>${preview ? coms + more : ''}</article>`;
   }
 
   // ---------- Банк: бонусы ----------

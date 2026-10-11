@@ -93,7 +93,8 @@ export class KitchenSession {
     this.puddles = [];
     this.sinkJob = null;
     this.sinkCool = null; // остужаем под краном: { product, run, open }
-    this.phone = { messages: [], unread: 0, posts: [], feed: [], liked: {}, comments: {} };
+    this.phone = { messages: [], unread: 0, posts: [], feed: [], liked: {}, comments: {}, replyUnread: {} };
+    this.commentQueue = []; // 0.10: ответы друзей на комментарии героини — { at, key, who, text }
     const initialBonus = Math.max(0, Math.round(bonus) || 0);
     this.bonus = { points: initialBonus, banked: initialBonus, history: [] }; // banked — баллы, уже сохранённые; подарки доступны сразу
     this.decor = [...decor]; // купленный декор кухни
@@ -778,6 +779,7 @@ export class KitchenSession {
       this.pushMessage(m.from, m.text, { photo: m.photo, request: m.request });
     }
     this._updateFeed();
+    this._updateCommentReplies();
     for (const e of this.triggers) {
       if (e.fired) continue;
       switch (e.type) {

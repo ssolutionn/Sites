@@ -1,7 +1,7 @@
 // Телефон: сообщения, список покупок, заказ доставки, получение за кадром.
 import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR } from './data.js';
 import { CLAYOUT } from './layout.js';
-import { FEED_POSTS, FEED_BY_ID, MY_POST, FEED_TUNE } from './feed-data.js';
+import { FEED_POSTS, FEED_BY_ID, FEED_AUTHORS, MY_POST, FEED_TUNE, COMMENT_REPLIES, COMMENT_REACTIONS, repliedVerb } from './feed-data.js';
 import { CHAT_REPLIES, CHAT_REACTIONS, CROWD_COMMENTS } from './chatter.js';
 
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
@@ -46,13 +46,70 @@ export const phoneMethods = {
     return true;
   },
 
-  /** Написать комментарий к доступному посту или собственному фото. */
-  commentPost(key, text) {
+  /** Написать комментарий к доступному посту или собственному фото; replyTo — ответ конкретному другу из ветки.
+   *  Через phone.commentReply секунд автор поста (или тот, кому ответили) отвечает героине. */
+  commentPost(key, text, replyTo = null) {
     const t = String(text ?? '').trim().slice(0, this.cfg.phone.maxCommentLength);
-    if (!t || !this.feedItems().some((i) => i.key === key)) return false;
-    (this.phone.comments[key] ??= []).push({ who: 'me', text: t, t: this.t });
+    const it = this.feedItems().find((i) => i.key === key);
+    if (!t || !it) return false;
+    const to = replyTo && replyTo !== 'me' && FEED_AUTHORS[replyTo] && this.postComments(key).some((c) => c.who === replyTo) ? replyTo : null;
+    (this.phone.comments[key] ??= []).push({ who: 'me', text: t, t: this.t, to });
+    this._queueCommentReply(it, to, t);
     this._emit('commented', { key });
     return true;
+  },
+
+  // Кто и что ответит. На пост друга — автор, под своим фото — тот, кому ответила, иначе последний из друзей в ветке.
+  // Одновременно в пути — один ответ на пост; задержка и выбор фразы детерминированы (без общего ГСЧ дня).
+  _queueCommentReply(it, to, text) {
+    if (this.commentQueue.some((q) => q.key === it.key)) return;
+    const friends = this.postComments(it.key).filter((c) => c.who !== 'me');
+    const who = to ?? (it.mine ? friends.at(-1)?.who ?? 'mom' : it.author);
+    const pool = COMMENT_REPLIES[who];
+    if (!pool?.length) return;
+    const low = text.toLowerCase();
+    const r = COMMENT_REACTIONS.find((x) => x.matches.some((w) => low.includes(w)));
+    const said = (this.phone.comments[it.key] ?? []).filter((c) => c.who === who && c.to === 'me').map((c) => c.text);
+    let reply = r ? r[who] ?? r.text : null;
+    if (!reply || said.includes(reply)) reply = pool.find((x) => !said.includes(x)) ?? pool[said.length % pool.length];
+    let h = 0;
+    for (const ch of it.key + text) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const [a, b] = this.cfg.phone.commentReply;
+    this.commentQueue.push({ at: this.t + a + (h % 1000) / 1000 * (b - a), key: it.key, who, text: reply });
+  },
+
+  _updateCommentReplies() {
+    for (const q of this.commentQueue) {
+      if (this.t < q.at) continue;
+      q.done = true;
+      if (!this.feedItems().some((i) => i.key === q.key)) continue;
+      (this.phone.comments[q.key] ??= []).push({ who: q.who, text: q.text, t: this.t, to: 'me' });
+      this.phone.replyUnread[q.key] = (this.phone.replyUnread[q.key] ?? 0) + 1;
+      this.phone.unread++;
+      const name = FEED_AUTHORS[q.who].name;
+      this._alert('phone', `${name} ${repliedVerb(q.who)} тебе: ${q.text.length > 34 ? q.text.slice(0, 32) + '…' : q.text}`, { station: 'phone', until: this.t + 12, phone: true, open: `andrey|${q.key}|feed` });
+      this._emit('commentReply', { key: q.key, who: q.who });
+    }
+    if (this.commentQueue.some((q) => q.done)) this.commentQueue = this.commentQueue.filter((q) => !q.done);
+  },
+
+  /** Кто сейчас «печатает» ответ под постом key (за typingAhead секунд до ответа), иначе null. */
+  commentTyping(key) {
+    const q = this.commentQueue.find((x) => x.key === key && x.at - this.t <= this.cfg.phone.typingAhead);
+    return q?.who ?? null;
+  },
+
+  /** Ветка открыта — ответы в ней прочитаны. */
+  markCommentsRead(key) {
+    if (!this.phone.replyUnread[key]) return true;
+    delete this.phone.replyUnread[key];
+    this.phone.unread = this.phone.messages.filter((m) => !m.read).length + this.feedUnread();
+    return true;
+  },
+
+  /** Сколько новых ответов на комментарии героини ещё не прочитано. */
+  repliesUnread() {
+    return Object.values(this.phone.replyUnread).reduce((a, b) => a + b, 0);
   },
 
   /** Последние комментарии: исходные реплики, друзья и все ответы героини. */
@@ -182,15 +239,15 @@ export const phoneMethods = {
     }
   },
 
-  /** Сколько постов ленты ещё не просмотрено. */
+  /** Сколько постов ленты ещё не просмотрено, плюс непрочитанные ответы на комментарии героини. */
   feedUnread() {
-    return this.phone.feed.filter((f) => !f.read).length;
+    return this.phone.feed.filter((f) => !f.read).length + this.repliesUnread();
   },
 
-  /** Лента просмотрена: посты прочитаны, в счётчике остаются только сообщения чатов. */
+  /** Лента просмотрена: посты прочитаны, в счётчике остаются сообщения чатов и ответы в ветках. */
   markFeedRead() {
     for (const f of this.phone.feed) f.read = true;
-    this.phone.unread = this.phone.messages.filter((m) => !m.read).length;
+    this.phone.unread = this.phone.messages.filter((m) => !m.read).length + this.repliesUnread();
     return true;
   },
 

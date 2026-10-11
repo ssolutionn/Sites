@@ -580,4 +580,10 @@ button.ready-pulse { animation: readyPulse 1.1s ease-in-out infinite; box-shadow
 #phone button.com-more { display: block; background: transparent; box-shadow: none; text-align: left; border-radius: 0; }
 #phone .comments > .com { padding: 8px 10px; margin: 5px 0; border-radius: 10px; background: #fff; overflow-wrap: anywhere; }
 #phone .comments > .com.own { background: #d9f0dd; }
+#phone .com .to { font-style: normal; font-weight: 800; color: var(--ink-2); margin-right: 4px; }
+#phone .comments > .com.to-me { box-shadow: inset 3px 0 0 var(--gold); }
+#phone .com-reply { display: block; margin-top: 3px; padding: 0; background: transparent; box-shadow: none; font-size: 12.5px; font-weight: 800; color: var(--ink-2); }
+#phone .reply-to { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12.5px; color: var(--ink-2); }
+#phone .reply-to button { padding: 0 6px; background: transparent; box-shadow: none; font-weight: 900; }
+#phone .talk .new-reply { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-pill); background: var(--berry); color: #fff; font-style: normal; font-size: 12.5px; }
 #phone .post-pic[data-photo-like] { touch-action: manipulation; cursor: pointer; user-select: none; }

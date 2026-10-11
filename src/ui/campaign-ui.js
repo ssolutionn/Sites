@@ -1023,7 +1023,12 @@ export class CampaignUI {
             this.sound.unlock();
             if (b.dataset.a === 'shoo') this.act('shoo');
             else if (b.dataset.a === 'collect') this.act('collectOrder');
-            else if (b.dataset.a === 'go') this.act('goTo', b.dataset.s);
+            else if (b.dataset.a === 'go') {
+              // ответ на комментарий: телефон откроется сразу на ветке
+              if (a.open) this.phoneNext = a.open;
+              if (a.open && this.app.session?.panel === 'phone') this.openPhone();
+              else this.act('goTo', b.dataset.s);
+            }
             else this.act('dismissAlert', a.id);
           }),
         );

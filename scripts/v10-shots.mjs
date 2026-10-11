@@ -125,6 +125,44 @@ try {
     check('день 7: клик по конфоркам — плита', await sess('s.panel === "stove"'), await sess('s.panel'));
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('comments')) {
+    // комментарий героини: «печатает…», ответ автора с уведомлением, «Ответить» конкретному другу; буквы в поле не двигают героиню
+    await openDay(1);
+    await closeTip();
+    await S(() => window.__sueta.session.fastForward(12));
+    await station('phone');
+    await closeTip();
+    await page.locator('#phone [data-nav^="andrey"]').first().click();
+    await page.locator('#phone [data-nav="andrey||feed"]').click();
+    await page.locator('#phone .com-more').first().click();
+    await waitFor(() => !!document.querySelector('#phone form[data-composer="commentPost"]'), 20000);
+    const key = await S(() => document.querySelector('#phone form[data-composer="commentPost"]')?.dataset.target);
+    const before = await sess('({ x: s.heroine.x, z: s.heroine.z, panel: s.panel })');
+    await page.locator('#phone .composer input').click();
+    await page.keyboard.type('Красота, сделаю так же');
+    await page.keyboard.press('Enter');
+    await waitFor(() => /Красота, сделаю так же/.test(document.querySelector('#phone .comments')?.textContent ?? ''), 20000);
+    const after = await sess('({ x: s.heroine.x, z: s.heroine.z, panel: s.panel })');
+    check('буквы WASD в поле ввода не двигают героиню', JSON.stringify(before) === JSON.stringify(after), JSON.stringify(after));
+    check('комментарий героини в ветке', await S(() => /Красота, сделаю так же/.test(document.querySelector('#phone .comments')?.textContent ?? '')));
+    await S((k) => { const s = window.__sueta.session; const q = s.commentQueue.find((x) => x.key === k); s.fastForward(Math.max(0, q.at - s.t - 1)); }, key);
+    await waitFor(() => /печатает/.test(document.querySelector('#phone .comments')?.textContent ?? ''), 15000);
+    check('друг «печатает…»', await S(() => /печатает/.test(document.querySelector('#phone .comments')?.textContent ?? '')));
+    await S(() => window.__sueta.session.fastForward(2));
+    await waitFor(() => !!document.querySelector('#phone .com.to-me'), 15000);
+    const reply = await S(() => document.querySelector('#phone .com.to-me')?.textContent ?? '');
+    check('ответ пришёл с «→ тебе»', /→ тебе/.test(reply), reply);
+    check('уведомление об ответе', await sess('s.alerts.some((a) => a.key === "phone" && /ответил/.test(a.text))'), await sess('s.alerts.map((a) => a.text).join(" | ")'));
+    await shot('comment_reply');
+    await page.locator('#phone .com-reply').first().click();
+    await waitFor(() => !!document.querySelector('#phone .reply-to'), 20000);
+    const chip = await S(() => document.querySelector('#phone .reply-to')?.textContent ?? '');
+    check('«Ответить» — метка «Ответ для …» и курсор в поле', /Ответ для/.test(chip) && (await S(() => document.activeElement?.matches('.composer input'))), chip);
+    await page.keyboard.type('Спасибо!'); await page.keyboard.press('Enter');
+    await waitFor((k) => window.__sueta.session.phone.comments[k]?.at(-1)?.text === 'Спасибо!', 20000, key);
+    check('ответ ушёл конкретному другу', await S((k) => !!window.__sueta.session.phone.comments[k].at(-1).to, key));
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); fail++; await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`);
 await browser.close();

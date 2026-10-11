@@ -97,7 +97,7 @@ export const CAMPAIGN = {
     // прогнать — помахать мышью над котом в обзоре: reversals разворотов за window секунд, каждый не короче minAmp (доля высоты экрана)
     wave: { reversals: 3, minAmp: 0.035, window: 2.5, hitRadius: 0.08 },
   },
-  phone: { typingAhead: 3, replyDelay: 4, maxChatLength: 120, maxCommentLength: 140, commentPreview: 6, doubleTapMs: 350 },
+  phone: { typingAhead: 3, replyDelay: 4, maxChatLength: 120, maxCommentLength: 140, commentPreview: 6, doubleTapMs: 350, commentReply: [5, 9] }, // commentReply: через сколько секунд друг отвечает на комментарий (0.10)
   // сообщения «просто так» (chatter.js): первое через start с, дальше раз в every с; в первый день реже
   notify: { start: 20, every: [30, 45], startFirstDay: 45, everyFirstDay: [50, 70] },
 
