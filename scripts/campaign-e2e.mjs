@@ -295,7 +295,8 @@ async function phoneTour(prefix) {
     await page.locator('#phone .ph-home').click();
     await wait(300);
   }
-  check('у телефона пять приложений на домашнем экране', ids.length === 5, ids.join(', '));
+  // 0.10: шестое приложение — «Ёлочный базар» (игрушки переехали из «Банка»)
+  check('у телефона шесть приложений на домашнем экране', ids.length === 6 && ids.includes('bazaar'), ids.join(', '));
   await closePanel();
   check('телефон закрывается', await waitFor(() => !window.__sueta.session.panel && document.getElementById('phone').classList.contains('hidden'), 5000));
 }
