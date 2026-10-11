@@ -55,6 +55,51 @@ try {
     await page.keyboard.press('KeyQ'); await wait(300);
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('keys')) {
+    // WASD ведёт героиню, над станцией рядом — «␣ Доска», пробел открывает; у гирлянды пробел — удержание
+    await openDay(1);
+    await closeTip();
+    const hr = () => S(() => { const h = window.__sueta.session.heroine; return { x: h.x, z: h.z, st: h.station, moving: h.moving }; });
+    const p0 = await hr();
+    await page.keyboard.down('KeyS');
+    await waitFor(() => window.__sueta.session.heroine.moving, 10000);
+    check('S — идёт к камере', (await hr()).z > p0.z, JSON.stringify(await hr()));
+    await waitFor(() => !window.__sueta.session.heroine.moving || window.__sueta.session.heroine.z > -0.2, 20000);
+    await page.keyboard.down('KeyA');
+    await waitFor(() => window.__sueta.session.heroine.x < -0.35, 20000);
+    await page.keyboard.up('KeyA'); await page.keyboard.up('KeyS'); await wait(300);
+    const p1 = await hr();
+    check('в остров не вошла', p1.z < 0.1 && (await S(() => { const s = window.__sueta.session; return s.nav.isFree(s.heroine.x, s.heroine.z); })), JSON.stringify(p1));
+    await waitFor(() => document.querySelector('.st-label.near') != null, 10000);
+    const near = await S(() => document.querySelector('.st-label.near')?.textContent ?? '');
+    check('над доской подпись «Пробел · Доска»', /Пробел/.test(near) && /Доска/.test(near), near);
+    await shot('keys_near');
+    await page.keyboard.press('Space');
+    await waitFor(() => window.__sueta.session.panel === 'board', 20000);
+    check('пробел открыл доску', await sess('s.panel === "board"'));
+    await page.keyboard.down('KeyW'); await wait(400); await page.keyboard.up('KeyW');
+    check('в крупном плане W не уводит от доски', await sess('s.panel === "board"'));
+    await page.keyboard.press('Escape'); await wait(400);
+    await page.keyboard.down('KeyW');
+    await waitFor(() => window.__sueta.session.heroine.z < -0.6, 20000);
+    await page.keyboard.up('KeyW');
+    check('Esc, затем W — ушла от доски', await sess('s.heroine.station === null && s.heroine.z < -0.5'));
+    // гирлянда: подойти клавишами не обязательно — проверяем удержание пробелом
+    await S(() => window.__sueta.session.lightsOff('garland'));
+    await closeTip();
+    await station('garland');
+    await closeTip();
+    await page.keyboard.down('Space');
+    const fixed = await waitFor(() => window.__sueta.session.garland.broken === false, 30000);
+    await page.keyboard.up('Space');
+    check('удержание пробела чинит гирлянду', fixed);
+    // кнопка с фокусом не нажимается пробелом
+    await S(() => document.querySelector('#btn-help')?.focus());
+    const tipBefore = await tipVisible();
+    await page.keyboard.press('Space'); await wait(400);
+    check('пробел не нажимает кнопку с фокусом', (await tipVisible()) === tipBefore);
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); fail++; await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`);
 await browser.close();

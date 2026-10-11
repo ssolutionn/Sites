@@ -55,6 +55,7 @@ export class KitchenSession {
     this.action = null;
     this.panel = null;
     this.holds = { radio: false, garland: false, star: false };
+    this.moveInput = null; // 0.10: направление с клавиатуры (WASD), метры кухни; null — стоять
     this.pointerDown = false;
 
     this.equipment = {
@@ -356,7 +357,7 @@ export class KitchenSession {
   _accountTime(h) {
     const hr = this.heroine;
     if (hr.away) this.stats.away += h;
-    else if (hr.target) this.stats.walk += h;
+    else if (hr.target || hr.moving) this.stats.walk += h;
     else if (this.panel === 'phone') this.stats.phone += h;
     else if (this.panel && CLOSEUP_STATIONS.has(this.panel)) this.stats.closeup += h;
     else if (this.panel) this.stats.panel += h;
@@ -441,6 +442,94 @@ export class KitchenSession {
     return true;
   }
 
+  // ---------- клавиатура (0.10): WASD — ходьба, пробел — контакт ----------
+  /** Направление ходьбы с клавиатуры в осях кухни (x — вправо, z — к камере); (0, 0) — остановиться. */
+  setMoveInput(x, z) {
+    const d = Math.hypot(x, z);
+    this.moveInput = d > EPS ? { x: x / d, z: z / d } : null;
+    return true;
+  }
+
+  /** Станция видна и с ней можно работать (метки над кухней и пробел смотрят сюда). */
+  stationAvailable(id) {
+    if (!this.stationStand(id)) return false;
+    if (id === 'bag') return !!this.delivery.bag;
+    if (id === 'puddle') return this.puddles.length > 0;
+    if (id === 'table') return !!(this.day.finalServe || this.phase === 'ready');
+    return true;
+  }
+
+  /** Ближайшая доступная станция в пределах руки (keys.reach) — её откроет пробел; null — рядом ничего. */
+  nearStation() {
+    const hr = this.heroine;
+    if (this.practice || this.isOver() || hr.away || hr.target) return null;
+    let best = null, bestD = this.cfg.keys.reach + EPS;
+    for (const id of [...Object.keys(CLAYOUT.stations), 'puddle']) {
+      if (!this.stationAvailable(id)) continue;
+      const st = this.stationStand(id);
+      const d = Math.hypot(st.x - hr.x, st.z - hr.z);
+      if (d < bestD) {
+        best = id;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  /** Что держит пробел на открытой станции: гирлянда, звезда на ёлке или радио (когда сломаны). */
+  holdKind() {
+    if (this.panel === 'garland' && this.garland.broken) return 'garland';
+    if (this.panel === 'tree' && this.star.broken) return 'star';
+    if (this.panel === 'radio' && this.radio.broken) return 'radio';
+    return null;
+  }
+
+  /** Пробел нажат: удержание на станции или подойти к ближайшей станции и открыть её. */
+  interact() {
+    if (this.isOver() || this.heroine.away) return false;
+    const kind = this.holdKind();
+    if (kind) return this.setHold(kind, true);
+    if (this.panel) return false;
+    const id = this.nearStation();
+    if (!id) {
+      this.setHint('Рядом ничего нет — подойди ближе к нужному месту');
+      return false;
+    }
+    return this.goTo(id);
+  }
+
+  /** Пробел отпущен: удержание прекращается, прогресс остаётся. */
+  interactUp() {
+    for (const k of Object.keys(this.holds)) this.holds[k] = false;
+    return true;
+  }
+
+  // Шаг по клавишам: клик-путь отменяется, станция без крупного плана закрывается; в мебель не заходит —
+  // скользит вдоль неё по свободной оси; к камере — не дальше keys.frontZ (иначе уйдёт из кадра).
+  // Застряла внутри препятствия (лужа под ногами) — выпускаем.
+  _stepInput(h) {
+    const hr = this.heroine, d = this.moveInput;
+    if (hr.target) {
+      hr.target = null;
+      hr.path = [];
+    }
+    if (this.panel || hr.station) this._leaveStation();
+    const step = this.cfg.walkSpeed * h;
+    const stuck = !this.nav.isFree(hr.x, hr.z);
+    const inside = (x, z) => z <= this.cfg.keys.frontZ && this.nav.inside(this.nav.cellOf(x, z).c, this.nav.cellOf(x, z).r);
+    const ok = (x, z) => inside(x, z) && (stuck || this.nav.isFree(x, z));
+    const nx = hr.x + d.x * step, nz = hr.z + d.z * step;
+    let moved = true;
+    if (ok(nx, nz)) {
+      hr.x = nx;
+      hr.z = nz;
+    } else if (Math.abs(d.x) > EPS && ok(nx, hr.z)) hr.x = nx;
+    else if (Math.abs(d.z) > EPS && ok(hr.x, nz)) hr.z = nz;
+    else moved = false;
+    hr.facing = Math.atan2(d.x, d.z);
+    hr.moving = moved;
+  }
+
   _leaveStation() {
     this._cancelAction();
     this._releaseHolds();
@@ -458,6 +547,10 @@ export class KitchenSession {
         hr.away = false;
         this._deliveryReturned();
       }
+      return;
+    }
+    if (this.moveInput && this._canMove() && !(this.panel && CLOSEUP_STATIONS.has(this.panel))) {
+      this._stepInput(h);
       return;
     }
     if (!hr.target) {

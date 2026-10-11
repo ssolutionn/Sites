@@ -158,7 +158,7 @@ export class CampaignUI {
   _label(id, text) {
     const d = document.createElement('div');
     d.className = 'st-label';
-    d.innerHTML = `<span class="ic">${STATION_ICON[id] ?? ''}</span><span class="nm">${esc(text)}</span>`;
+    d.innerHTML = `<kbd class="kc">Пробел</kbd><span class="ic">${STATION_ICON[id] ?? ''}</span><span class="nm">${esc(text)}</span>`;
     d.style.display = 'none';
     d.addEventListener('click', () => {
       this.sound.unlock();
@@ -226,6 +226,8 @@ export class CampaignUI {
 
   _controls() {
     return `<table>
+      <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> или стрелки</td><td>Ходить по кухне</td></tr>
+      <tr><td><kbd>Пробел</kbd></td><td>Открыть место рядом (на метке — «Пробел»); у гирлянды, звезды и радио — удерживать</td></tr>
       <tr><td>Клик по полу</td><td>Пойти в эту точку</td></tr>
       <tr><td>Клик по станции или метке</td><td>Подойти и начать действие</td></tr>
       <tr><td>Зажать и провести у доски</td><td>Росчерк ножом: сверху вниз или слева направо</td></tr>
@@ -233,7 +235,8 @@ export class CampaignUI {
       <tr><td>Удержание и движение</td><td>Намазывание, перемешивание, тёрка, мытьё, уборка, маринад</td></tr>
       <tr><td>Перетаскивание</td><td>Стопки канапе, фрукты, сервировка стола</td></tr>
       <tr><td><kbd>Q</kbd></td><td>Рецепт</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Закрыть телефон/рецепт, иначе пауза</td></tr>
+      <tr><td><kbd>A</kbd><kbd>D</kbd> у доски</td><td>Повернуть доску</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Закрыть рецепт, отойти от места, иначе пауза</td></tr>
       <tr><td><kbd>M</kbd></td><td>Звук</td></tr>
     </table>`;
   }
@@ -976,11 +979,11 @@ export class CampaignUI {
 
   _renderLabels(s) {
     const closeup = CLOSEUP_STATIONS.has(s.panel) || s.practice;
+    // 0.10: станция, которую откроет пробел, — подписана и с клавишей «␣»
+    const near = s.panel ? null : s.nearStation();
     for (const [id, el] of Object.entries(this.labelEls)) {
-      let show = !closeup && !s.heroine.away && s.phase !== 'finished';
-      if (id === 'bag') show = show && !!s.delivery.bag;
-      if (id === 'puddle') show = show && s.puddles.length > 0;
-      if (id === 'table') show = show && (s.day.finalServe || s.phase === 'ready');
+      const show = !closeup && !s.heroine.away && s.phase !== 'finished' && s.stationAvailable(id);
+      el.classList.toggle('near', show && id === near);
       if (!show) {
         el.style.display = 'none';
         continue;
@@ -1412,15 +1415,15 @@ export class CampaignUI {
       case 'radio': {
         // док радио: шкала-индикатор и одна главная кнопка; настройка — только ручкой на самом радио (или колесом над ним)
         const main = s.radio.broken
-          ? `<button class="primary big hold-btn" data-hold="radio" data-act="hold">🎛 Настроить (удерживай)</button>`
+          ? `<button class="primary big hold-btn" title="Удерживай кнопку мыши или пробел" data-hold="radio" data-act="hold">🎛 Настроить (удерживай)</button>`
           : this._btn(s.radio.enabled ? '⏻ Выключить' : '⏻ Включить', 'toggleRadio', [], s.radio.enabled ? '' : 'primary', busy);
         return `<h2>📻 Радио</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items radio-tuner"><div class="radio-readout" data-live></div></div><div class="dock-main">${main}</div></div>`;
       }
       case 'garland':
-        return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
+        return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" title="Удерживай кнопку мыши или пробел" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
       case 'tree': {
         // ёлка (0.9): звезда, подарки дня, игрушки из коробки — выбрать и кликнуть по ветке
-        const star = s.star.broken ? `<button class="primary big hold-btn" data-hold="star" data-act="hold">⭐ Поправить звезду (удерживай)</button>` : '';
+        const star = s.star.broken ? `<button class="primary big hold-btn" title="Удерживай кнопку мыши или пробел" data-hold="star" data-act="hold">⭐ Поправить звезду (удерживай)</button>` : '';
         const gifts = s.giftsLeft().map((i) => this._btn(`🎁 Подарок ${i + 1}`, 'openGift', [i], 'primary gift-btn', busy, 'Открыть подарок')).join('');
         const fallen = s.toys.filter((x) => x.fallen).length;
         const pick = fallen ? this._btn(`🧸 Поднять игрушки (${fallen})`, 'pickUpToys', [], 'danger', busy) : '';

@@ -518,6 +518,23 @@ async function boot() {
   });
   const TURN_KEYS = { KeyA: 1, KeyD: -1 };
   let turnHeld = null;
+  // 0.10: WASD и стрелки — ходьба в обзоре (камера смотрит вдоль −z: W — вглубь кухни, D — вправо); пробел — контакт
+  const MOVE_KEYS = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
+  const moveHeld = new Set();
+  let moveSent = '', moveFor = null;
+  const syncMove = () => {
+    let x = 0, z = 0;
+    for (const c of moveHeld) {
+      x += MOVE_KEYS[c][0];
+      z += MOVE_KEYS[c][1];
+    }
+    const sig = `${x},${z}`;
+    if (!session || (sig === moveSent && moveFor === session)) return;
+    moveSent = sig;
+    moveFor = session;
+    session.setMoveInput(x, z);
+  };
+  const typing = (e) => e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
   const TURN_HOLD = 180; // мс: дольше — уже не тап, а вращение
   const KNIFE_DENY = new Set(['too-close', 'limit', 'short', 'diagonal', 'wobbly', 'rounds-only', 'outside']);
   const release = () => {
@@ -544,9 +561,15 @@ async function boot() {
   );
 
   window.addEventListener('keydown', (e) => {
+    if (typing(e)) return;
+    // пробел не должен «нажимать» кнопку, на которой остался фокус после клика мышью
+    if (e.code === 'Space' && mode === 'kitchen') e.preventDefault();
     if (e.repeat) return;
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (e.key === 'Escape') {
+    if (e.code === 'Space' && mode === 'kitchen') {
+      sound.unlock();
+      const r = act('interact');
+      if (r === false && !session.panel) sound.play('deny');
+    } else if (e.key === 'Escape') {
       if (mode === 'kitchen') {
         // Esc — «назад»: закрыть рецепт, выйти со станции (крупный план → обзор, как подписано на «←»), в обзоре — пауза
         if (ui.recipeOpen) ui.toggleRecipe(false);
@@ -560,16 +583,26 @@ async function boot() {
       // A/D: короткое нажатие — доска на четверть оборота, удержание — плавно на любой угол
       sound.unlock();
       turnHeld = { code: e.code, dir: TURN_KEYS[e.code], t0: performance.now(), spun: false };
+    } else if (MOVE_KEYS[e.code] && mode === 'kitchen') {
+      sound.unlock();
+      moveHeld.add(e.code);
     } else if (e.code === 'KeyM') app.toggleMute();
     else if (e.code === 'KeyQ' && mode === 'kitchen') ui.toggleRecipe();
   });
   window.addEventListener('keyup', (e) => {
+    moveHeld.delete(e.code);
+    if (e.code === 'Space') {
+      if (!typing(e) && mode === 'kitchen') e.preventDefault();
+      session?.interactUp();
+    }
     if (!turnHeld || e.code !== turnHeld.code) return;
     if (!turnHeld.spun) act('boardTurn', turnHeld.dir);
     turnHeld = null;
   });
   window.addEventListener('blur', () => {
     turnHeld = null;
+    moveHeld.clear();
+    session?.interactUp();
     session?.pointerUp();
     app.pause();
   });
@@ -608,6 +641,7 @@ async function boot() {
     const real = Math.max(0, (now - last) / 1000);
     last = now;
     if (mode === 'kitchen' && session) {
+      syncMove();
       if (turnHeld && now - turnHeld.t0 > TURN_HOLD) {
         turnHeld.spun = true;
         session.boardSpin(turnHeld.dir, Math.min(real, CAMPAIGN.maxFrameDt));

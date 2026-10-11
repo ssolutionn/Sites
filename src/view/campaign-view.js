@@ -915,7 +915,7 @@ export class CampaignView {
   _pose(s) {
     if (!s) return { pose: 'menu' };
     const a = s.action;
-    if (s.heroine.target) return { pose: 'walk' };
+    if (s.heroine.target || s.heroine.moving) return { pose: 'walk' };
     if (a?.type === 'shoo') return { pose: 'shoo' };
     if (a?.type === 'cut') return { pose: 'cut', progress: a.elapsed / a.duration };
     if (a) return { pose: 'work' };
