@@ -30,7 +30,7 @@ export function buildNav() {
 }
 
 export class KitchenSession {
-  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, challenge = false, tableDishes = [], mods = {}, bonus = 0, decor = [], toys = [], giftsOpened = [] } = {}) {
+  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, challenge = false, tableDishes = [], mods = {}, bonus = 0, decor = [], toys = [], giftsOpened = [], setsDone = [] } = {}) {
     this.cfg = cfg;
     this.challenge = !!challenge; // испытание: баллы и декор кампании не трогаем (persist.js)
     this.mods = mods;
@@ -98,7 +98,7 @@ export class KitchenSession {
     const initialBonus = Math.max(0, Math.round(bonus) || 0);
     this.bonus = { points: initialBonus, banked: initialBonus, history: [] }; // banked — баллы, уже сохранённые; подарки доступны сразу
     this.decor = [...decor]; // купленный декор кухни
-    this._initTree(toys, giftsOpened); // игрушки на ёлке и подарки дня (st-tree.js)
+    this._initTree(toys, giftsOpened, setsDone); // игрушки на ёлке, подарки дня, собранные наборы (st-tree.js)
     this.kitchenTimers = [];
     this.delivery = { draft: {}, order: null, bag: null, usePoints: false };
     this.table = { placed: {}, available: new Set(tableDishes) };

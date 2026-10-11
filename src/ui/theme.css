@@ -330,6 +330,7 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 #phone .app-andrey .ico { background: linear-gradient(160deg, #7b6cff, #4c3fd8); color: #fff; }
 #phone .app-bank .ico { background: linear-gradient(160deg, #ffd06a, #e2a52c); color: #3b2a10; }
 #phone .app-book .ico { background: linear-gradient(160deg, #e2534f, #a32a2f); }
+#phone .app-bazaar .ico { background: linear-gradient(160deg, #3fa46a, #1f6a43); }
 #phone .app-timers .ico { background: linear-gradient(160deg, #ff9f43, #e86a1d); color: #fff; }
 #phone .hint-home { position: absolute; left: 0; right: 0; bottom: 44px; text-align: center; font-size: 13px; font-weight: 800; opacity: 0.85; }
 /* приложения */
@@ -449,6 +450,18 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 #phone .decor .dn { flex: 1; display: flex; flex-direction: column; }
 #phone .decor .dn small { color: var(--ink-2); font-size: 11.5px; }
 #phone .decor .owned { font-size: 12px; font-weight: 800; color: var(--pine); }
+#phone button.decor.go-bazaar { width: 100%; text-align: left; box-shadow: none; }
+#phone .baz-bal { padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: #fff; font-size: 13px; }
+#phone .baz-bal b { font-size: 18px; color: var(--pine); }
+#phone .baz-bal small { display: block; color: var(--ink-2); font-size: 12.5px; }
+#phone .deal-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 16px; background: linear-gradient(135deg, #fff4d6, #ffe2a3); box-shadow: inset 0 0 0 2px var(--gold); }
+#phone .deal-card .di { font-size: 34px; }
+#phone .deal-card .dn { flex: 1; display: flex; flex-direction: column; }
+#phone .deal-card .dn small { font-size: 12.5px; color: var(--ink-2); }
+#phone .toy-set h4 { margin: 12px 2px 6px; }
+#phone .toy-set h4 small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); text-transform: none; letter-spacing: 0; }
+#phone .toy-set h4 .set-done { color: var(--pine); font-weight: 900; }
+#phone .decor.toy.deal { box-shadow: inset 0 0 0 2px var(--gold); }
 #phone .h-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee3d3; }
 #phone .h-row b { color: var(--pine); }
 #phone .h-row b.neg { color: var(--berry-dark); }

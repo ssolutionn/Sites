@@ -183,7 +183,7 @@ export const DECOR = {
   candles: { name: 'Свечи-звёзды', icon: '⭐', price: 25, note: 'Подсвечники на подоконник' },
 };
 
-// Ёлочные игрушки (0.9, пункт 24 владельца): покупают в «Банке» за баллы или находят в подарках под ёлкой;
+// Ёлочные игрушки (0.9, пункт 24 владельца): покупают в «Ёлочном базаре» (0.10) за баллы или находят в подарках под ёлкой;
 // вешают на ёлку в крупном плане. Ёлка наряжается от дня к дню (save.toys). shape — модель в src/view/toys.js.
 export const TOYS = {
   ballRed: { name: 'Красный шар', icon: '🔴', price: 25, color: 0xd7262b, shape: 'ball' },
@@ -197,6 +197,16 @@ export const TOYS = {
   santa: { name: 'Дед Мороз', icon: '🎅', price: 60, color: 0xd7262b, shape: 'figure' },
   snowmaiden: { name: 'Снегурочка', icon: '👧', price: 60, color: 0x4f9fe0, shape: 'figure' },
 };
+
+// 0.10: наборы игрушек «Ёлочного базара». Повесил на ёлку весь набор разом — разовая награда баллами (save.sets).
+// Награда меньше цены набора: это приятный возврат, а не заработок.
+export const TOY_SETS = {
+  classic: { name: 'Классика', icon: '🔴', toys: ['ballRed', 'ballBlue', 'ballGold'], reward: 30 },
+  forest: { name: 'Зимний лес', icon: '🌲', toys: ['cone', 'icicle', 'snowflake'], reward: 40 },
+  tale: { name: 'Сказка', icon: '🎅', toys: ['santa', 'snowmaiden', 'bird', 'bell'], reward: 60 },
+};
+// Ёлочный базар: каждый день одна игрушка со скидкой dealOff (закреплена за днём — st-tree.js dealToy).
+export const BAZAAR = { dealOff: 0.3 };
 
 // Подарки под ёлкой: perDay штук в каждый день кампании, внутри — баллы или игрушка (вес w).
 // Приз закреплён за днём и номером подарка: переиграть день и «перевыбить» приз нельзя (st-tree.js giftPrize).

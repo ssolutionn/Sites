@@ -1,6 +1,6 @@
 // Что из прохождения попадает в сохранение кампании (0.8). Чистые функции: main.js только вызывает их и пишет в хранилище.
 // Правило: испытания и практика кампанию не трогают; баллы дня попадают в сохранение только итогом дня.
-import { DECOR, TOYS, GIFTS } from './data.js';
+import { DECOR, TOYS, GIFTS, TOY_SETS } from './data.js';
 
 /** Отметить, что идёт день кампании (чтобы после перезагрузки начать его заново). Возвращает true, если сохранение изменилось. */
 export function markInProgress(saveData, { dayId, practice = false, challenge = false }) {
@@ -42,8 +42,15 @@ export function applyTreeEvent(saveData, e, { toys = null, practice = false, cha
     if (e.prize?.kind === 'points') saveData.bonus = (saveData.bonus ?? 0) + e.prize.n;
   } else if (e.type === 'toyBought') {
     const t = TOYS[e.id];
-    if (!t || (saveData.bonus ?? 0) < t.price) return false;
-    saveData.bonus = Math.max(0, (saveData.bonus ?? 0) - t.price);
+    const price = e.price ?? t?.price; // 0.10: товар дня — со скидкой
+    if (!t || (saveData.bonus ?? 0) < price) return false;
+    saveData.bonus = Math.max(0, (saveData.bonus ?? 0) - price);
+  } else if (e.type === 'setComplete') {
+    // 0.10: набор собран — награда разовая, набор запоминается
+    saveData.sets ??= [];
+    if (!TOY_SETS[e.id] || saveData.sets.includes(e.id)) return false;
+    saveData.sets = [...saveData.sets, e.id];
+    saveData.bonus = (saveData.bonus ?? 0) + (e.n ?? 0);
   } else if (!['toyHung', 'toyTaken', 'toysKnocked', 'toysPicked'].includes(e.type)) return false;
   if (toys) saveData.toys = toys.filter((t) => TOYS[t.id]).map((t) => ({ id: t.id, slot: Number.isInteger(t.slot) ? t.slot : null }));
   return true;

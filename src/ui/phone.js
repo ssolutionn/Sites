@@ -1,7 +1,7 @@
 // Телефон героини: цельный смартфон с новогодним домашним экраном и пятью приложениями.
 // Только отображение и команды через act(...): состояние живёт в KitchenSession.
 import { clockText, wallAgo } from '../campaign/clock.js';
-import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER, TOYS } from '../campaign/data.js';
+import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER, TOYS, TOY_SETS, BAZAAR } from '../campaign/data.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
@@ -21,6 +21,7 @@ export const APPS = [
   { id: 'shop', name: NEUTRAL ? 'Доставка' : 'Пятёрочка', icon: NEUTRAL ? '🛒' : `<img src="${LOGO_URL}" alt="" />`, cls: 'app-shop' },
   { id: 'andrey', name: 'Андрей', icon: '<b>А</b>', cls: 'app-andrey' },
   { id: 'bank', name: 'Банк', icon: '<b>₽</b>', cls: 'app-bank' },
+  { id: 'bazaar', name: 'Ёлочный базар', icon: '🎄', cls: 'app-bazaar' },
   { id: 'book', name: 'Кулинарная книга', icon: '📖', cls: 'app-book' },
   { id: 'timers', name: 'Таймеры', icon: '⏲', cls: 'app-timers' },
 ];
@@ -260,6 +261,8 @@ export class PhoneUI {
         return this._andrey(s);
       case 'bank':
         return this._bank(s);
+      case 'bazaar':
+        return this._bazaar(s);
       case 'book':
         return this._book(s);
       case 'timers':
@@ -382,6 +385,44 @@ export class PhoneUI {
       <div class="post-f">${like}<span class="talk">💬 ${it.talk}${s.phone.replyUnread[it.key] ? `<em class="new-reply">ответ</em>` : ''}</span></div>${preview ? coms + more : ''}</article>`;
   }
 
+  // ---------- Ёлочный базар (0.10): игрушки наборами, товар дня со скидкой ----------
+  _bazaar(s) {
+    const own = {}, hung = {};
+    for (const t of s.toys ?? []) {
+      own[t.id] = (own[t.id] ?? 0) + 1;
+      if (t.slot != null) hung[t.id] = true;
+    }
+    const closed = s.challenge || s.practice;
+    const deal = s.dealId();
+    const off = Math.round(BAZAAR.dealOff * 100);
+    const buy = (id) => {
+      const price = s.toyPrice(id);
+      const can = !closed && s.bonus.banked >= price;
+      return btn(`⭐ ${price}`, 'buyToy', [id], can ? 'primary mini' : 'mini soft-disabled', false, can ? 'Купить — игрушка появится в коробке у ёлки' : `Для украшений нужно ${price} баллов`);
+    };
+    const row = (id) => {
+      const t = TOYS[id];
+      const sale = id === deal;
+      const note = own[id] ? `у тебя: ${own[id]}${hung[id] ? ' · на ёлке' : ''}` : sale ? `<s>${t.price}</s> сегодня −${off} %` : 'на ёлку';
+      return `<div class="decor toy ${sale ? 'deal' : ''}"><span class="di">${t.icon}</span><span class="dn"><b>${esc(t.name)}</b><small>${note}</small></span>${buy(id)}</div>`;
+    };
+    const sets = Object.entries(TOY_SETS)
+      .map(([id, set]) => {
+        const p = s.setProgress(id);
+        const status = p.done ? '<small class="set-done">собран ✓</small>' : `<small class="set-prog">на ёлке ${p.hung} из ${p.need} · весь набор +${set.reward}</small>`;
+        return `<section class="toy-set"><h4>${set.icon} ${esc(set.name)}${status}</h4>${set.toys.map(row).join('')}</section>`;
+      })
+      .join('');
+    const dealCard = deal
+      ? `<div class="deal-card"><span class="di">${TOYS[deal].icon}</span><span class="dn"><small>Товар дня · −${off} %</small><b>${esc(TOYS[deal].name)}</b><small><s>${TOYS[deal].price}</s> → ${s.toyPrice(deal)} баллов</small></span>${buy(deal)}</div>`
+      : '';
+    return `${this._head('Ёлочный базар', 'игрушки на ёлку за баллы')}<div class="app-body bank bazaar">
+      <div class="baz-bal">Для украшений: <b>${s.bonus.banked}</b> баллов${s.bonus.points > s.bonus.banked ? `<small>ещё ${s.bonus.points - s.bonus.banked} за готовку — после дня</small>` : ''}</div>
+      ${closed ? '<p class="fine">В испытании и практике базар закрыт.</p>' : dealCard}
+      <p class="fine">Купленная игрушка ждёт в коробке у ёлки. Повесь весь набор — вернём часть баллов.</p>
+      ${sets}</div>`;
+  }
+
   // ---------- Банк: бонусы ----------
   _bank(s) {
     const hist = s.bonus.history.slice(0, 8).map((h) => `<div class="h-row"><span>${esc(h.why)}</span><b class="${h.n < 0 ? 'neg' : ''}">${h.n > 0 ? '+' : ''}${h.n}</b></div>`).join('');
@@ -391,17 +432,12 @@ export class PhoneUI {
         return `<div class="decor ${own ? 'own' : ''}"><span class="di">${d.icon}</span><span class="dn"><b>${esc(d.name)}</b><small>${esc(d.note)}</small></span>${own ? '<span class="owned">на кухне ✓</span>' : btn(`⭐ ${d.price}`, 'buyDecor', [id], s.bonus.banked >= d.price ? 'primary mini' : 'mini soft-disabled')}</div>`;
       })
       .join('');
-    // ёлочные игрушки (0.9): можно купить сколько угодно — повесить у ёлки
-    const own = {};
-    for (const t of s.toys ?? []) own[t.id] = (own[t.id] ?? 0) + 1;
-    const toys = Object.entries(TOYS)
-      .map(([id, t]) => `<div class="decor"><span class="di">${t.icon}</span><span class="dn"><b>${esc(t.name)}</b><small>${own[id] ? `у тебя: ${own[id]}` : 'на ёлку'}</small></span>${btn(`⭐ ${t.price}`, 'buyToy', [id], s.bonus.banked >= t.price && !s.challenge && !s.practice ? 'primary mini' : 'mini soft-disabled')}</div>`)
-      .join('');
+
     return `${this._head('Банк', 'бонусная программа')}<div class="app-body bank">
       <div class="bcard"><small>${NEUTRAL ? 'Бонусная карта' : 'Карта «Выручай-карта»'}</small><div class="bp">${s.bonus.points}<span>баллов</span></div><div class="bn">•••• 2025</div></div>
       <div class="earn"><span>🛒 ${Math.round(BONUS.cashback * 100)} % с заказов</span><span>🍽 за каждое блюдо</span><span>📷 за фото</span><span>🎁 в подарках</span></div>
       <p class="fine">Для украшений доступно ${s.bonus.banked} баллов. ${s.bonus.points > s.bonus.banked ? `Ещё ${s.bonus.points - s.bonus.banked} за готовку — после завершения дня.` : 'Баллы из подарков можно тратить сразу.'}</p>
-      <h4>Ёлочные игрушки</h4><p class="fine">Купленная игрушка ждёт в коробке у ёлки — подойди и повесь.</p>${toys}
+      <button class="decor go-bazaar" data-nav="bazaar"><span class="di">🎄</span><span class="dn"><b>Ёлочные игрушки</b><small>наборы и товар дня — в «Ёлочном базаре»</small></span><span class="owned">›</span></button>
       <h4>Декор кухни за баллы</h4>${decor}
       <h4>История</h4>${hist || '<div class="fine">Баллы появятся после первого заказа или готового блюда.</div>'}
       <p class="fine">Баллами можно оплатить до половины заказа в доставке. Игровые баллы, без реальных денег.</p></div>`;

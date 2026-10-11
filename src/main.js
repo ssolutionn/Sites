@@ -162,7 +162,7 @@ async function boot() {
     challenge = ch;
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
-    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [] });
+    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [], setsDone: save.data.sets ?? [] });
     if (Number.isFinite(save.data.settings.radioFreq)) session.radio.freq = clampFreq(save.data.settings.radioFreq);
     view.reset();
     view.setActive(true);

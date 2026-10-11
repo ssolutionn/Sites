@@ -1,6 +1,6 @@
 // Сохранение кампании в localStorage: версия формата, дни, лучшие оценки, настройки.
 // Повреждённые или устаревшие данные не роняют игру.
-import { CAMPAIGN, DAYS, TOYS, GIFTS } from './data.js';
+import { CAMPAIGN, DAYS, TOYS, GIFTS, TOY_SETS } from './data.js';
 
 export const SAVE_KEY = 'novogodnyaya-sueta.campaign';
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}.backup`;
@@ -24,6 +24,7 @@ export function emptySave(version = CAMPAIGN.saveVersion) {
     decor: [], // купленный декор кухни
     toys: [], // ёлочные игрушки: { id, slot } — slot на ёлке или null (в коробке)
     gifts: {}, // id дня → номера открытых подарков
+    sets: [], // 0.10: собранные наборы игрушек (награда за набор — один раз)
   };
 }
 
@@ -83,6 +84,7 @@ export function parseSave(raw, { version = CAMPAIGN.saveVersion, migrations = MI
   base.gifts = {};
   if (data.gifts && typeof data.gifts === 'object')
     for (const [k, v] of Object.entries(data.gifts)) if (Array.isArray(v)) base.gifts[k] = v.filter((i) => Number.isInteger(i) && i >= 0 && i < GIFTS.perDay);
+  base.sets = Array.isArray(data.sets) ? [...new Set(data.sets.filter((id) => TOY_SETS[id]))] : [];
   base.finished = base.days.every((d) => d.completed);
   return { save: base, status: migrated ? 'migrated' : 'ok' };
 }

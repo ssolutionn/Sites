@@ -163,6 +163,28 @@ try {
     check('ответ ушёл конкретному другу', await S((k) => !!window.__sueta.session.phone.comments[k].at(-1).to, key));
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('bazaar')) {
+    // «Ёлочный базар»: наборы, товар дня со скидкой, покупка кнопкой — игрушка в коробке у ёлки
+    await openDay(2, { bonus: 300 });
+    await closeTip();
+    await S(() => { const s = window.__sueta.session; s.bonus.banked = s.bonus.points; });
+    await station('phone');
+    await closeTip();
+    await page.locator('#phone [data-nav="bazaar"]').first().click();
+    await waitFor(() => !!document.querySelector('#phone .bazaar'), 20000);
+    const sets = await S(() => [...document.querySelectorAll('#phone .toy-set h4')].map((h) => h.textContent));
+    check('три набора на витрине', sets.length === 3, sets.join(' | '));
+    const deal = await sess('s.dealId()');
+    check('товар дня со скидкой', await S(() => /−30 %/.test(document.querySelector('#phone .deal-card')?.textContent ?? '')), deal);
+    await wait(1200);
+    await shot('bazaar');
+    const before = await sess('s.bonus.points');
+    await page.locator('#phone .deal-card button').click();
+    await waitFor((n) => window.__sueta.session.bonus.points < n, 20000, before);
+    const after = await sess('({ pts: s.bonus.points, box: s.toysInBox().map((t) => t.id), price: s.toyPrice(s.dealId()) })');
+    check('куплено со скидкой, игрушка в коробке', before - after.pts === after.price && after.box.includes(deal), JSON.stringify(after));
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); fail++; await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`);
 await browser.close();

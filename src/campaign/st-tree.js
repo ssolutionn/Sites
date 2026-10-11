@@ -1,6 +1,6 @@
 // Ёлка (0.9, пункт 24 владельца): подарки под ёлкой (3 в день, внутри баллы или игрушка), ёлочные игрушки —
-// купить в «Банке», повесить на ёлку, снять; кот от скуки сбивает игрушки на пол. Звезда на ёлке — st-home.js (lightsOff).
-import { TOYS, GIFTS } from './data.js';
+// купить в «Ёлочном базаре» (0.10), повесить на ёлку, снять; кот от скуки сбивает игрушки на пол. Звезда на ёлке — st-home.js (lightsOff).
+import { TOYS, GIFTS, TOY_SETS, BAZAAR } from './data.js';
 import { TREE_SLOTS } from './layout.js';
 import { createRng } from '../game/rng.js';
 
@@ -20,8 +20,14 @@ export function giftPrize(dayId, index, gifts = GIFTS) {
   return { kind: 'points', n: p.n };
 }
 
+/** Товар дня «Ёлочного базара»: закреплён за днём кампании (за неделю — разные игрушки). */
+export function dealToy(dayId) {
+  return TOY_IDS[(dayId * 7 + 3) % TOY_IDS.length];
+}
+
 export const treeMethods = {
-  _initTree(toys = [], giftsOpened = []) {
+  _initTree(toys = [], giftsOpened = [], setsDone = []) {
+    this.setsDone = new Set(setsDone.filter((id) => TOY_SETS[id])); // наборы, за которые награда уже получена
     // uid — номер игрушки в сохранении (с 1); slot — место на ёлке (TREE_SLOTS) или null — в коробке
     this.toys = toys.filter((t) => TOYS[t?.id]).map((t, i) => ({ uid: i + 1, id: t.id, slot: Number.isInteger(t.slot) && TREE_SLOTS[t.slot] ? t.slot : null, fallen: false }));
     this.treeHand = null; // uid игрушки в руке
@@ -55,7 +61,39 @@ export const treeMethods = {
     return uid;
   },
 
-  /** Купить ёлочную игрушку за баллы (телефон → «Банк»). */
+  /** Игрушка со скидкой сегодня (null — в испытании и практике базара нет). */
+  dealId() {
+    return this.practice || this.challenge ? null : dealToy(this.day.id);
+  },
+
+  /** Цена игрушки сегодня, с учётом скидки на товар дня. */
+  toyPrice(id) {
+    const t = TOYS[id];
+    if (!t) return null;
+    return id === this.dealId() ? Math.round(t.price * (1 - BAZAAR.dealOff)) : t.price;
+  },
+
+  /** Набор на ёлке: сколько его разных игрушек висит, сколько нужно, получена ли награда. */
+  setProgress(id) {
+    const set = TOY_SETS[id];
+    const onTree = new Set(this.toys.filter((t) => t.slot != null).map((t) => t.id));
+    return { hung: set.toys.filter((x) => onTree.has(x)).length, need: set.toys.length, done: this.setsDone.has(id) };
+  },
+
+  // Повешена игрушка — не собрался ли набор. Награда разовая: снял и повесил снова — второй раз не дают.
+  _checkSets() {
+    for (const [id, set] of Object.entries(TOY_SETS)) {
+      if (this.setsDone.has(id)) continue;
+      const p = this.setProgress(id);
+      if (p.hung < p.need) continue;
+      this.setsDone.add(id);
+      const n = this._earn(set.reward, `Набор «${set.name}»`, { banked: true });
+      this._emit('setComplete', { id, n });
+      this.setHint(`Набор «${set.name}» собран! +${set.reward} баллов`, 3);
+    }
+  },
+
+  /** Купить ёлочную игрушку за баллы (телефон → «Ёлочный базар»). Товар дня — со скидкой. */
   buyToy(id) {
     const t = TOYS[id];
     if (!t) return false;
@@ -63,19 +101,20 @@ export const treeMethods = {
       this.setHint('Игрушки покупаются в кампании', 2.5);
       return false;
     }
-    if (this.bonus.points < t.price) {
-      this.setHint(`Не хватает баллов: нужно ${t.price}, есть ${this.bonus.points}`, 2.5);
+    const price = this.toyPrice(id);
+    if (this.bonus.points < price) {
+      this.setHint(`Не хватает баллов: нужно ${price}, есть ${this.bonus.points}`, 2.5);
       return false;
     }
-    if (this.bonus.banked < t.price) {
+    if (this.bonus.banked < price) {
       this.setHint('Баллы за готовку станут доступны для игрушек после завершения дня. Баллы из подарков — сразу!', 4);
       return false;
     }
-    this.bonus.points -= t.price;
-    this.bonus.banked -= t.price;
-    this.bonus.history.unshift({ t: this.t, n: -t.price, why: t.name });
+    this.bonus.points -= price;
+    this.bonus.banked -= price;
+    this.bonus.history.unshift({ t: this.t, n: -price, why: t.name });
     const uid = this._addToy(id);
-    this._emit('toyBought', { id, uid });
+    this._emit('toyBought', { id, uid, price });
     this.setHint(`${t.name} — в коробке у ёлки. Повесь её!`, 3);
     return true;
   },
@@ -115,6 +154,7 @@ export const treeMethods = {
       t.slot = slot;
       this.treeHand = null;
       this._emit('toyHung', { uid: t.uid, id: t.id, slot });
+      this._checkSets();
       return true;
     }
     if (!there) return false;
