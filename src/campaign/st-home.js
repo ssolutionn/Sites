@@ -458,7 +458,8 @@ export const homeMethods = {
     if (!e || e.clean) return false;
     this.sinkCool = null;
     if (this.sinkJob?.item === item) return true;
-    this.sinkJob = { item, mask: new CoverageMask({ ...this.cfg.wash, width: SINK.w, depth: SINK.d }) };
+    this.sinkJob = { item, scrub: new Scrubber(this.cfg.wash) };
+    this.setHint('Зажми губку над предметом и потри туда-сюда — не нужно искать каждое пятнышко', 3);
     this._emit('sinkStart', { item });
     return true;
   },
@@ -477,18 +478,18 @@ export const homeMethods = {
       return 'ignored';
     }
     if (!this.pointerDown) {
-      this._sinkLast = null;
+      job.scrub.release();
       return 'hover';
     }
-    if (Math.abs(x) > SINK.w / 2 || Math.abs(z) > SINK.d / 2) {
-      this._sinkLast = null;
+    const c = this.cfg.wash;
+    const onItem = job.item === 'bowl' ? Math.hypot(x, z) <= c.bowlRadius : Math.abs(x) <= c.width / 2 && Math.abs(z) <= c.depth / 2;
+    if (!onItem) {
+      job.scrub.release();
       return 'off';
     }
-    const p = { x, z };
-    const g = this._sinkLast ? job.mask.strokeLine(this._sinkLast, p, 0.22) : job.mask.stroke(x, z, 0.22);
-    this._sinkLast = p;
-    if (g > 0) this._emit('wash', { cov: job.mask.coverage() });
-    if (job.mask.coverage() >= this.cfg.wash.autoFinish) {
+    const g = job.scrub.move(x, z);
+    if (g > 0) this._emit('wash', { cov: job.scrub.progress });
+    if (job.scrub.complete) {
       this.equipment[job.item].clean = true;
       this._emit('washed', { item: job.item });
       this.setHint(this.equipment[job.item].cleanText, 2);

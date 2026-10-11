@@ -2,6 +2,7 @@
 // Все операции управляются мышью; логическая принадлежность меняется только после успешного действия.
 import { CoverageMask } from './coverage.js';
 import { fillState, fillQuality } from './mechanics.js';
+import { stationOfStep } from './data.js';
 import { trayItems, eggHalfPos, CANAPE_PILES, FRUIT_PILES, CHICKEN_ZONES, TRAY } from './layout.js';
 
 const inEllipse = (x, z, e) => ((x - e.x) / e.rx) ** 2 + ((z - e.z) / e.rz) ** 2 <= 1;
@@ -16,7 +17,7 @@ export const trayMethods = {
 
   trayDishes() {
     return Object.entries(this.dishes)
-      .filter(([id, d]) => !d.done && d.recipe.steps.some((s) => !['cut', 'grate', 'add', 'mix', 'boil', 'bake'].includes(s.type)))
+      .filter(([id, d]) => !d.done && d.recipe.steps.some((s) => stationOfStep(s) === 'tray'))
       .map(([id]) => id);
   },
 
@@ -772,8 +773,11 @@ export const trayMethods = {
       parts = { asm: asm * 100, comp: doseScore * 100 };
       const thin = cov.filter((c) => c < 0.85).length;
       notes.push(thin ? `На ${thin} ломт. масла маловато` : 'Масло лежит ровным слоем');
-      const many = w.breads.filter((b) => b.doses >= 3).length;
-      notes.push(many ? `На ${many} бутербр. слишком много икры` : 'Икры в меру на каждом');
+      const many = w.breads.filter((b) => b.doses > want).length;
+      const few = w.breads.filter((b) => b.doses < want).length;
+      if (many) notes.push(`На ${many} бутербр. слишком много икры`);
+      if (few) notes.push(`На ${few} бутербр. икры маловато`);
+      if (!many && !few) notes.push('Икры в меру на каждом');
     } else if (lay === 'eggs' || lay === 'tartlets' || lay === 'tomatoes') {
       const cont = lay === 'eggs' ? w.eggs.flatMap((e) => e.halves) : lay === 'tartlets' ? w.cups : w.toms;
       const levels = cont.map((c) => c.fill);

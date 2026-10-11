@@ -18,7 +18,7 @@ export function markInProgress(saveData, { dayId, practice = false, challenge = 
 export function applyDecorPurchase(saveData, { id, practice = false, challenge = false }) {
   if (practice || challenge) return false;
   const d = DECOR[id];
-  if (!d || saveData.decor.includes(id)) return false;
+  if (!d || saveData.decor.includes(id) || (saveData.bonus ?? 0) < d.price) return false;
   saveData.bonus = Math.max(0, (saveData.bonus ?? 0) - d.price);
   saveData.decor = [...saveData.decor, id];
   return true;
@@ -42,7 +42,7 @@ export function applyTreeEvent(saveData, e, { toys = null, practice = false, cha
     if (e.prize?.kind === 'points') saveData.bonus = (saveData.bonus ?? 0) + e.prize.n;
   } else if (e.type === 'toyBought') {
     const t = TOYS[e.id];
-    if (!t) return false;
+    if (!t || (saveData.bonus ?? 0) < t.price) return false;
     saveData.bonus = Math.max(0, (saveData.bonus ?? 0) - t.price);
   } else if (!['toyHung', 'toyTaken', 'toysKnocked', 'toysPicked'].includes(e.type)) return false;
   if (toys) saveData.toys = toys.filter((t) => TOYS[t.id]).map((t) => ({ id: t.id, slot: Number.isInteger(t.slot) ? t.slot : null }));

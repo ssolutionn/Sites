@@ -43,7 +43,7 @@ export const treeMethods = {
       this.gifts.opened.add(index);
       const prize = giftPrize(this.day.id, index);
       let uid = null;
-      if (prize.kind === 'points') this._earn(prize.n, 'Подарок под ёлкой');
+      if (prize.kind === 'points') this._earn(prize.n, 'Подарок под ёлкой', { banked: true });
       else uid = this._addToy(prize.id);
       this._emit('giftOpened', { dayId: this.day.id, index, prize, uid });
     });
@@ -67,7 +67,12 @@ export const treeMethods = {
       this.setHint(`Не хватает баллов: нужно ${t.price}, есть ${this.bonus.points}`, 2.5);
       return false;
     }
+    if (this.bonus.banked < t.price) {
+      this.setHint('Баллы за готовку станут доступны для игрушек после завершения дня. Баллы из подарков — сразу!', 4);
+      return false;
+    }
     this.bonus.points -= t.price;
+    this.bonus.banked -= t.price;
     this.bonus.history.unshift({ t: this.t, n: -t.price, why: t.name });
     const uid = this._addToy(id);
     this._emit('toyBought', { id, uid });

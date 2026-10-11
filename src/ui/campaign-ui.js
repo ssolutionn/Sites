@@ -1246,7 +1246,7 @@ export class CampaignUI {
           const k = Math.min(1, s.sinkCool.run / CAMPAIGN.cool.underTap);
           return `<span class="qbar"><i style="width:${k * 100}%"></i></span><span class="q">${s.sinkCool.open ? 'Вода льётся — остывает' : 'Зажми над раковиной — откроется кран'} · ${Math.round(k * 100)} %</span>`;
         }
-        return s.sinkJob ? `Чистота: ${Math.round(s.sinkJob.mask.coverage() * 100)} %` : '';
+        return s.sinkJob ? `Моем: ${esc(s.equipment[s.sinkJob.item].label)} · Чистота: ${Math.round(s.sinkJob.scrub.progress * 100)} %` : '';
       case 'puddle': {
         const p = s._activePuddle();
         return p ? `Вытерто: ${Math.round(p.mask.coverage() * 100)} %` : '';
@@ -1384,7 +1384,7 @@ export class CampaignUI {
         const dirty = s.dirtyItems();
         const btns = dirty.map((d) => this._btn(`🧽 ${esc(d.label)}`, 'sinkSelect', [d.id], s.sinkJob?.item === d.id ? 'primary active' : 'ghost', busy)).join('');
         const cool = s.hotList().map((x) => this._btn(`❄️ Под кран: ${PICON[x.product]} ${esc(PRODUCTS[x.product].name.toLowerCase())}`, 'coolPick', [x.product], s.sinkCool?.product === x.product ? 'primary active' : 'primary', busy)).join('');
-        return `<h2>🚰 Раковина</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${cool}${btns || (cool ? '' : '<span class="small">Вся посуда чистая, остужать нечего.</span>')}</div></div><div class="row">${bar}</div>${live}`;
+        return `<h2>🚰 Раковина</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${cool}${btns || (cool ? '' : '<span class="small">Вся посуда чистая, остужать нечего.</span>')}</div></div><div class="row">${bar}</div>${live}${s.sinkJob ? '<p class="note">Зажми кнопку на посуде и поводи губкой туда-сюда. Грязь смывается, прогресс сохраняется.</p>' : ''}`;
       }
       case 'puddle':
         return `<h2>🧽 Лужа</h2><div class="row">${back}</div>${live}<p class="note">Зажми кнопку и води тряпкой по луже.</p>`;

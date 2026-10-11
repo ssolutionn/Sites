@@ -5,14 +5,15 @@ const url = process.argv[2] || 'http://localhost:4173/';
 const part = process.argv[3] || 'all';
 const out = process.env.OUT || 'production/qa/evidence';
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const page = await browser.newPage({ viewport: { width: Number(process.env.WIDTH) || 1280, height: Number(process.env.HEIGHT) || 720 } });
+await page.addInitScript(() => { const key = 'novogodnyaya-sueta.campaign'; const data = JSON.parse(localStorage.getItem(key) || '{"version":1,"days":[]}'); data.settings = { ...data.settings, quality: 'low' }; localStorage.setItem(key, JSON.stringify(data)); });
 const errs = [];
 page.on('pageerror', (e) => errs.push(String(e)));
 page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 const S = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
-const shot = (n) => page.screenshot({ path: `${out}/v9_${n}.png`, timeout: 90000 }).catch((e) => console.log('shot fail', n, e.message.split('\n')[0]));
-async function waitFor(fn, timeout = 60000, arg) { const t0 = Date.now(); while (Date.now() - t0 < timeout) { if (await page.evaluate(fn, arg)) return true; await wait(100); } return false; }
+const shot = (n) => page.screenshot({ path: `${out}/v9_${n}.png`, timeout: 90000 }).catch((e) => { fail++; console.log('shot fail', n, e.message.split('\n')[0]); });
+async function waitFor(fn, timeout = 60000, arg) { const t0 = Date.now(); while (Date.now() - t0 < timeout) { if (await page.evaluate(fn, arg)) return true; await wait(100); } throw new Error('Ожидание не выполнено: ' + fn.toString().slice(0, 120)); }
 const sess = (expr) => S(new Function(`const s = window.__sueta.session; return (${expr});`));
 const click = (sel) => S((q) => document.querySelector(q)?.click(), sel);
 const tip = () => page.locator('#tip button').click({ timeout: 600 }).catch(() => {});
@@ -22,14 +23,13 @@ const want = (p) => part === 'all' || part.split(',').includes(p);
 
 /** Открыть день n (1..7): прошлые дни отмечены пройденными. */
 async function openDay(n) {
-  await page.goto(url, { timeout: 180000 }); await wait(1200);
-  await S((n) => { localStorage.clear(); }, n);
   await page.goto(url, { timeout: 180000 }); await waitFor(() => !!window.__sueta?.save, 120000);
-  await S((n) => { const sv = window.__sueta.save; sv.data.days.forEach((d, i) => { if (i < n - 1) { d.completed = true; d.unlocked = true; d.best = d.last = { D: 90, dishes: {}, order: 100, time: 0 }; } }); sv.data.days[n - 1].unlocked = true; sv.write(); }, n);
+  await S((n) => { const sv = window.__sueta.save; localStorage.clear(); sv.reset(); sv.data.days.forEach((d, i) => { if (i < n - 1) { d.completed = true; d.unlocked = true; d.best = d.last = { D: 90, dishes: {}, order: 100, time: 0 }; } }); sv.data.days[n - 1].unlocked = true; sv.data.settings.quality = 'low'; sv.write(); }, n);
   await page.reload({ timeout: 180000 }); await wait(1500);
   await page.waitForSelector('[data-ui=continue],[data-ui=new]', { timeout: 120000 });
   await S(() => (document.querySelector('[data-ui=continue]') ?? document.querySelector('[data-ui=new]'))?.click()); await wait(800);
   await page.waitForSelector('[data-ui=enter]', { timeout: 120000 }); await click('[data-ui=enter]'); await wait(1200);
+  await S(() => window.__sueta.sv.renderer.setSize(640, 360, false));
 }
 async function station(st) {
   await S((st) => window.__sueta.session.goTo(st), st);
@@ -39,6 +39,63 @@ async function station(st) {
 const scr = (st, x, z) => S(([st, x, z]) => window.__sueta.view.localToScreen(st, x, z), [st, x, z]);
 
 try {
+  if (want('phone')) {
+    await openDay(1);
+    await S(() => { const s = window.__sueta.session; s.chatter = null; s.triggers = []; s.msgQueue = []; s.pushMessage('Верка', 'Фото в купальнике 🌊', { photo: 'swimsuit' }); });
+    await station('phone');
+    await page.locator('[data-nav="andrey"]').click();
+    await page.locator('[data-nav="andrey|Верка|chats"]').click();
+    await page.locator('.photo-failed').waitFor();
+    check('неудачная загрузка фото только в ЛС', await page.locator('.photo-failed').count() === 1);
+    check('никто не печатает постоянно', await page.locator('.typing').count() === 0);
+    const input = page.locator('[aria-label="Сообщение"]');
+    await input.fill('Не грузится 😅');
+    // При обновлении телефона текст и курсор не исчезают.
+    await S(() => { const s = window.__sueta.session; s.msgQueue.push({ at: s.t + 2, from: 'Верка', text: 'Тут плохой интернет' }); });
+    await waitFor(() => !!document.querySelector('.typing'));
+    check('черновик и фокус переживают появление «печатает»', await input.inputValue() === 'Не грузится 😅' && await input.evaluate((e) => e === document.activeElement));
+    await page.locator('form[data-composer="replyChat"] button[type="submit"]').click();
+    await waitFor(() => !!document.querySelector('.bubble.mine'));
+    check('своя реплика появилась в чате', await page.locator('.bubble.mine').innerText().then((t) => t.includes('Не грузится 😅')));
+    await S(() => window.__sueta.session.fastForward(5));
+    await waitFor(() => !document.querySelector('.typing'));
+    await shot('phone_dm');
+    await page.locator('.back[data-nav="andrey||chats"]').click();
+    await page.locator('[data-nav="andrey||feed"]').click();
+    const pic = page.locator('[data-photo-like]').first();
+    const id = await pic.getAttribute('data-photo-like');
+    await pic.dblclick();
+    await waitFor((id) => !!window.__sueta.session.phone.liked[id], 10000, id);
+    await pic.dblclick();
+    check('повторный двойной тап не снимает лайк', await S((id) => !!window.__sueta.session.phone.liked[id], id));
+    await page.locator('.com-more').first().click();
+    await page.locator('[aria-label="Комментарий"]').fill('Мой комментарий: вкусно!');
+    await page.locator('form[data-composer="commentPost"] button[type="submit"]').click();
+    await waitFor(() => [...document.querySelectorAll('.comments > .com.own')].some((e) => e.textContent.includes('Мой комментарий: вкусно!')));
+    check('комментарий опубликован в открытой ветке', await page.locator('.comments > .com.own').count() === 1);
+    await page.locator('.comments > .com.own').scrollIntoViewIfNeeded();
+    await shot('phone_comments');
+    const clock = await S(() => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+    check('телефон показывает время устройства по минутам', await page.locator('.ph-status b').innerText() === clock);
+  }
+  if (want('wash')) {
+    await openDay(2);
+    await S(() => { const s = window.__sueta.session; s.chatter = null; s.triggers = []; });
+    await station('sink');
+    await page.locator('button[data-act="sinkSelect"][data-args*=bowl]').click();
+    await wait(500);
+    await shot('wash_dirty_bowl');
+    const left = await scr('sink', -0.08, 0), right = await scr('sink', 0.08, 0);
+    await page.mouse.move(left.x, left.y); await page.mouse.down();
+    for (let k = 0; k < 20 && (await sess('!!s.sinkJob')); k++) {
+      const p = k % 2 ? left : right;
+      await page.mouse.move(p.x, p.y, { steps: 6 }); await wait(40);
+    }
+    await page.mouse.up();
+    check('миска отмывается мышью в одной полосе', await sess('s.equipment.bowl.clean && !s.sinkJob'));
+    await shot('wash_clean_bowl');
+    check('нет ошибок рендера губки', errs.length === 0);
+  }
   if (want('crash')) {
     // день 3: начинка яиц — майонез, затем зелень (раньше игра падала)
     await openDay(3);
@@ -259,7 +316,7 @@ try {
   if (want('tree')) {
     // 24: подарки под ёлкой, игрушки за баллы, повесить на ёлку мышью, сохранится между днями
     await openDay(2);
-    await S(() => { const sv = window.__sueta.save; sv.data.bonus = 200; sv.write(); window.__sueta.session.bonus.points = 200; });
+    await S(() => { const sv = window.__sueta.save; sv.data.bonus = 200; sv.write(); window.__sueta.session.bonus.points = window.__sueta.session.bonus.banked = 200; });
     await station('tree');
     await wait(800); await tip();
     check('у ёлки три подарка', (await S(() => document.querySelectorAll('button[data-act="openGift"]').length)) === 3);
@@ -301,12 +358,14 @@ try {
     await page.waitForSelector('[data-ui=continue],[data-ui=new]', { timeout: 120000 });
     await S(() => (document.querySelector('[data-ui=continue]') ?? document.querySelector('[data-ui=new]'))?.click()); await wait(800);
     await page.waitForSelector('[data-ui=enter]', { timeout: 120000 }); await click('[data-ui=enter]'); await wait(1200);
+  await S(() => window.__sueta.sv.renderer.setSize(640, 360, false));
     check('открыт день 3', (await sess('s.day.id')) === 3);
     check('на следующий день игрушки на месте', (await sess('s.toys.length')) === keep && keep >= 3, `${keep}`);
     await station('tree'); await wait(800); await tip();
     await shot('tree_next_day');
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
-} catch (e) { console.log('ERR', e.message.split('\n')[0]); await shot('error'); }
+} catch (e) { fail++; console.log('ERR', e.stack); await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`, errs.slice(0, 4));
 await browser.close();
+if (fail || errs.length) process.exitCode = 1;

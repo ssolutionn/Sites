@@ -147,7 +147,7 @@ export class CampaignView {
     this.foam.position.set(sk.x, ISLAND_H, sk.z);
     this.foam.visible = false;
     this.root.add(this.foam);
-    this.washTex = null;
+    this.washDirt = null;
 
     // духовка: свечение дверцы
     this.ovenGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.22), new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0 }));
@@ -580,10 +580,9 @@ export class CampaignView {
       F.disposeGroup(mesh);
     }
     this.puddleMeshes.clear();
-    this.washTex?.dispose();
-    this.washTex = null;
+    this.washDirt = null;
     this.washKey = null;
-    this.sinkItem.clear();
+    for (const c of this.sinkItem.children.slice()) F.disposeGroup(c);
     this.shreds.clear();
     this.roundGroup.clear();
     this.cutBoard.reset();
@@ -1763,8 +1762,7 @@ export class CampaignView {
     if (key !== this.washKey) {
       this.washKey = key;
       for (const c of this.sinkItem.children.slice()) F.disposeGroup(c);
-      this.washTex?.dispose();
-      this.washTex = null;
+      this.washDirt = null;
       if (job) {
         let model;
         if (job.item === 'bowl') {
@@ -1776,15 +1774,17 @@ export class CampaignView {
         } else model = F.bakingForm();
         if (job.item === 'form') model.scale.setScalar(0.9);
         this.sinkItem.add(model);
-        this.washTex = new F.MaskTexture(job.mask, 0x8a6a3a, { invert: true, alphaMax: 0.75 });
-        const pl = F.maskPlane(this.washTex, SINK.w, SINK.d, job.item === 'bowl' ? 0.02 : 0.02);
-        this.sinkItem.add(pl);
+        const geometry = job.item === 'bowl' ? new THREE.CircleGeometry(0.115, 32) : new THREE.PlaneGeometry(0.28, 0.18);
+        this.washDirt = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x8a6a3a, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }));
+        this.washDirt.rotation.x = -Math.PI / 2;
+        this.washDirt.position.y = job.item === 'bowl' ? 0.075 : 0.025;
+        this.sinkItem.add(this.washDirt);
       }
     }
-    this.washTex?.update();
+    if (job && this.washDirt) this.washDirt.material.opacity = 0.75 * (1 - job.scrub.progress);
     const washing = s.panel === 'sink' && !!job;
     this.sponge.visible = washing;
-    this.foam.visible = washing && job.mask.coverage() > 0.05;
+    this.foam.visible = washing && job.scrub.progress > 0.05;
     if (washing && this.pointerLocal) {
       const a = CLAYOUT.stations.sink.anchor;
       this.sponge.position.set(a.x + this.pointerLocal.x, ISLAND_H + 0.04 + (s.pointerDown ? 0 : 0.02), a.z + this.pointerLocal.z);

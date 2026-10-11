@@ -7,7 +7,7 @@ import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
 import { feedArt, dishArt, heartIcon } from './feed-art.js';
 import { PICON } from './icons.js';
-import { CHATTER_AVATARS } from '../campaign/chatter.js';
+import { CHATTER_AVATARS, QUICK_CHAT, QUICK_COMMENT } from '../campaign/chatter.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (sec) => {
@@ -52,6 +52,8 @@ export class PhoneUI {
     this.fresh = new Set(); // посты, которые были новыми при открытии ленты (подсвечены до ухода с неё)
     this.pop = null; // пост, у которого сердечко анимируется в этом кадре
     this.view = null;
+    this.drafts = new Map();
+    this.lastTap = null;
     this.bindInputs();
     root.addEventListener('click', (e) => {
       const nav = e.target.closest('[data-nav]');
@@ -59,6 +61,7 @@ export class PhoneUI {
         this.sound?.unlock();
         this.sound?.play('click');
         this.fresh.clear();
+        this.lastTap = null;
         const [app, sub, tab] = nav.dataset.nav.split('|');
         this.app = app;
         this.sub = sub || null;
@@ -82,17 +85,59 @@ export class PhoneUI {
         this.act(b.dataset.act, ...args);
         this.sig = null;
       }
+      const quick = e.target.closest('[data-quick]');
+      if (quick) this.send(quick.closest('[data-composer]'), quick.dataset.quick);
+    });
+    root.addEventListener('pointerup', (e) => {
+      const pic = e.target.closest('[data-photo-like]');
+      if (!pic || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const id = pic.dataset.photoLike;
+      const now = performance.now();
+      if (this.lastTap?.id === id && now - this.lastTap.at <= this.doubleTapMs) {
+        this.act('likePost', id, true);
+        this.pop = id;
+        this.sig = null;
+        this.lastTap = null;
+      } else this.lastTap = { id, at: now };
     });
   }
 
   // Флажки (оплата баллами) — по изменению, а не по клику.
   bindInputs() {
+    this.root.addEventListener('input', (e) => {
+      const composer = e.target.closest('[data-composer]');
+      if (composer) this.drafts.set(composer.dataset.draft, e.target.value);
+    });
+    this.root.addEventListener('submit', (e) => {
+      const form = e.target.closest('form[data-composer]');
+      if (!form) return;
+      e.preventDefault();
+      this.send(form, form.querySelector('input').value);
+    });
     this.root.addEventListener('change', (e) => {
       const inp = e.target.closest('input[data-act]');
       if (!inp) return;
       this.act(inp.dataset.act, inp.checked);
       this.sig = null;
     });
+  }
+
+  send(form, text) {
+    if (!form) return;
+    if (this.act(form.dataset.composer, form.dataset.target, text)) {
+      this.drafts.delete(form.dataset.draft);
+      this.sig = null;
+    }
+  }
+
+  _composer(s, command, target) {
+    const key = `${command}:${target}`;
+    const chat = command === 'replyChat';
+    const quick = chat ? QUICK_CHAT : QUICK_COMMENT;
+    const limit = chat ? s.cfg.phone.maxChatLength : s.cfg.phone.maxCommentLength;
+    return `<form class="composer" data-composer="${command}" data-target="${esc(target)}" data-draft="${esc(key)}">
+      <div class="quick-replies">${quick.map((t) => `<button type="button" data-quick="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+      <div class="compose-row"><input aria-label="${chat ? 'Сообщение' : 'Комментарий'}" placeholder="${chat ? 'Написать сообщение…' : 'Написать комментарий…'}" maxlength="${limit}" value="${esc(this.drafts.get(key) ?? '')}" autocomplete="off" /><button type="submit" class="primary" aria-label="Отправить">↑</button></div></form>`;
   }
 
   open(app = 'home') {
@@ -113,6 +158,7 @@ export class PhoneUI {
   }
 
   render(s) {
+    this.doubleTapMs = s.cfg.phone.doubleTapMs;
     let feedSig = '';
     if (this.app === 'andrey') {
       const tab = this._andreyTab(s);
@@ -123,14 +169,16 @@ export class PhoneUI {
         if (fresh.length) this.act('markFeedRead');
         feedSig = s.feedItems().map((i) => `${i.key}:${i.likes}${i.liked ? '+' : ''}:${i.talk}`).join() + [...this.fresh].join();
       }
-      feedSig += `|${s.feedUnread()}`;
+      feedSig += `|${s.feedUnread()}|${[...s.typingFrom()].join()}`;
     }
     const o = s.delivery.order;
-    const sig = [this.app, this.sub, this.tab, s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, !!s.delivery.bag, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' || this.app === 'home' ? Math.floor(s.t) : '', s.kitchenTimers.length, feedSig, this.app === 'home' ? s.phone.unread : ''].join('§');
+    const sig = [this.app, this.sub, this.tab, clockText(new Date()), s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, !!s.delivery.bag, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' ? Math.floor(s.t) : '', s.kitchenTimers.length, s.alerts.filter(a => a.urgent).slice(0, 1).map(a => a.text).join(), feedSig, this.app === 'home' ? [s.phone.unread, s.burners.map(b => b.state).join(), s.kitchenTimers.map(x => +(s.t >= x.end)).join()].join(':') : ''].join('§');
     if (sig === this.sig) return;
     this.sig = sig;
     // Прокрутка того же экрана сохраняется при перерисовке (новый пост, рост лайков).
     const view = [this.app, this.sub, this.tab].join('|');
+    const active = this.root.ownerDocument.activeElement;
+    const focused = view === this.view && active?.matches('.composer input') ? { key: active.closest('[data-composer]').dataset.draft, start: active.selectionStart, end: active.selectionEnd } : null;
     const keep = view === this.view ? this.root.querySelector('.app-body')?.scrollTop ?? 0 : 0;
     this.view = view;
     const screen = this.app === 'home' ? this._home(s) : `<div class="app-screen ${this.anim ? 'enter' : ''}">${this._app(s)}</div>`;
@@ -148,6 +196,11 @@ export class PhoneUI {
     if (keep) {
       const body = this.root.querySelector('.app-body');
       if (body) body.scrollTop = keep;
+    }
+    if (focused) {
+      const input = [...this.root.querySelectorAll('[data-composer]')].find((f) => f.dataset.draft === focused.key)?.querySelector('input');
+      input?.focus({ preventScroll: true });
+      input?.setSelectionRange(focused.start, focused.end);
     }
   }
 
@@ -249,7 +302,13 @@ export class PhoneUI {
     const head = this._head('Андрей', 'ловит даже на кухне');
     if (tab === 'chats' && this.sub) {
       const msgs = s.phone.messages.filter((m) => m.from === this.sub);
-      return `${this._head(esc(this.sub), 'в сети', 'andrey||chats')}<div class="app-body chat">${msgs.map((m) => `<div class="bubble">${esc(m.text)}${m.photo ? '<div class="photo-card"><div class="sun"></div><div class="palm">🌴</div><div class="cap">Вид с балкона</div></div>' : ''}<small>${phoneClock(m.t, s.t)}</small></div>`).join('')}<div class="typing">${esc(this.sub)} печатает…</div></div>`;
+      const typing = s.typingFrom().has(this.sub);
+      return `${this._head(esc(this.sub), typing ? 'печатает…' : 'в сети', 'andrey||chats')}<div class="app-body chat">${msgs.map((m) => `<div class="bubble ${m.mine ? 'mine' : ''}">${esc(m.text)}${m.photo === 'swimsuit' ? '<div class="photo-failed"><span>▧</span><b>Фото не загрузилось</b><small>Интернет у моря тоже на каникулах…</small></div>' : m.photo ? '<div class="photo-card"><div class="sun"></div><div class="palm">🌴</div><div class="cap">Вид с балкона</div></div>' : ''}<small>${phoneClock(m.t, s.t)}</small></div>`).join('')}${typing ? `<div class="typing">${esc(this.sub)} печатает…</div>` : ''}</div>${msgs.length ? this._composer(s, 'replyChat', this.sub) : ''}`;
+    }
+    if (this.sub) {
+      const post = s.feedItems().find((it) => it.key === this.sub);
+      const comments = s.postComments(this.sub).map((c) => `<div class="com ${c.who === 'me' ? 'own' : ''}"><b>${esc(FEED_AUTHORS[c.who]?.name ?? c.who)}</b>${esc(c.text)}</div>`).join('');
+      return `${this._head('Комментарии', '', 'andrey||feed')}<div class="app-body feed comments">${post ? this._post(s, post, s.day.id, false) : ''}${comments || '<div class="empty">Напиши первый комментарий.</div>'}</div>${post ? this._composer(s, 'commentPost', this.sub) : ''}`;
     }
     if (tab === 'chats') {
       const by = {};
@@ -270,7 +329,7 @@ export class PhoneUI {
   }
 
   // Пост ленты: автор и время, текст, картинка или опрос, лайк, превью комментариев.
-  _post(s, it, today) {
+  _post(s, it, today, preview = true) {
     const a = FEED_AUTHORS[it.author] ?? { name: it.author, ava: '🙂' };
     const isNew = !it.mine && this.fresh.has(it.id);
     const pic = it.mine ? dishArt(DICON[it.dishId] ?? '🍽', s.dishes[it.dishId]?.recipe.name ?? '', it.alt) : it.art ? feedArt(it.art, it.alt) : '';
@@ -279,11 +338,11 @@ export class PhoneUI {
       ? `<span class="like mine" title="Лайки друзей">${heartIcon(true)} ${it.likes}</span>`
       : `<button class="like ${it.liked ? 'on' : ''} ${it.liked && this.pop === it.id ? 'pop' : ''}" data-act="likePost" data-args='${esc(JSON.stringify([it.id]))}' aria-pressed="${it.liked}" title="${it.liked ? 'Убрать лайк' : 'Нравится'}">${heartIcon(it.liked)} ${it.likes}</button>`;
     const coms = it.comments.map((c) => `<div class="com"><b>${esc(FEED_AUTHORS[c.who]?.name ?? c.who)}</b>${esc(c.text)}</div>`).join('');
-    const more = it.talk > it.comments.length ? `<div class="com-more">Все комментарии (${it.talk})</div>` : '';
+    const more = `<button class="com-more" data-nav="andrey|${esc(it.key)}|feed">Открыть комментарии · написать</button>`;
     return `<article class="post ${isNew ? 'new' : ''}" data-post="${esc(it.key)}">
       <div class="post-h"><span class="ava" style="--ava:${a.color ?? '#8f84ff'}">${a.ava}</span><span class="who"><b>${esc(a.name)}${a.badge ? ' <i class="tick">✓</i>' : ''}</b>${a.note ? `<small>${esc(a.note)}</small>` : ''}</span><span class="when">${isNew ? '<i class="new-dot">новое</i>' : ''}${feedWhen(it.day, it.at, today, s.t)}</span></div>
-      ${it.text ? `<p class="post-t">${esc(it.text)}</p>` : ''}${poll}${pic ? `<div class="post-pic">${pic}</div>` : ''}
-      <div class="post-f">${like}<span class="talk">💬 ${it.talk}</span></div>${coms}${more}</article>`;
+      ${it.text ? `<p class="post-t">${esc(it.text)}</p>` : ''}${poll}${pic ? `<div class="post-pic" ${it.mine ? '' : `data-photo-like="${esc(it.id)}"`} title="Дважды нажми на фото, чтобы поставить лайк">${pic}</div>` : ''}
+      <div class="post-f">${like}<span class="talk">💬 ${it.talk}</span></div>${preview ? coms + more : ''}</article>`;
   }
 
   // ---------- Банк: бонусы ----------
@@ -292,18 +351,19 @@ export class PhoneUI {
     const decor = Object.entries(DECOR)
       .map(([id, d]) => {
         const own = s.decor.includes(id);
-        return `<div class="decor ${own ? 'own' : ''}"><span class="di">${d.icon}</span><span class="dn"><b>${esc(d.name)}</b><small>${esc(d.note)}</small></span>${own ? '<span class="owned">на кухне ✓</span>' : btn(`⭐ ${d.price}`, 'buyDecor', [id], s.bonus.points >= d.price ? 'primary mini' : 'mini soft-disabled')}</div>`;
+        return `<div class="decor ${own ? 'own' : ''}"><span class="di">${d.icon}</span><span class="dn"><b>${esc(d.name)}</b><small>${esc(d.note)}</small></span>${own ? '<span class="owned">на кухне ✓</span>' : btn(`⭐ ${d.price}`, 'buyDecor', [id], s.bonus.banked >= d.price ? 'primary mini' : 'mini soft-disabled')}</div>`;
       })
       .join('');
     // ёлочные игрушки (0.9): можно купить сколько угодно — повесить у ёлки
     const own = {};
     for (const t of s.toys ?? []) own[t.id] = (own[t.id] ?? 0) + 1;
     const toys = Object.entries(TOYS)
-      .map(([id, t]) => `<div class="decor"><span class="di">${t.icon}</span><span class="dn"><b>${esc(t.name)}</b><small>${own[id] ? `у тебя: ${own[id]}` : 'на ёлку'}</small></span>${btn(`⭐ ${t.price}`, 'buyToy', [id], s.bonus.points >= t.price && !s.challenge && !s.practice ? 'primary mini' : 'mini soft-disabled')}</div>`)
+      .map(([id, t]) => `<div class="decor"><span class="di">${t.icon}</span><span class="dn"><b>${esc(t.name)}</b><small>${own[id] ? `у тебя: ${own[id]}` : 'на ёлку'}</small></span>${btn(`⭐ ${t.price}`, 'buyToy', [id], s.bonus.banked >= t.price && !s.challenge && !s.practice ? 'primary mini' : 'mini soft-disabled')}</div>`)
       .join('');
     return `${this._head('Банк', 'бонусная программа')}<div class="app-body bank">
       <div class="bcard"><small>${NEUTRAL ? 'Бонусная карта' : 'Карта «Выручай-карта»'}</small><div class="bp">${s.bonus.points}<span>баллов</span></div><div class="bn">•••• 2025</div></div>
       <div class="earn"><span>🛒 ${Math.round(BONUS.cashback * 100)} % с заказов</span><span>🍽 за каждое блюдо</span><span>📷 за фото</span><span>🎁 в подарках</span></div>
+      <p class="fine">Для украшений доступно ${s.bonus.banked} баллов. ${s.bonus.points > s.bonus.banked ? `Ещё ${s.bonus.points - s.bonus.banked} за готовку — после завершения дня.` : 'Баллы из подарков можно тратить сразу.'}</p>
       <h4>Ёлочные игрушки</h4><p class="fine">Купленная игрушка ждёт в коробке у ёлки — подойди и повесь.</p>${toys}
       <h4>Декор кухни за баллы</h4>${decor}
       <h4>История</h4>${hist || '<div class="fine">Баллы появятся после первого заказа или готового блюда.</div>'}
@@ -363,7 +423,7 @@ export class PhoneUI {
     return `${this._head('Таймеры кухни', 'всё, что варится и остывает')}<div class="app-body timers">
       ${rows.join('') || '<div class="empty">Сейчас ничего не варится.</div>'}
       <h4>Поставить таймер</h4><div class="trow">${[1, 2, 3, 5].map((m) => btn(`${m} мин`, 'setKitchenTimer', [m * 60], 'mini')).join('')}</div>
-      <p class="fine">Минута игры — это минута на часах кухни, на часах телефона — час.</p></div>`;
+      <p class="fine">Таймеры считают время готовки. Часы телефона показывают твоё местное время.</p></div>`;
   }
 }
 

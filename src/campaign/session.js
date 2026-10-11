@@ -20,7 +20,7 @@ import { RADIO } from './radio-data.js';
 import { CHATTER } from './chatter.js';
 
 const EPS = 1e-6;
-export const URGENT = new Set(['cat', 'pot', 'pot2', 'oven', 'spillWarn']);
+export const URGENT = new Set(['cat', 'oven', 'spillWarn', ...Array.from({ length: CAMPAIGN.burners }, (_, i) => i ? `pot${i + 1}` : 'pot')]);
 
 export function buildNav() {
   const nav = new NavGrid({ ...CLAYOUT.bounds, cell: 0.1, radius: 0.2 });
@@ -92,8 +92,9 @@ export class KitchenSession {
     this.puddles = [];
     this.sinkJob = null;
     this.sinkCool = null; // остужаем под краном: { product, run, open }
-    this.phone = { messages: [], unread: 0, posts: [], feed: [], liked: {} };
-    this.bonus = { points: Math.max(0, Math.round(bonus) || 0), history: [] }; // баллы бонусной программы (между днями — в сохранении)
+    this.phone = { messages: [], unread: 0, posts: [], feed: [], liked: {}, comments: {} };
+    const initialBonus = Math.max(0, Math.round(bonus) || 0);
+    this.bonus = { points: initialBonus, banked: initialBonus, history: [] }; // banked — баллы, уже сохранённые; подарки доступны сразу
     this.decor = [...decor]; // купленный декор кухни
     this._initTree(toys, giftsOpened); // игрушки на ёлке и подарки дня (st-tree.js)
     this.kitchenTimers = [];
@@ -281,17 +282,28 @@ export class KitchenSession {
   // Переделать начинку/блюдо с ошибочным вариантом (без лука после лука).
   redoFilling(dishId) {
     const dish = this.dishes[dishId];
-    if (!dish || dish.done || !dish.recipe.onionOption) return false;
-    const fillingSteps = dish.recipe.steps.filter((s) => ['grate', 'cut', 'add', 'mix'].includes(s.type));
+    if (!dish || dish.done || !dish.recipe.onionOption || this.action) return false;
+    const fillingSteps = dish.recipe.steps.filter((s) => ['grate', 'cut', 'add', 'season', 'mix', 'taste', 'fill', 'garnish', 'layers'].includes(s.type));
     for (const s of fillingSteps) {
+      this.inventory.release(this._opId(dishId, s.id));
       dish.steps[s.id] = { done: false, q: null, info: null };
       delete this.board.items[`${dishId}:${s.id}`];
     }
     if (this.board.current?.startsWith(dishId + ':')) this.board.current = null;
     if (this.bowl.owner === dishId) this._dirtyBowl();
     if (this.workPlate.owner === dishId) this.workPlate = { owner: null, amount: 0 };
+    if (this.tray.owner === dishId) this.spoon.load = 0;
+    if (dish.work?.toms) for (const t of dish.work.toms) { t.fill = 0; t.garnish = false; }
+    if (dish.work?.layers) { dish.work.layers = []; dish.work.current = null; }
     dish.attempt++;
     dish.prepared = {};
+    dish.pieces = {};
+    dish.mayo = null;
+    if (dish.season) {
+      const target = { ...dish.season.target };
+      this._initSeason(dish);
+      dish.season.target = target;
+    }
     this._emit('redo', { dishId });
     this.setHint('Начинка выброшена. Подготовь её заново — продукты понадобятся ещё раз.');
     return true;
@@ -635,6 +647,7 @@ export class KitchenSession {
     this.tray.lastStroke = null;
     this._sinkLast = null;
     this.stoveWipe?.scrub.release();
+    this.sinkJob?.scrub.release();
     if (this.sinkCool) this.sinkCool.pressed = false;
     this._wipeLast = null;
     if (this.tray.drag) this._dropDrag(null);
@@ -662,6 +675,7 @@ export class KitchenSession {
     for (const m of this.msgQueue) {
       if (m.sent || t < m.at) continue;
       m.sent = true;
+      if (m.ifSilent && this.phone.messages.some((x) => x.mine && x.from === m.from)) continue;
       this.pushMessage(m.from, m.text, { photo: m.photo, request: m.request });
     }
     this._updateFeed();

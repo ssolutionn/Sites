@@ -34,11 +34,12 @@ test('покупка декора списывает цену с СОХРАНЁ�
   assert.equal(s.bonus, 100 - price);
 });
 
-test('баллы не уходят в минус и неизвестный декор игнорируется', () => {
+test('нельзя сохранить постоянный декор без оплаты; неизвестный декор игнорируется', () => {
   const s = emptySave();
   s.bonus = 5;
-  assert.equal(applyDecorPurchase(s, { id: 'lights' }), true);
-  assert.equal(s.bonus, 0);
+  assert.equal(applyDecorPurchase(s, { id: 'lights' }), false);
+  assert.equal(s.bonus, 5);
+  assert.deepEqual(s.decor, []);
   assert.equal(applyDecorPurchase(s, { id: 'нет-такого' }), false);
 });
 

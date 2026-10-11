@@ -20,7 +20,7 @@ export const boardMethods = {
         const state = this.stepState(dishId, s.id);
         if (state === 'skipped') continue;
         const key = `${dishId}:${s.id}`;
-        out.push({ key, dishId, stepId: s.id, product: s.product, qty: s.qty ?? 1, type: s.type, shape: s.shape, state, started: !!this.board.items[key], block: state === 'ready' ? (this.board.items[key] ? null : this._carryBlock(dishId, s)) : this.stepBlock(dishId, s.id) });
+        out.push({ key, dishId, stepId: s.id, product: s.product, qty: s.qty ?? 1, type: s.type, shape: s.shape, state, started: !!this.board.items[key], block: state === 'ready' ? this._boardDirtyBlock(s.product) || (this.board.items[key] ? null : this._carryBlock(dishId, s)) : this.stepBlock(dishId, s.id) });
       }
     }
     return out;
@@ -40,6 +40,8 @@ export const boardMethods = {
   boardSelect(key) {
     if (!this._isIdleAt('board') || this.action) return false;
     if (this.board.items[key]) {
+      const block = this._boardDirtyBlock(this.board.items[key].product);
+      if (block) { this.setHint(block); return false; }
       this.board.current = key;
       this._emit('boardSwitch', { key });
       return true;
@@ -109,6 +111,13 @@ export const boardMethods = {
   _boardPointer(type, x, z) {
     const it = this.boardCur();
     if (!it) return 'ignored';
+    const block = this._boardDirtyBlock(it.product);
+    if (block) {
+      this.board.stroke = null;
+      this.board.knife = null;
+      if (type === 'down') this.setHint(block);
+      return 'blocked';
+    }
     const ux = x / BOARD_UNIT, uz = z / BOARD_UNIT;
     if (it.body) {
       // доска повёрнута: точку мыши — в систему продукта
@@ -483,7 +492,7 @@ export const boardMethods = {
     this.board.current = null;
     this._emit('transfer', { dishId: it.dishId, stepId: it.stepId, product: it.product, dest: step.dest, pieces: moved, q });
     // следующий продукт той же станции выбирается автоматически, если он уже начат
-    const next = this.boardTasks().find((t) => t.started);
+    const next = this.boardTasks().find((t) => t.started && !this._boardDirtyBlock(t.product));
     if (next) this.board.current = next.key;
     this._afterStepProgress(it.dishId);
     return true;

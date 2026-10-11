@@ -2,6 +2,7 @@
 import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR } from './data.js';
 import { CLAYOUT } from './layout.js';
 import { FEED_POSTS, FEED_BY_ID, MY_POST, FEED_TUNE } from './feed-data.js';
+import { CHAT_REPLIES, CHAT_REACTIONS, CROWD_COMMENTS } from './chatter.js';
 
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
 
@@ -19,11 +20,66 @@ export const phoneMethods = {
     return m;
   },
 
+  /** Собеседники, чьи сообщения придут в ближайшие секунды. */
+  typingFrom() {
+    const ahead = this.cfg.phone.typingAhead;
+    const out = new Set();
+    for (const m of this.msgQueue) {
+      if (m.sent || m.at < this.t || m.at - this.t > ahead) continue;
+      if (m.ifSilent && this.phone.messages.some((x) => x.mine && x.from === m.from)) continue;
+      out.add(m.from);
+    }
+    if (this.chatter?.pool.length && this.chatter.next >= this.t && this.chatter.next - this.t <= ahead) out.add(this.chatter.pool[0].from);
+    return out;
+  },
+
+  /** Написать в существующий чат; вымышленный собеседник отвечает с задержкой. */
+  replyChat(to, text) {
+    const t = String(text ?? '').trim().slice(0, this.cfg.phone.maxChatLength);
+    if (!t || !this.phone.messages.some((m) => m.from === to && !m.mine)) return false;
+    this.phone.messages.push({ id: this._id(), from: to, mine: true, text: t, t: this.t, read: true });
+    const list = CHAT_REPLIES[to] ?? [];
+    const n = this.phone.messages.filter((m) => m.mine && m.from === to).length;
+    const reaction = CHAT_REACTIONS[to]?.find((r) => r.matches.some((word) => t.toLowerCase().includes(word)));
+    if (list.length) this.msgQueue.push({ at: this.t + this.cfg.phone.replyDelay, from: to, text: reaction?.text ?? list[Math.min(n, list.length) - 1], sent: false });
+    this._emit('chatSent', { to });
+    return true;
+  },
+
+  /** Написать комментарий к доступному посту или собственному фото. */
+  commentPost(key, text) {
+    const t = String(text ?? '').trim().slice(0, this.cfg.phone.maxCommentLength);
+    if (!t || !this.feedItems().some((i) => i.key === key)) return false;
+    (this.phone.comments[key] ??= []).push({ who: 'me', text: t, t: this.t });
+    this._emit('commented', { key });
+    return true;
+  },
+
+  /** Последние комментарии: исходные реплики, друзья и все ответы героини. */
+  postComments(key) {
+    const it = this.feedItems().find((i) => i.key === key);
+    if (!it) return [];
+    const own = this.phone.comments[key] ?? [];
+    const base = it.mine
+      ? MY_POST.comments.filter((c) => it.likes >= c.likes && (c.minQ == null || this.dishes[it.dishId].Q >= c.minQ) && (c.maxQ == null || this.dishes[it.dishId].Q <= c.maxQ))
+      : FEED_BY_ID[it.id].comments;
+    const list = base.map(({ who, text }) => ({ who, text }));
+    const want = Math.min(this.cfg.phone.commentPreview, it.talk - own.length);
+    let h = 0;
+    for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    for (let k = 0; list.length < want && k < CROWD_COMMENTS.length; k++) {
+      const [who, text] = CROWD_COMMENTS[(h + k * 3) % CROWD_COMMENTS.length];
+      if (!list.some((c) => c.text === text)) list.push({ who, text });
+    }
+    return [...list, ...own];
+  },
+
   // ---------- банк: бонусы ----------
-  _earn(points, why) {
+  _earn(points, why, { banked = false } = {}) {
     const n = Math.round(points);
     if (n <= 0 || this.practice || this.challenge) return 0;
     this.bonus.points += n;
+    if (banked) this.bonus.banked += n;
     this.bonus.history.unshift({ t: this.t, n, why });
     this._emit('bonus', { n, why });
     return n;
@@ -50,7 +106,12 @@ export const phoneMethods = {
       this.setHint(`Не хватает баллов: нужно ${d.price}, есть ${this.bonus.points}`, 2.5);
       return false;
     }
+    if (this.bonus.banked < d.price) {
+      this.setHint('Баллы за готовку станут доступны для украшений после завершения дня. Баллы из подарков — сразу!', 4);
+      return false;
+    }
     this.bonus.points -= d.price;
+    this.bonus.banked -= d.price;
     this.bonus.history.unshift({ t: this.t, n: -d.price, why: d.name });
     this.decor.push(id);
     this._emit('decorBought', { id });
@@ -134,8 +195,9 @@ export const phoneMethods = {
   },
 
   /** Лайк поста ленты (повторное нажатие снимает). Своё фото лайкнуть нельзя. */
-  likePost(id) {
+  likePost(id, forceOn = false) {
     if (!this.phone.feed.some((f) => f.id === id)) return false;
+    if (forceOn && this.phone.liked[id]) return true;
     const on = !this.phone.liked[id];
     if (on) this.phone.liked[id] = true;
     else delete this.phone.liked[id];
@@ -159,14 +221,14 @@ export const phoneMethods = {
     const day = this.day?.id ?? 0;
     const npc = this.phone.feed.map((f) => {
       const p = FEED_BY_ID[f.id];
-      return { key: p.id, id: p.id, mine: false, author: p.author, text: p.text, art: p.art, alt: p.alt, poll: p.poll, dishId: null, day: p.day, at: p.at, likes: this.feedLikes(p), liked: !!this.phone.liked[p.id], comments: p.comments.slice(0, FEED_TUNE.preview), talk: p.talk, unread: !f.read };
+      return { key: p.id, id: p.id, mine: false, author: p.author, text: p.text, art: p.art, alt: p.alt, poll: p.poll, dishId: null, day: p.day, at: p.at, likes: this.feedLikes(p), liked: !!this.phone.liked[p.id], comments: p.comments.slice(0, FEED_TUNE.preview), talk: p.talk + (this.phone.comments[p.id]?.length ?? 0), unread: !f.read };
     });
     const mine = this.phone.posts.map((p) => {
       const likes = this.postLikes(p);
       const Q = p.Q ?? 0;
       const com = MY_POST.comments.filter((c) => likes >= c.likes && (c.minQ == null || Q >= c.minQ) && (c.maxQ == null || Q <= c.maxQ));
       const name = this.dishes[p.dishId]?.recipe.name ?? '';
-      return { key: `me-${p.id}`, id: p.id, mine: true, author: 'me', text: MY_POST.text.replace('{dish}', name), art: null, alt: name, poll: null, dishId: p.dishId, day, at: p.t, likes, liked: false, comments: com.slice(-FEED_TUNE.preview), talk: com.length, unread: false };
+      return { key: `me-${p.id}`, id: p.id, mine: true, author: 'me', text: MY_POST.text.replace('{dish}', name), art: null, alt: name, poll: null, dishId: p.dishId, day, at: p.t, likes, liked: false, comments: com.slice(-FEED_TUNE.preview), talk: com.length + (this.phone.comments[`me-${p.id}`]?.length ?? 0), unread: false };
     });
     return [...mine, ...npc].sort((a, b) => b.day - a.day || b.at - a.at);
   },
@@ -228,6 +290,8 @@ export const phoneMethods = {
     }
     const paidPoints = this.pointsFor(cost.total);
     if (paidPoints) {
+      const earnedToday = this.bonus.points - this.bonus.banked;
+      this.bonus.banked -= Math.max(0, paidPoints - earnedToday);
       this.bonus.points -= paidPoints;
       this.bonus.history.unshift({ t: this.t, n: -paidPoints, why: 'Оплата заказа баллами' });
     }
@@ -286,7 +350,7 @@ export const phoneMethods = {
       this.setHint('Курьер ещё не приехал', 2);
       return false;
     }
-    const risky = this.alerts.some((a) => a.key === 'pot' || a.key === 'oven');
+    const risky = this.alerts.some((a) => /^pot\d*$/.test(a.key) || a.key === 'oven');
     if (risky && !force) {
       this._emit('collectWarn');
       return 'warn';
