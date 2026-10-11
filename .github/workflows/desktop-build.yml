@@ -12,6 +12,9 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      # 3D-модели лежат в Git LFS: без них prebuild (models:sync) падает на файлах-указателях.
+      # Тянем только готовые GLB (~6 МБ), не исходники .blend и текстуры — бережём квоту LFS.
+      - run: git lfs pull --include="assets/**/*.glb"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -41,6 +44,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      # 3D-модели лежат в Git LFS: без них prebuild (models:sync) падает на файлах-указателях.
+      # Тянем только готовые GLB (~6 МБ), не исходники .blend и текстуры — бережём квоту LFS.
+      - run: git lfs pull --include="assets/**/*.glb"
       - uses: actions/setup-node@v4
         with:
           node-version: 22

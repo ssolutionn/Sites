@@ -2,10 +2,34 @@
 import * as THREE from 'three';
 import { instantiateActor, animateActor } from './assets.js';
 import { material, mesh, ellipsoid, curve, line, snowflake, taperedLimb, group, mergeStaticMeshes } from './model-utils.js';
+import { tex, NEUTRAL } from './textures.js';
+
+// Значок партнёра на нагруднике фартука GLB-героини: точка на груди в позе покоя (м, от ступней) и радиус.
+// Значок висит на кости spine_02 — повторяет наклоны корпуса. В нейтральной сборке значка нет.
+const APRON_BADGE = { bone: 'spine_02', at: [0, 1.06, 0.134], r: 0.042 };
+
+/** Нашить значок на фартук модели героини (поза покоя, корень в начале координат). */
+function addApronBadge(root) {
+  const bone = root.getObjectByName(APRON_BADGE.bone);
+  if (!bone) return null;
+  root.updateMatrixWorld(true);
+  const badge = new THREE.Mesh(
+    new THREE.CircleGeometry(APRON_BADGE.r, 40),
+    new THREE.MeshStandardMaterial({ map: tex.logo, transparent: true, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }),
+  );
+  badge.name = 'apron_badge';
+  badge.position.copy(bone.worldToLocal(new THREE.Vector3(...APRON_BADGE.at)));
+  badge.quaternion.copy(bone.getWorldQuaternion(new THREE.Quaternion()).invert());
+  bone.add(badge);
+  return badge;
+}
 
 export function buildHeroine() {
   const actor = instantiateActor('girl');
-  if (actor) return actor;
+  if (actor) {
+    if (!NEUTRAL) actor.userData.badge = addApronBadge(actor);
+    return actor;
+  }
   const root = group(null, 'heroine');
   const body = group(root, 'heroine_body');
   const skin = material(0xf1b992, .58), skinShadow = material(0xd98d71);
@@ -61,10 +85,12 @@ export function buildHeroine() {
   for(const s of [-1,1]){const b=ellipsoid(bow,red,[s*.031,0,.013],[.034,.026,.014],'apron_bow_loop');b.rotation.z=s*.3;}
   ellipsoid(bow,stitch,[0,0,.03],[.012,.015,.012],'apron_bow_knot');
   for(const s of [-1,1])curve(bow,red,[[s*.01,-.01,.005],[s*.026,-.055,.016],[s*.035,-.105,.012]],.009,'apron_bow_tail',14);
-  // Modeled badge and numeral, no raster texture dependencies.
-  const badge=mesh(new THREE.TorusGeometry(.049,.0032,8,40),white,body,'apron_badge_outline');badge.position.set(0,1.024,.166);
-  const five=curve(body,white,[[.021,1.050,.174],[-.014,1.050,.174],[-.020,1.025,.174],[.010,1.025,.174],[.022,1.014,.174],[.018,.991,.174],[-.009,.986,.174],[-.023,.996,.174]],.006,'apron_badge_five',28);
-  curve(body,green,[[.007,1.067,.168],[.023,1.077,.17],[.034,1.065,.171],[.007,1.067,.168]],.004,'apron_badge_leaf',14);
+  // Значок партнёра (цифра в круге с листиком) — только в фирменной сборке; в нейтральной его нет.
+  if (!NEUTRAL) {
+    const badge=mesh(new THREE.TorusGeometry(.049,.0032,8,40),white,body,'apron_badge_outline');badge.position.set(0,1.024,.166);
+    const five=curve(body,white,[[.021,1.050,.174],[-.014,1.050,.174],[-.020,1.025,.174],[.010,1.025,.174],[.022,1.014,.174],[.018,.991,.174],[-.009,.986,.174],[-.023,.996,.174]],.006,'apron_badge_five',28);
+    curve(body,green,[[.007,1.067,.168],[.023,1.077,.17],[.034,1.065,.171],[.007,1.067,.168]],.004,'apron_badge_leaf',14);
+  }
   // Embroidery along exposed chest, skirt and cuffs.
   for(const s of [-1,1]){
     snowflake(body,red,s*.145,1.14,.111,.021,'sweater_snowflake');
