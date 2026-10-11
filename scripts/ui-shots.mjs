@@ -11,7 +11,7 @@ page.on('pageerror', (e) => errs.push(String(e)));
 page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 const S = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
-const shot = (n) => page.screenshot({ path: `${out}/ui_${n}_${W}.png` });
+const shot = (n) => page.screenshot({ path: `${out}/ui_${n}_${W}.png`, timeout: 150000 }); // SwiftShader в облаке снимает кадр дольше 30 с
 async function waitFor(fn, timeout = 30000, arg) { const t0 = Date.now(); while (Date.now() - t0 < timeout) { if (await page.evaluate(fn, arg)) return true; await wait(100); } return false; }
 async function openPanel(id) {
   await S((id) => window.__sueta.session.goTo(id), id);
