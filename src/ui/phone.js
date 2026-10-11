@@ -7,6 +7,7 @@ import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
 import { feedArt, dishArt, heartIcon } from './feed-art.js';
 import { PICON } from './icons.js';
+import { pts as ptsWord } from '../campaign/words.js';
 import { CHATTER_AVATARS, QUICK_CHAT, QUICK_COMMENT } from '../campaign/chatter.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -246,7 +247,7 @@ export class PhoneUI {
     return `<div class="wall">${flakes}<div class="garland">${Array.from({ length: 9 }, (_, i) => `<span style="--c:${['#ff5a5a', '#ffd166', '#6ee7a8', '#7ab8ff'][i % 4]}"></span>`).join('')}</div></div>
       <div class="widget"><div class="w-time">${phoneClock(s.t)}</div><div class="w-date">${date} · до Нового года ${Math.max(1, 31 - (24 + day) + 1)} дн.</div></div>
       <div class="apps">${APPS.map((a) => `<button class="app ${a.cls}" data-nav="${a.id}"><span class="ico">${a.icon}${badges[a.id] ? `<em>${badges[a.id]}</em>` : ''}</span><span class="nm">${esc(a.name)}</span></button>`).join('')}</div>
-      <div class="hint-home">💰 ${s.wallet.budget - s.wallet.spent} ₽ · ⭐ ${s.bonus.points} баллов</div>`;
+      <div class="hint-home">💰 ${s.wallet.budget - s.wallet.spent} ₽ · ⭐ ${ptsWord(s.bonus.points)}</div>`;
   }
 
   _head(title, sub = '', back = 'home') {
@@ -319,7 +320,7 @@ export class PhoneUI {
       <h4>Продукты</h4><div class="pgrid">${cat.map(card).join('')}</div>
       <h4>К празднику</h4><div class="pgrid">${extras}</div>
       </div>
-      <div class="cart"><div class="cart-sum"><b>Корзина: ${total} ₽</b>${s.bonus.points ? `<label class="pts"><input type="checkbox" data-act="setUsePoints" ${s.delivery.usePoints ? 'checked' : ''} /> баллами ${pts ? `−${pts}` : `до ${Math.round(BONUS.payShare * 100)} %`}</label>` : ''}</div><div class="modes">${modes}</div></div>`;
+      <div class="cart"><div class="cart-sum"><b>Корзина: ${total} ₽</b>${s.bonus.points ? `<label class="pts"><input type="checkbox" data-act="setUsePoints" ${s.delivery.usePoints ? 'checked' : ''} /> очками домохозяйки ${pts ? `−${pts}` : `до ${Math.round(BONUS.payShare * 100)} %`}</label>` : ''}</div><div class="modes">${modes}</div></div>`;
   }
 
   // ---------- Андрей: мессенджер и фото ----------
@@ -364,7 +365,7 @@ export class PhoneUI {
     const today = s.day?.id ?? 1;
     const posts = s.feedItems().map((it) => this._post(s, it, today)).join('');
     return `${head}${seg}<div class="app-body feed">
-      ${done.length ? `<div class="snap">${done.map((d) => btn(`📷 Сфотографировать: ${esc(d.recipe.short)}`, 'postPhoto', [d.id], 'primary wide')).join('')}<small>+${BONUS.perPhoto} баллов за фото</small></div>` : '<div class="fine">Приготовь блюдо — и сфотографируй его для друзей.</div>'}
+      ${done.length ? `<div class="snap">${done.map((d) => btn(`📷 Сфотографировать: ${esc(d.recipe.short)}`, 'postPhoto', [d.id], 'primary wide')).join('')}<small>+${ptsWord(BONUS.perPhoto)} за фото</small></div>` : '<div class="fine">Приготовь блюдо — и сфотографируй его для друзей.</div>'}
       ${posts || '<div class="empty">В ленте пока тихо. Друзья ещё режут салаты.</div>'}</div>`;
   }
 
@@ -398,7 +399,7 @@ export class PhoneUI {
     const buy = (id) => {
       const price = s.toyPrice(id);
       const can = !closed && s.bonus.banked >= price;
-      return btn(`⭐ ${price}`, 'buyToy', [id], can ? 'primary mini' : 'mini soft-disabled', false, can ? 'Купить — игрушка появится в коробке у ёлки' : `Для украшений нужно ${price} баллов`);
+      return btn(`⭐ ${price}`, 'buyToy', [id], can ? 'primary mini' : 'mini soft-disabled', false, can ? 'Купить — игрушка появится в коробке у ёлки' : `Для украшений нужно ${ptsWord(price)}`);
     };
     const row = (id) => {
       const t = TOYS[id];
@@ -414,12 +415,12 @@ export class PhoneUI {
       })
       .join('');
     const dealCard = deal
-      ? `<div class="deal-card"><span class="di">${TOYS[deal].icon}</span><span class="dn"><small>Товар дня · −${off} %</small><b>${esc(TOYS[deal].name)}</b><small><s>${TOYS[deal].price}</s> → ${s.toyPrice(deal)} баллов</small></span>${buy(deal)}</div>`
+      ? `<div class="deal-card"><span class="di">${TOYS[deal].icon}</span><span class="dn"><small>Товар дня · −${off} %</small><b>${esc(TOYS[deal].name)}</b><small><s>${TOYS[deal].price}</s> → ${ptsWord(s.toyPrice(deal))}</small></span>${buy(deal)}</div>`
       : '';
-    return `${this._head('Ёлочный базар', 'игрушки на ёлку за баллы')}<div class="app-body bank bazaar">
-      <div class="baz-bal">Для украшений: <b>${s.bonus.banked}</b> баллов${s.bonus.points > s.bonus.banked ? `<small>ещё ${s.bonus.points - s.bonus.banked} за готовку — после дня</small>` : ''}</div>
+    return `${this._head('Ёлочный базар', 'игрушки на ёлку за очки домохозяйки')}<div class="app-body bank bazaar">
+      <div class="baz-bal">Для украшений: <b>${s.bonus.banked}</b> очк. домохозяйки${s.bonus.points > s.bonus.banked ? `<small>ещё ${s.bonus.points - s.bonus.banked} за готовку — после дня</small>` : ''}</div>
       ${closed ? '<p class="fine">В испытании и практике базар закрыт.</p>' : dealCard}
-      <p class="fine">Купленная игрушка ждёт в коробке у ёлки. Повесь весь набор — вернём часть баллов.</p>
+      <p class="fine">Купленная игрушка ждёт в коробке у ёлки. Повесь весь набор — вернём часть очков.</p>
       ${sets}</div>`;
   }
 
@@ -434,13 +435,13 @@ export class PhoneUI {
       .join('');
 
     return `${this._head('Банк', 'бонусная программа')}<div class="app-body bank">
-      <div class="bcard"><small>${NEUTRAL ? 'Бонусная карта' : 'Карта «Выручай-карта»'}</small><div class="bp">${s.bonus.points}<span>баллов</span></div><div class="bn">•••• 2025</div></div>
+      <div class="bcard"><small>${NEUTRAL ? 'Бонусная карта' : 'Карта «Выручай-карта»'}</small><div class="bp">${s.bonus.points}<span>очков домохозяйки</span></div><div class="bn">•••• 2025</div></div>
       <div class="earn"><span>🛒 ${Math.round(BONUS.cashback * 100)} % с заказов</span><span>🍽 за каждое блюдо</span><span>📷 за фото</span><span>🎁 в подарках</span></div>
-      <p class="fine">Для украшений доступно ${s.bonus.banked} баллов. ${s.bonus.points > s.bonus.banked ? `Ещё ${s.bonus.points - s.bonus.banked} за готовку — после завершения дня.` : 'Баллы из подарков можно тратить сразу.'}</p>
+      <p class="fine">Для украшений доступно ${ptsWord(s.bonus.banked)}. ${s.bonus.points > s.bonus.banked ? `Ещё ${s.bonus.points - s.bonus.banked} за готовку — после завершения дня.` : 'Очки из подарков можно тратить сразу.'}</p>
       <button class="decor go-bazaar" data-nav="bazaar"><span class="di">🎄</span><span class="dn"><b>Ёлочные игрушки</b><small>наборы и товар дня — в «Ёлочном базаре»</small></span><span class="owned">›</span></button>
-      <h4>Декор кухни за баллы</h4>${decor}
-      <h4>История</h4>${hist || '<div class="fine">Баллы появятся после первого заказа или готового блюда.</div>'}
-      <p class="fine">Баллами можно оплатить до половины заказа в доставке. Игровые баллы, без реальных денег.</p></div>`;
+      <h4>Декор кухни за очки домохозяйки</h4>${decor}
+      <h4>История</h4>${hist || '<div class="fine">Очки появятся после первого заказа или готового блюда.</div>'}
+      <p class="fine">Очками домохозяйки можно оплатить до половины заказа в доставке. Игровые очки, без реальных денег.</p></div>`;
   }
 
   // ---------- Кулинарная книга ----------

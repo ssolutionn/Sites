@@ -4,6 +4,7 @@ import { TOYS, GIFTS, TOY_SETS, BAZAAR } from './data.js';
 import { TREE_SLOTS } from './layout.js';
 import { createRng } from '../game/rng.js';
 import { Scrubber } from './mechanics.js';
+import { pts } from './words.js';
 
 export const TOY_IDS = Object.keys(TOYS);
 
@@ -195,7 +196,7 @@ export const treeMethods = {
       this.setsDone.add(id);
       const n = this._earn(set.reward, `Набор «${set.name}»`, { banked: true });
       this._emit('setComplete', { id, n });
-      this.setHint(`Набор «${set.name}» собран! +${set.reward} баллов`, 3);
+      this.setHint(`Набор «${set.name}» собран! +${pts(set.reward)}`, 3);
     }
   },
 
@@ -209,11 +210,11 @@ export const treeMethods = {
     }
     const price = this.toyPrice(id);
     if (this.bonus.points < price) {
-      this.setHint(`Не хватает баллов: нужно ${price}, есть ${this.bonus.points}`, 2.5);
+      this.setHint(`Не хватает очков домохозяйки: нужно ${price}, есть ${this.bonus.points}`, 2.5);
       return false;
     }
     if (this.bonus.banked < price) {
-      this.setHint('Баллы за готовку станут доступны для игрушек после завершения дня. Баллы из подарков — сразу!', 4);
+      this.setHint('Очки за готовку станут доступны для игрушек после завершения дня. Очки из подарков — сразу!', 4);
       return false;
     }
     this.bonus.points -= price;
@@ -301,7 +302,7 @@ export const treeMethods = {
       knocked.push(t.uid);
     }
     if (knocked.length) {
-      this._alert('toys', 'Игрушки на полу — подними их у ёлки', { station: 'tree' });
+      this._alert('toys', 'Игрушки на полу', { station: 'tree', detail: 'Игрушки на полу — подними их у ёлки' });
       this._emit('toysKnocked', { uids: knocked });
     }
     return knocked.length;

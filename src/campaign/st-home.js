@@ -8,9 +8,9 @@ import { TEMPTING, BOILED } from './st-extra.js';
 const rand = (rng, [a, b]) => a + (b - a) * rng.next();
 // Что кот затеял от скуки — текст срочного дела.
 const MISCHIEF = {
-  garland: 'Кот тянется к гирлянде! Помаши на него',
-  star: 'Кот лезет на ёлку! Помаши на него',
-  toys: 'Кот сбивает игрушки с ёлки! Помаши на него',
+  garland: ['Кот тянется к гирлянде', 'Кот тянется к гирлянде. Помаши на него мышью, крикни или отгони сама'],
+  star: ['Кот лезет на ёлку', 'Кот лезет на ёлку. Помаши на него мышью, крикни или отгони сама'],
+  toys: ['Кот сбивает игрушки', 'Кот сбивает игрушки с ёлки. Помаши на него мышью, крикни или отгони сама'],
 };
 
 export const homeMethods = {
@@ -236,7 +236,7 @@ export const homeMethods = {
           this._removeAlert(this._potKey(s.i));
         }
         const name = this.productName(s.product);
-        this._alert('potReady' + (s.i || ''), `${BOILED[s.product]?.ready ?? name + ' — готово'} — достань из кастрюли`, { station: 'stove' });
+        this._alert('potReady' + (s.i || ''), `${BOILED[s.product]?.ready ?? name + ' — готово'}`, { station: 'stove', detail: `${BOILED[s.product]?.ready ?? name + ' — готово'} — достань из кастрюли` });
         this._emit('potatoReady', { burner: s.i, product: s.product });
       }
       if (s.overflow && this.t >= s.overflow.deadline) {
@@ -263,7 +263,7 @@ export const homeMethods = {
     if (!b) return;
     const w = rand(this.rng, this.cfg.events.potWindow);
     b.overflow = { deadline: this.t + w };
-    this._alert(this._potKey(b.i), `Кастрюля выкипает (${this.productName(b.product).toLowerCase()})! Поверни крутилку ниже 6`, { deadline: this.t + w, window: w, station: 'stove' });
+    this._alert(this._potKey(b.i), `Кастрюля убегает`, { deadline: this.t + w, window: w, station: 'stove', detail: `Кастрюля с продуктом «${this.productName(b.product).toLowerCase()}» убегает — поверни крутилку ниже 6` });
     this._markUrgent();
     this._emit('potBoil', { burner: b.i });
   },
@@ -386,16 +386,16 @@ export const homeMethods = {
       o.state = 'ready';
       const w = rand(this.rng, this.cfg.events.ovenWindow);
       o.windowEnd = this.t + w;
-      this._alert('oven', 'Курица готова — достань из духовки!', { deadline: o.windowEnd, window: w, station: 'oven' });
+      this._alert('oven', 'Курица готова', { deadline: o.windowEnd, window: w, station: 'oven', detail: 'Курица готова — достань из духовки, пока не пересушилась' });
       this._markUrgent();
       this._emit('ovenReady');
     } else if (o.state === 'ready' && this.t >= o.windowEnd) {
       o.state = 'over';
-      this._alert('oven', 'Курица перегревается! Срочно достань', { station: 'oven' });
+      this._alert('oven', 'Курица пересыхает', { station: 'oven', detail: 'Курица пересыхает — достань из духовки' });
       this._emit('ovenOver');
     } else if (o.state === 'over' && this.t >= o.windowEnd + this.cfg.oven.burnAfter) {
       o.state = 'burnt';
-      this._alert('oven', 'Курица сгорела — достань и приготовь замену', { station: 'oven' });
+      this._alert('oven', 'Курица подгорела', { station: 'oven', detail: 'Курица подгорела — достань и приготовь новую' });
       this._emit('ovenBurnt');
     }
   },
@@ -507,7 +507,7 @@ export const homeMethods = {
     const pd = { id: this._id(), source, x: at.x, z: at.z, r: at.r, stand, mask: new CoverageMask({ ...this.cfg.wipe, width: PUDDLE.w, depth: PUDDLE.d, shape: 'ellipse' }) };
     this.puddles.push(pd);
     this.nav.setDynamic('puddle' + pd.id, { x: pd.x, z: pd.z, r: pd.r });
-    this._alert('puddle', 'На полу лужа — вытри тряпкой', { station: 'puddle', dismissable: false });
+    this._alert('puddle', 'На полу лужа', { station: 'puddle', dismissable: false, detail: 'На полу лужа — вытри тряпкой' });
     this._emit('puddle', { id: pd.id });
   },
 
@@ -591,7 +591,7 @@ export const homeMethods = {
   _startCatTheft(product = 'sausage') {
     const w = rand(this.rng, this.cfg.events.catWindow);
     this.cat = { state: 'theft', deadline: this.t + w, startedAt: this.t, product };
-    this._alert('cat', `Кот тянется ${TEMPTING[product] ?? 'к еде'}! Выйди в обзор и помаши на него`, { deadline: this.t + w, window: w, action: 'shoo' });
+    this._alert('cat', `Кот тянется ${TEMPTING[product] ?? 'к еде'}`, { deadline: this.t + w, window: w, action: 'shoo', detail: `Кот тянется ${TEMPTING[product] ?? 'к еде'}. В обзоре кухни помаши мышью над котом, крикни или отгони сама` });
     this._markUrgent();
     this._emit('catStart', { kind: 'theft' });
   },
@@ -599,7 +599,7 @@ export const homeMethods = {
   _startSpillWarn() {
     const w = rand(this.rng, this.cfg.events.catWindow);
     this.cat = { state: 'spill', deadline: this.t + w, startedAt: this.t };
-    this._alert('spillWarn', 'Кот подбирается к стакану компота! Помаши на него', { deadline: this.t + w, window: w, action: 'shoo' });
+    this._alert('spillWarn', 'Кот подбирается к компоту', { deadline: this.t + w, window: w, action: 'shoo', detail: 'Кот подбирается к стакану компота. В обзоре кухни помаши мышью над котом, крикни или отгони сама' });
     this._markUrgent();
     this._emit('catStart', { kind: 'spill' });
   },
@@ -623,7 +623,7 @@ export const homeMethods = {
     const kind = opts[Math.floor(this.rng.next() * opts.length)];
     const w = rand(this.rng, c.mischiefWindow);
     this.cat = { state: 'mischief', kind, deadline: this.t + w, startedAt: this.t };
-    this._alert('cat', MISCHIEF[kind], { deadline: this.t + w, window: w, action: 'shoo' });
+    this._alert('cat', MISCHIEF[kind][0], { deadline: this.t + w, window: w, action: 'shoo', detail: MISCHIEF[kind][1] });
     this._markUrgent();
     this._emit('catStart', { kind: 'mischief', target: kind });
     return true;

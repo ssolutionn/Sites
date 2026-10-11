@@ -31,7 +31,7 @@ test('декор покупается за баллы один раз, без б
   assert.equal(s.bonus.points, 0);
   assert.equal(s.buyDecor('snowman'), false);
   assert.equal(s.buyDecor('wreath'), false);
-  assert.match(s.hint.text, /баллов/);
+  assert.match(s.hint.text, /очков домохозяйки/); // 0.11: валюта переименована
 });
 
 test('готовое блюдо даёт баллы, его фото — ещё баллы и лайки', () => {

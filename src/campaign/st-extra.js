@@ -231,7 +231,7 @@ export const extraMethods = {
     const c = this.cfg.cat;
     if (n.hunger >= c.warnAt && !n.warned) {
       n.warned = true;
-      this._alert('catHungry', 'Кот проголодался — покорми, пока он не полез за едой', { station: 'catbowl' });
+      this._alert('catHungry', 'Кот проголодался', { station: 'catbowl', detail: 'Кот проголодался — покорми, пока он не полез за едой' });
       this._emit('catHungry');
     }
     // голодный кот сам ищет еду, оставленную на доске
@@ -243,7 +243,7 @@ export const extraMethods = {
     if (this.cat.state === 'home' || this.cat.state === 'visit') n.boredom = Math.min(100, n.boredom + this._boredRate() * (this.catCalm() ? 0.5 : 1) * h);
     if (n.boredom >= c.wantPlayAt && !n.boredWarned) {
       n.boredWarned = true;
-      this._alert('catBored', 'Кот скучает — поиграй с ним, иначе начнёт безобразничать', { station: 'catbowl' });
+      this._alert('catBored', 'Кот скучает', { station: 'catbowl', detail: 'Кот скучает — поиграй с ним, иначе начнёт безобразничать' });
       this._emit('catBored');
     }
     if (this.cat.state === 'home' && n.boredom >= c.mischiefAt && this._canStartUrgent()) this._startMischief();

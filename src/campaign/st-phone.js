@@ -15,7 +15,7 @@ export const phoneMethods = {
       this.requestKnown = true;
       for (const r of this.requests ?? []) if (extra.request === true ? r.fixed : r.id === extra.request) r.known = true;
     }
-    this._alert('phone', `${from}: ${text.length > 42 ? text.slice(0, 40) + '…' : text}`, { station: 'phone', until: this.t + 12, phone: true });
+    this._alert('phone', `${from}: ${text.length > 26 ? text.slice(0, 24) + '…' : text}`, { station: 'phone', until: this.t + 8, phone: true, detail: `${from}: ${text}` });
     this._emit('phoneMsg', { from });
     return m;
   },
@@ -87,7 +87,7 @@ export const phoneMethods = {
       this.phone.replyUnread[q.key] = (this.phone.replyUnread[q.key] ?? 0) + 1;
       this.phone.unread++;
       const name = FEED_AUTHORS[q.who].name;
-      this._alert('phone', `${name} ${repliedVerb(q.who)} тебе: ${q.text.length > 34 ? q.text.slice(0, 32) + '…' : q.text}`, { station: 'phone', until: this.t + 12, phone: true, open: `andrey|${q.key}|feed` });
+      this._alert('phone', `${name} ${repliedVerb(q.who)} тебе`, { station: 'phone', until: this.t + 8, phone: true, detail: `${name} ${repliedVerb(q.who)} тебе: ${q.text}`, open: `andrey|${q.key}|feed` });
       this._emit('commentReply', { key: q.key, who: q.who });
     }
     if (this.commentQueue.some((q) => q.done)) this.commentQueue = this.commentQueue.filter((q) => !q.done);
@@ -160,11 +160,11 @@ export const phoneMethods = {
       return false;
     }
     if (this.bonus.points < d.price) {
-      this.setHint(`Не хватает баллов: нужно ${d.price}, есть ${this.bonus.points}`, 2.5);
+      this.setHint(`Не хватает очков домохозяйки: нужно ${d.price}, есть ${this.bonus.points}`, 2.5);
       return false;
     }
     if (this.bonus.banked < d.price) {
-      this.setHint('Баллы за готовку станут доступны для украшений после завершения дня. Баллы из подарков — сразу!', 4);
+      this.setHint('Очки за готовку станут доступны для украшений после завершения дня. Очки из подарков — сразу!', 4);
       return false;
     }
     this.bonus.points -= d.price;
@@ -208,7 +208,7 @@ export const phoneMethods = {
     for (const x of this.kitchenTimers) {
       if (x.done || this.t < x.end) continue;
       x.done = true;
-      this._alert('timer', `Таймер на ${Math.round(x.total / 60) || 1} мин сработал`, { until: this.t + 8 });
+      this._alert('timer', `Таймер сработал`, { until: this.t + 6, detail: `Таймер на ${Math.round(x.total / 60) || 1} мин сработал` });
       this._emit('timerDone', { id: x.id });
     }
     this.kitchenTimers = this.kitchenTimers.filter((x) => !x.done || this.t < x.end + 8);
@@ -350,7 +350,7 @@ export const phoneMethods = {
       const earnedToday = this.bonus.points - this.bonus.banked;
       this.bonus.banked -= Math.max(0, paidPoints - earnedToday);
       this.bonus.points -= paidPoints;
-      this.bonus.history.unshift({ t: this.t, n: -paidPoints, why: 'Оплата заказа баллами' });
+      this.bonus.history.unshift({ t: this.t, n: -paidPoints, why: 'Оплата заказа очками домохозяйки' });
     }
     this.wallet.spent += cost.total - paidPoints;
     this._earn((cost.total - paidPoints) * BONUS.cashback, 'Кешбэк за заказ');
@@ -361,7 +361,7 @@ export const phoneMethods = {
       this._emit('orderPlaced', { items, mode });
       const ok = this.collectOrder(true);
       if (ok === true) this.setHint(`Бегу в магазин — ${m.away} с. Плита и духовка без присмотра!`, 4);
-      else this._alert('delivery', 'Сходить в магазин — путь к двери', { action: 'collect', dismissable: false });
+      else this._alert('delivery', 'Сходи за заказом', { action: 'collect', dismissable: false, detail: 'Сходить в магазин — путь к двери' });
       return true;
     }
     const wait = rand(this.rng, m.wait ?? this.cfg.events.deliveryWait);
@@ -383,7 +383,7 @@ export const phoneMethods = {
     if (next === 'onTheWay') this.pushMessage('Доставка', 'Курьер в пути.');
     if (next === 'arrived') {
       this.pushMessage('Доставка', 'Курьер приехал. Можно забрать заказ.');
-      this._alert('delivery', 'Курьер приехал — забери заказ', { action: 'collect', dismissable: false });
+      this._alert('delivery', 'Курьер у двери', { action: 'collect', dismissable: false, detail: 'Курьер приехал — забери заказ' });
     }
   },
 
