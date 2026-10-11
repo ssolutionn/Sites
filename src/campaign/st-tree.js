@@ -164,6 +164,24 @@ export const treeMethods = {
     return true;
   },
 
+  /**
+   * Отпустить игрушку из руки после перетаскивания (0.10): над свободной веткой slot — повесить; мимо или на занятую —
+   * вернуть на ветку back (откуда сняли), а если её нет или она занята — в коробку. true — повешена на slot.
+   */
+  dropToy(slot, back = null) {
+    if (this.treeHand == null || !this._isIdleAt('tree')) return false;
+    const free = (i) => Number.isInteger(i) && TREE_SLOTS[i] && !this.toys.some((t) => t.slot === i);
+    if (free(slot)) return this.treeClick(slot);
+    if (free(back)) {
+      this.treeClick(back);
+      return false;
+    }
+    const t = this.toys.find((x) => x.uid === this.treeHand);
+    this.treeHand = null;
+    this._emit('toyReturned', { uid: t.uid, id: t.id });
+    return false;
+  },
+
   // Кот сбил игрушки (проказа от скуки): до двух висящих — на пол, их нужно поднять.
   _knockToys() {
     const hung = this.toys.filter((t) => t.slot != null);

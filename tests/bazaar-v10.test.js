@@ -78,3 +78,38 @@ test('собранный в прошлые дни набор не награжд
   s.treeClick(TREE_SLOTS.length - 1);
   assert.equal(s.drain().some((e) => e.type === 'setComplete'), false);
 });
+
+// 0.10 Ф5: наряжать руками — перетаскивание. Отпустил над свободной веткой — висит; мимо — вернулась туда, откуда взяли.
+test('перетащить игрушку из коробки на ветку; мимо ёлки — назад в коробку', () => {
+  const s = rich(0);
+  s.buyToy('ballRed');
+  s.buyToy('cone');
+  arrive(s, 'tree');
+  const [a, b] = s.toysInBox();
+  s.pickToy(a.uid);
+  assert.ok(s.dropToy(5));
+  assert.equal(a.slot, 5);
+  assert.equal(s.treeHand, null);
+  s.pickToy(b.uid);
+  assert.equal(s.dropToy(null), false);
+  assert.equal(b.slot, null);
+  assert.equal(s.treeHand, null, 'вернулась в коробку');
+  assert.ok(s.drain().some((e) => e.type === 'toyReturned'));
+});
+
+test('висящую игрушку перетащили на занятую ветку — она возвращается на свою', () => {
+  const s = rich(0);
+  s.buyToy('ballRed');
+  s.buyToy('cone');
+  arrive(s, 'tree');
+  const [a, b] = s.toysInBox();
+  s.pickToy(a.uid);
+  s.dropToy(1);
+  s.pickToy(b.uid);
+  s.dropToy(2);
+  s.treeClick(1); // взяли с ветки 1
+  assert.equal(s.treeHand, a.uid);
+  assert.equal(s.dropToy(2, 1), false); // ветка 2 занята — назад на 1
+  assert.equal(a.slot, 1);
+  assert.equal(s.treeHand, null);
+});

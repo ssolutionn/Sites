@@ -185,6 +185,52 @@ try {
     check('куплено со скидкой, игрушка в коробке', before - after.pts === after.price && after.box.includes(deal), JSON.stringify(after));
     check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
   }
+  if (want('tree')) {
+    // наряжать руками: зажать игрушку в коробке и перетащить на ветку; висящую — на другую ветку; мимо — назад
+    await openDay(2, { toys: [{ id: 'ballRed', slot: null }, { id: 'cone', slot: null }, { id: 'bell', slot: null }] });
+    await closeTip();
+    await station('tree');
+    await wait(1200);
+    await closeTip();
+    const slotPx = (i) => S((i) => window.__sueta.view.treeSlotScreen(i), i);
+    const free = await S(() => { const s = window.__sueta.session; return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].filter((i) => !s.toys.some((t) => t.slot === i)); });
+    const [a, b] = [free[3], free[9]];
+    const chip = await page.locator('#panel [data-drag-toy]').first().boundingBox();
+    const pa = await slotPx(a);
+    await page.mouse.move(chip.x + chip.width / 2, chip.y + chip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move((chip.x + pa.x) / 2, (chip.y + pa.y) / 2, { steps: 4 });
+    await page.mouse.move(pa.x, pa.y, { steps: 4 });
+    await wait(600);
+    check('пока тянешь — свободные ветки светятся', await S(() => window.__sueta.view.slotDots?.some((m) => m.visible)));
+    check('игрушка едет за курсором', await S(() => !document.querySelector('#drag-ghost').classList.contains('hidden')));
+    await shot('tree_drag');
+    await page.mouse.up();
+    await waitFor((a) => window.__sueta.session.toys.some((t) => t.slot === a), 15000, a);
+    check('отпустила над веткой — висит', await S((a) => window.__sueta.session.toys.some((t) => t.slot === a), a));
+    await wait(300);
+    await shot('tree_hung');
+    // висящую — на другую ветку
+    const pb = await slotPx(b);
+    const pa2 = await slotPx(a);
+    await page.mouse.move(pa2.x, pa2.y);
+    await page.mouse.down();
+    await page.mouse.move(pb.x, pb.y, { steps: 8 });
+    await page.mouse.up();
+    await waitFor((b) => window.__sueta.session.toys.some((t) => t.slot === b), 15000, b);
+    check('перетащила висящую на другую ветку', await S(([a, b]) => { const s = window.__sueta.session; return s.toys.some((t) => t.slot === b) && !s.toys.some((t) => t.slot === a); }, [a, b]));
+    // мимо ёлки — назад в коробку
+    const inBox = await sess('s.toysInBox().length');
+    const chip2 = await page.locator('#panel [data-drag-toy]').first().boundingBox();
+    await page.mouse.move(chip2.x + chip2.width / 2, chip2.y + chip2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(chip2.x + 20, chip2.y - 140, { steps: 6 });
+    await page.mouse.move(60, 400, { steps: 6 });
+    await page.mouse.up();
+    await wait(500);
+    check('мимо ёлки — игрушка вернулась в коробку', (await sess('s.treeHand === null && s.toysInBox().length')) === inBox);
+    check('нет ошибок консоли', errs.length === 0, errs.slice(0, 2).join(' | '));
+  }
 } catch (e) { console.log('ERR', e.message.split('\n')[0]); fail++; await shot('error'); }
 console.log(`итого OK ${ok} FAIL ${fail}; ошибок консоли ${errs.length}`);
 await browser.close();

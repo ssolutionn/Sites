@@ -8,7 +8,7 @@ import { toyModel, ghostify } from './toys.js';
 
 const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
 import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, TREE_SLOTS } from '../campaign/layout.js';
-import { CAMPAIGN, PRODUCTS, DISH_ORDER } from '../campaign/data.js';
+import { CAMPAIGN, PRODUCTS, DISH_ORDER, TOYS } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
 import { animateHeroine, setExpression } from './heroine.js';
@@ -462,8 +462,9 @@ export class CampaignView {
       case 'c-tree': {
         // ёлка целиком, чуть справа-спереди: видны ветки для игрушек и звезда
         // вся ёлка между HUD сверху и доком снизу: нижние ветки и звезда в кадре
-        look.set(TREE.x + 0.05, 1.02, TREE.z);
-        pos.set(TREE.x + 0.05 + 1.55 * back, 1.55, TREE.z + 4.4 * back);
+        // 0.10: ближе (наряжаем руками — ветки должны быть крупными); ёлка выше дока, звезда под HUD
+        look.set(TREE.x + 0.05, 0.99, TREE.z);
+        pos.set(TREE.x + 0.05 + 1.27 * back, 1.4, TREE.z + 3.58 * back);
         return true;
       }
       case 'c-final': {
@@ -621,6 +622,24 @@ export class CampaignView {
 
   onEvent(e) {
     switch (e.type) {
+      case 'toyHung': {
+        // 0.10: повесила — игрушка качается, искры цвета игрушки и золота
+        (this.toySwing ??= new Map()).set(e.uid, null);
+        const sl = TREE_SLOTS[e.slot];
+        if (sl && this.k.tree) {
+          const at = this.k.tree.group.localToWorld(new THREE.Vector3(sl.x, sl.y, sl.z));
+          this.particles.emit(at, TOYS[e.id]?.color ?? 0xffffff, 8, { spread: 0.04, up: 0.35, life: 0.8, size: 0.01, gravity: 0.4 });
+          this.particles.emit(at, 0xffe08a, 8, { spread: 0.05, up: 0.5, life: 1, size: 0.008, gravity: -0.1 });
+        }
+        break;
+      }
+      case 'setComplete': {
+        if (this.k.tree) {
+          const at = this.k.tree.group.localToWorld(new THREE.Vector3(0, 1.1, 0));
+          for (const c of [0xffe08a, 0xd7262b, 0x3fae49, 0xffffff]) this.particles.emit(at, c, 12, { spread: 0.3, up: 0.9, life: 1.4, size: 0.012, gravity: 1.2 });
+        }
+        break;
+      }
       case 'navFail':
         this.failMark.position.set(e.x, 0.015, e.z);
         this.failMark.visible = true;
@@ -789,7 +808,15 @@ export class CampaignView {
         const sl = TREE_SLOTS[toy.slot];
         if (m.parent !== tr.group) tr.group.add(m);
         m.position.set(sl.x, sl.y, sl.z);
-        m.rotation.set(0, Math.atan2(sl.x, sl.z), Math.sin(t * 1.3 + toy.uid) * 0.08);
+        // только что повешенная качается и успокаивается (затухающий маятник ~2 с)
+        let swing = 0;
+        if (this.toySwing?.has(toy.uid)) {
+          if (this.toySwing.get(toy.uid) == null) this.toySwing.set(toy.uid, t);
+          const dt = t - this.toySwing.get(toy.uid);
+          swing = 0.5 * Math.exp(-2.4 * dt) * Math.sin(dt * 11);
+          if (dt > 2.5) this.toySwing.delete(toy.uid);
+        }
+        m.rotation.set(0, Math.atan2(sl.x, sl.z), Math.sin(t * 1.3 + toy.uid) * 0.08 + swing);
         const hot = s.panel === 'tree' && this.treeHover === toy.slot && s.treeHand == null;
         m.scale.setScalar(TOY_SCALE * (hot ? 1.18 : 1));
         m.visible = true;
@@ -809,6 +836,23 @@ export class CampaignView {
       }
     // игрушка в руке — «примерка» над свободной веткой под мышью
     const hand = s.treeHand != null ? s.toys.find((x) => x.uid === s.treeHand) : null;
+    // 0.10: пока игрушка в руке, свободные ветки светятся точками (под мышью — крупнее)
+    if (!this.slotDots) {
+      const geo = new THREE.SphereGeometry(0.026, 12, 10);
+      this.slotDots = TREE_SLOTS.map((sl) => {
+        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffc928, transparent: true, opacity: 0.95, depthTest: false }));
+        m.position.set(sl.x, sl.y - 0.02, sl.z);
+        m.renderOrder = 6;
+        m.visible = false;
+        tr.group.add(m);
+        return m;
+      });
+    }
+    const taken = new Set((s.toys ?? []).filter((x) => x.slot != null).map((x) => x.slot));
+    this.slotDots.forEach((m, i) => {
+      m.visible = !!hand && s.panel === 'tree' && !taken.has(i);
+      if (m.visible) m.scale.setScalar((this.treeHover === i ? 1.7 : 1) * (1 + 0.25 * Math.sin(t * 5 + i)));
+    });
     const free = this.treeHover != null && !s.toys.some((x) => x.slot === this.treeHover);
     if (hand && free && s.panel === 'tree') {
       if (this.toyGhost?.userData.id !== hand.id) {

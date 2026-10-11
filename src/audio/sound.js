@@ -228,6 +228,10 @@ export class Sound {
       case 'drop':
         this._tone(520, 0.08, { vol: 0.14, slideTo: 380 });
         break;
+      case 'jingle':
+        // 0.10: игрушка на ёлке — короткий стеклянный звон (основной тон и два обертона)
+        [[1568, 0], [2093, 0.05], [2637, 0.1]].forEach(([f, at]) => this._tone(f, 0.45, { type: 'triangle', vol: 0.09, at }));
+        break;
       case 'bag':
         this._noise(0.35, { vol: 0.25, freq: 1500, q: 0.4 });
         break;

@@ -40,6 +40,7 @@ export const TIP_DONE = {
   boardDirty: ['washed'],
   delivery: ['bagArrived'],
   money: ['orderPlaced'],
+  treeDecor: ['toyHung'],
 };
 
 /** Закрывает ли событие type подсказку topic. */

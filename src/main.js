@@ -120,7 +120,7 @@ async function boot() {
 
   const SOUND_OF = {
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
-    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'drop', toyTaken: 'select', toysPicked: 'added',
+    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'jingle', toyTaken: 'select', toysPicked: 'added', toyReturned: 'rotate', setComplete: 'success',
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
@@ -324,6 +324,19 @@ async function boot() {
       sv.setCameraMode('menu');
       ui.showMenu(save);
     },
+    // 0.10: ёлка — игрушку отпустили после перетаскивания: над свободной веткой — повесить, мимо — назад
+    toyHover(e) {
+      if (session?.panel === 'tree') view.treeHover = view.treeSlotAt(ndcOf(e));
+    },
+    dropToy(e, back = null) {
+      if (!session || mode !== 'kitchen' || session.panel !== 'tree') return;
+      const r = canvas.getBoundingClientRect();
+      const overPanel = e.target?.closest?.('#panel');
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      const slot = inside && !overPanel ? view.treeSlotAt(ndcOf(e)) : null;
+      const hung = act('dropToy', slot, back);
+      if (!hung && slot != null) sound.play('deny');
+    },
     dropDish(id, e) {
       if (!session || mode !== 'kitchen') return;
       const r = canvas.getBoundingClientRect();
@@ -506,10 +519,13 @@ async function boot() {
       return;
     }
     if (session.panel === 'table' || session.panel === 'phone') return;
-    // ёлка крупным планом: клик по ветке — повесить игрушку из руки или снять висящую
+    // ёлка крупным планом: клик по ветке — повесить игрушку из руки; зажать висящую — снять и тянуть на другую ветку
     if (session.panel === 'tree' && sv.camT >= 0.95) {
       const slot = view.treeSlotAt(ndc);
-      if (slot != null) act('treeClick', slot);
+      if (slot == null) return;
+      const empty = session.treeHand == null;
+      act('treeClick', slot);
+      if (empty && session.treeHand != null) ui.startToyDrag(session.treeHand, e, slot);
       return;
     }
     const hit = view.pick(ndc);
