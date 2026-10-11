@@ -9,6 +9,7 @@ import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
 import { LOGO_URL, NEUTRAL } from '../view/textures.js';
 import { formatFreq } from '../campaign/st-radio.js';
 import { PICON } from './icons.js';
+import { tipClosedBy } from './tip-done.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -601,11 +602,28 @@ export class CampaignUI {
     this.tipT = 14;
   }
 
+  /**
+   * Игрок сделал то, о чём подсказка (tip-done.js): открытая подсказка закрывается сама, а ждущая в очереди
+   * больше не нужна. type — событие сессии или интерфейса ('recipeOpened').
+   */
+  _tipDone(type) {
+    if (this.lastTip && tipClosedBy(this.lastTip, type) && !this.el.tip.classList.contains('hidden')) {
+      this.el.tip.classList.add('hidden');
+      this.tipT = 0;
+    }
+    const done = this.pendingTips.filter((t) => tipClosedBy(t, type));
+    if (!done.length) return;
+    for (const t of done) this.tipShown.add(t);
+    this.pendingTips = this.pendingTips.filter((t) => !done.includes(t));
+  }
+
   /** Совет о происшествии вне станции, где игрок сейчас работает, не перекрывает работу — ждёт выхода из крупного плана. */
   tipWhenFree(topic) {
     const s = this.app.session;
     const catBusy = s && ['theft','spill','mischief'].includes(s.cat.state) && !['catTheft','catSpill','catWave'].includes(topic);
-    if (catBusy || (s?.panel && CLOSEUP_STATIONS.has(s.panel))) {
+    // открытый совет не перебиваем: новый ждёт, пока игрок прочтёт или сделает то, о чём старый
+    const busyTip = this.el?.tip && !this.el.tip.classList.contains('hidden') && this.lastTip !== topic;
+    if (catBusy || busyTip || (s?.panel && CLOSEUP_STATIONS.has(s.panel))) {
       if (!this.tipShown.has(topic) && !this.pendingTips.includes(topic)) this.pendingTips.push(topic);
       return;
     }
@@ -625,6 +643,7 @@ export class CampaignUI {
   }
 
   onEvent(e, s) {
+    this._tipDone(e.type);
     switch (e.type) {
       case 'tutorial':
         this.tip(e.topic);
@@ -823,6 +842,7 @@ export class CampaignUI {
   }
 
   confirmCollect() {
+    this.lastTip = null;
     this.el.tip.innerHTML = `<div class="tip-text">⚠️ На плите или в духовке срочное дело. Всё равно идти за пакетом?</div><button class="danger" id="go-anyway">Идти</button><button class="ghost" id="go-cancel">Остаться</button>`;
     this.el.tip.classList.remove('hidden');
     $('#go-anyway').addEventListener('click', () => {
@@ -1498,6 +1518,7 @@ export class CampaignUI {
 
   toggleRecipe(force) {
     this.recipeOpen = force ?? !this.recipeOpen;
+    if (this.recipeOpen) this._tipDone('recipeOpened');
     this.el.recipe.classList.toggle('hidden', !this.recipeOpen);
     this.recipeSig = null;
   }

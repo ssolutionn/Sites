@@ -4,7 +4,7 @@ import { CampaignUI } from '../src/ui/campaign-ui.js';
 
 test('cat instructions describe theft, spilled drinks and tree mischief separately', () => {
   const topics=[];
-  const ui={tip:(topic)=>topics.push(topic)};
+  const ui={tip:(topic)=>topics.push(topic),_tipDone:()=>{}};
   for (const kind of ['theft','spill','mischief']) CampaignUI.prototype.onEvent.call(ui,{type:'catStart',kind},{});
   assert.deepEqual(topics,['catTheft','catSpill','catWave']);
 });
