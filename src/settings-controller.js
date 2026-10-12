@@ -33,13 +33,16 @@ export class SettingsController {
     this.hooks.motion?.(s.reduceMotion);
   }
 
-  /** Громкость шины 'master' | 'sfx' | 'music', 0..1. preview — проиграть пример (при отпускании ползунка). */
-  setVolume(bus, value, { preview = false } = {}) {
+  /**
+   * Громкость шины 'master' | 'sfx' | 'music', 0..1. preview — проиграть пример (при отпускании ползунка);
+   * save: false — не писать на диск, пока ползунок тянут (запись — на отпускании).
+   */
+  setVolume(bus, value, { preview = false, save = true } = {}) {
     if (!VOLUME_BUSES.includes(bus)) return false;
     const v = normalizeVolume(value, this.s.volume[bus]);
     this.s.volume = { ...this.s.volume, [bus]: v };
     this.sound.setVolumes(this.s.volume);
-    this.persist();
+    if (save) this.persist();
     if (preview) this.sound.preview?.(bus);
     return v;
   }

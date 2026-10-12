@@ -1,0 +1,81 @@
+/* 0.11: экран «Настройки», размер текста интерфейса, «меньше движения».
+   Подключается после theme.css; токены и радиусы — оттуда. Правила: design/ui/ui-guidelines.md. */
+
+/* ---------- экран настроек (бумага, как остальные диалоги) ---------- */
+.dialog.settings { width: min(900px, 100%); max-height: calc(100vh - 24px); overflow-y: auto; padding: 16px 24px 0; }
+.dialog.settings:focus { outline: none; }
+.dialog.settings h2 { margin: 0 0 4px; font-size: 28px; }
+.dialog.settings h2::before { margin-bottom: 8px; }
+.st-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 32px; align-items: start; }
+@media (max-width: 780px) { .st-grid { grid-template-columns: minmax(0, 1fr); } }
+.st-sec { margin: 0 0 4px; }
+.st-sec h3 { margin: 8px 0 2px; font-size: 12.5px; font-weight: 900; letter-spacing: 0.7px; text-transform: uppercase; color: var(--ink-2); }
+.st-row, .st-krow { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; border-bottom: 1px solid var(--paper-line); }
+.st-name { font-weight: 800; font-size: 15px; color: var(--ink); line-height: 1.2; }
+.st-name kbd { font-size: 12.5px; font-weight: 800; margin-left: 6px; padding: 1px 7px; background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--paper-line); color: var(--ink-2); }
+.st-ctl { display: flex; align-items: center; gap: 10px; flex: none; }
+.st-ctl input[type=range] { width: 150px; height: 24px; margin: 0; accent-color: var(--pine-hi); cursor: pointer; }
+.st-val { min-width: 48px; text-align: right; font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.st-hint { margin: 2px 0 6px; font-size: 13px; line-height: 1.3; font-weight: 600; color: var(--ink-2); }
+
+/* переключатель «Вкл / Выкл» */
+.st-switch { flex: none; display: inline-flex; align-items: center; gap: 8px; min-width: 88px; padding: 4px 12px 4px 4px; background: var(--paper-2); box-shadow: inset 0 0 0 1.5px var(--paper-line); }
+.st-switch i { flex: none; position: relative; width: 38px; height: 22px; border-radius: 11px; background: color-mix(in srgb, var(--ink-2) 40%, var(--paper-2)); transition: background var(--t-fast); }
+.st-switch i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(20, 12, 4, 0.35); transition: transform var(--t-fast); }
+.st-switch[aria-checked=true] i { background: var(--pine-hi); }
+.st-switch[aria-checked=true] i::after { transform: translateX(16px); }
+.st-switch b { font-size: 13px; font-weight: 800; min-width: 30px; text-align: left; }
+.st-switch[aria-checked=true] b { color: var(--pine); }
+
+/* выбор из нескольких: 100 / 115 / 130 %, Красиво / Экономно */
+.st-seg { flex: none; display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: var(--paper-2); box-shadow: inset 0 0 0 1.5px var(--paper-line); }
+.st-seg button { padding: 5px 13px; font-size: 14px; background: transparent; box-shadow: none; white-space: nowrap; }
+.st-seg button[aria-checked=true] { background: linear-gradient(180deg, #36a06e, var(--pine-hi)); color: #fff; box-shadow: var(--shadow-1); }
+
+/* клавиши */
+.st-keys { list-style: none; margin: 0; padding: 0; }
+.st-krow { min-height: 33px; }
+.st-kctl { display: flex; align-items: center; gap: 8px; flex: none; }
+.st-key { min-width: 84px; padding: 4px 12px; font-size: 14px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--paper-line), inset 0 -3px 0 rgba(0, 0, 0, 0.08); }
+.st-key.changed { box-shadow: inset 0 0 0 2px var(--gold), inset 0 -3px 0 rgba(0, 0, 0, 0.08); }
+.st-key.listening { background: var(--gold-soft); box-shadow: 0 0 0 3px var(--gold); }
+.st-alt { min-width: 44px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.st-msg { min-height: 36px; margin: 8px 0 6px; font-size: 13px; line-height: 1.3; font-weight: 700; color: var(--ink-2); }
+.st-msg.warn { color: var(--berry-dark); }
+.st-msg.ok { color: var(--pine); }
+.st-reset { padding: 6px 16px; font-size: 14px; }
+
+/* «Готово» не уезжает при прокрутке */
+.st-actions { position: sticky; bottom: 0; justify-content: flex-end; margin: 6px -24px 0; padding: 10px 24px 14px; background: linear-gradient(180deg, rgba(253, 242, 222, 0), #fdf2de 35%); }
+
+/* ---------- размер текста: 115 % и 130 % ----------
+   zoom умножает размеры слоёв интерфейса поверх сцены; 3D-сцена, метки станций и drag-призрак остаются в своих
+   координатах. vw/vh внутри zoom тоже умножаются, поэтому в формулах ниже они поделены на масштаб (--vw, --vh).
+   При 100 % атрибута data-ts нет, и ни одно правило ниже не действует. */
+:root { --ui-zoom: 1; }
+body[data-ts] { --vw: calc(100vw / var(--ui-zoom)); --vh: calc(100vh / var(--ui-zoom)); }
+body[data-ts] :is(#hud, #panel, #recipe, #phone, #alerts, #tip, #toasts, #overlay, #lesson-note) { zoom: var(--ui-zoom); }
+body[data-ts] .hud2-task { width: min(380px, calc(var(--vw) - 420px)); }
+body[data-ts] #alerts { width: min(290px, calc(var(--vw) - 32px)); }
+body[data-ts] #panel.station-panel { width: min(880px, calc(var(--vw) - 32px)); max-height: calc(var(--vh) * 0.46); }
+body[data-ts] #recipe { width: min(380px, calc(var(--vw) - 32px)); max-height: calc(var(--vh) - 290px); }
+body[data-ts] #tip { width: min(640px, calc(var(--vw) - 32px)); }
+body[data-ts] #tip.side { width: min(300px, calc(var(--vw) - 32px)); }
+body[data-ts] #lesson-note { width: min(300px, calc(var(--vw) - 32px)); }
+body[data-ts] #phone .device { height: min(690px, calc(var(--vh) - 40px)); }
+body[data-ts] .dialog { max-height: calc(var(--vh) - 48px); }
+body[data-ts] .dialog.intro { max-height: calc(var(--vh) - 24px); }
+body[data-ts] .dialog.settings { max-height: calc(var(--vh) - 24px); }
+body[data-ts] .menu2 { width: min(1240px, calc(var(--vw) - 48px)); padding-bottom: calc(var(--vh) * 0.06); }
+body[data-ts] .menu2 .brand h1 { font-size: clamp(40px, calc(var(--vw) * 0.054), 68px); }
+/* метки станций стоят там, где их поставила сцена (координаты в пикселях окна): масштабируем только текст */
+body[data-ts] .st-label { font-size: calc(13px * var(--ui-zoom)); }
+body[data-ts] .st-label .kc { font-size: calc(12.5px * var(--ui-zoom)); }
+body[data-ts] .st-label .ic { font-size: calc(16px * var(--ui-zoom)); }
+body[data-ts] .st-label .nm, body[data-ts] .st-label.near .nm { font-size: calc(13px * var(--ui-zoom)); }
+body[data-ts] .st-label.hover .nm, body[data-ts] .st-label:hover .nm, body[data-ts] .st-label.urgent .nm, body[data-ts] .st-label.here .nm, body[data-ts] .st-label.near .nm { max-width: calc(160px * var(--ui-zoom)); }
+body[data-ts] #hint { font-size: calc(15px * var(--ui-zoom)); padding: calc(9px * var(--ui-zoom)) calc(18px * var(--ui-zoom)); }
+
+/* ---------- меньше движения (настройка или системное prefers-reduced-motion) ---------- */
+body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+body.reduce-motion .snowfall { display: none; }

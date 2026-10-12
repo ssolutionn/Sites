@@ -43,8 +43,9 @@ export function keyName(code) {
   let m;
   if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
   if ((m = /^Digit([0-9])$/.exec(code))) return m[1];
+  if ((m = /^(Shift|Control|Alt|Meta|OS)(?:Left|Right)$/.exec(code))) return { Shift: 'Shift', Control: 'Ctrl', Alt: 'Alt', Meta: 'Win', OS: 'Win' }[m[1]];
   if ((m = /^Numpad(.+)$/.exec(code))) return 'Num ' + ({ Add: '+', Subtract: '−', Multiply: '×', Divide: '÷', Decimal: ',' }[m[1]] ?? m[1]);
-  const named = { Space: 'Пробел', Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backquote: '`', Minus: '−', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: '\'', Comma: ',', Period: '.', Slash: '/', Backslash: '\\', IntlBackslash: '\\', PageUp: 'PgUp', PageDown: 'PgDn', Backspace: 'Backspace', Delete: 'Del', Insert: 'Ins', Home: 'Home', End: 'End' };
+  const named = { Space: 'Пробел', Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backquote: '`', Minus: '−', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: '\'', Comma: ',', Period: '.', Slash: '/', Backslash: '\\', IntlBackslash: '\\', PageUp: 'PgUp', PageDown: 'PgDn', Backspace: 'Backspace', Delete: 'Del', Insert: 'Ins', Home: 'Home', End: 'End', Tab: 'Tab', Enter: 'Enter', NumpadEnter: 'Num Enter', CapsLock: 'Caps Lock', ContextMenu: 'Меню' };
   return named[code] ?? code;
 }
 

@@ -11,6 +11,9 @@ import { formatFreq } from '../campaign/st-radio.js';
 import { PICON } from './icons.js';
 import { tipClosedBy } from './tip-done.js';
 import { pts } from '../campaign/words.js';
+import { Keymap, keyName } from '../keymap.js';
+import { settingsHTML, bindSettings, systemReduceMotion } from './settings-ui.js';
+import { effectiveReduceMotion } from '../settings.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -161,7 +164,7 @@ export class CampaignUI {
   _label(id, text) {
     const d = document.createElement('div');
     d.className = 'st-label';
-    d.innerHTML = `<kbd class="kc">Пробел</kbd><span class="ic">${STATION_ICON[id] ?? ''}</span><span class="nm">${esc(text)}</span>`;
+    d.innerHTML = `<kbd class="kc">${esc(this._keyName('interact'))}</kbd><span class="ic">${STATION_ICON[id] ?? ''}</span><span class="nm">${esc(text)}</span>`;
     d.style.display = 'none';
     d.addEventListener('click', () => {
       this.sound.unlock();
@@ -173,6 +176,7 @@ export class CampaignUI {
 
   // ---------- экраны ----------
   _overlay(html, cls = '') {
+    this._closeSettings?.();
     this.el.overlay.className = cls;
     this.el.overlay.innerHTML = html;
     this.el.overlay.querySelectorAll('[data-ui]').forEach((b) =>
@@ -218,8 +222,8 @@ export class CampaignUI {
           </div>
           <div class="settings">
             <button class="icon" data-ui="controls" title="Управление">⌨</button>
-            <button class="icon" data-ui="mute" title="Звук (M)">${this.app.isMuted() ? '🔇' : '🔊'}</button>
-            <button data-ui="quality" title="Качество графики">${save.data.settings.quality === 'low' ? '🖥 Экономно' : '🖥 Красиво'}</button>
+            <button class="icon" data-ui="mute" title="Звук (${esc(this._keyName('mute'))})">${this.app.isMuted() ? '🔇' : '🔊'}</button>
+            <button data-ui="settings" title="Звук, управление, размер текста, графика">⚙ Настройки</button>
           </div>
           ${dev ? '<div class="row2"><a class="btn-link" href="./classic.html">Оливье за 5 минут</a><a class="btn-link" href="./gallery.html">3D-галерея</a></div>' : ''}
           <div class="card controls hidden" id="controls-card">${this._controls()}</div>
@@ -227,21 +231,45 @@ export class CampaignUI {
       </div>`, 'center');
   }
 
+  // Клавиша действия из настроек (WASD, пробел и так далее — как назначил игрок).
+  _keyName(action) {
+    return keyName((this.app.keymap ?? (this.app.keymap = new Keymap())).get(action));
+  }
+
   _controls() {
+    const K = (a) => `<kbd>${esc(this._keyName(a))}</kbd>`;
     return `<table>
-      <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> или стрелки</td><td>Ходить по кухне</td></tr>
-      <tr><td><kbd>Пробел</kbd></td><td>Открыть место рядом (на метке — «Пробел»); у гирлянды, звезды и радио — удерживать</td></tr>
+      <tr><td>${['up', 'left', 'down', 'right'].map(K).join('')} или стрелки</td><td>Ходить по кухне</td></tr>
+      <tr><td>${K('interact')}</td><td>Открыть место рядом (на метке — «${esc(this._keyName('interact'))}»); у гирлянды, звезды и радио — удерживать</td></tr>
       <tr><td>Клик по полу</td><td>Пойти в эту точку</td></tr>
       <tr><td>Клик по станции или метке</td><td>Подойти и начать действие</td></tr>
       <tr><td>Зажать и провести у доски</td><td>Росчерк ножом: сверху вниз или слева направо</td></tr>
 
       <tr><td>Удержание и движение</td><td>Намазывание, перемешивание, тёрка, мытьё, уборка, маринад</td></tr>
       <tr><td>Перетаскивание</td><td>Стопки канапе, фрукты, сервировка стола</td></tr>
-      <tr><td><kbd>Q</kbd></td><td>Рецепт</td></tr>
-      <tr><td><kbd>A</kbd><kbd>D</kbd> у доски</td><td>Повернуть доску</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Закрыть рецепт, отойти от места, иначе пауза</td></tr>
-      <tr><td><kbd>M</kbd></td><td>Звук</td></tr>
+      <tr><td>${K('recipe')}</td><td>Рецепт</td></tr>
+      <tr><td>${K('left')}${K('right')} у доски</td><td>Повернуть доску</td></tr>
+      <tr><td>${K('pause')}</td><td>Закрыть рецепт, отойти от места, иначе пауза</td></tr>
+      <tr><td>${K('mute')}</td><td>Звук</td></tr>
+      <tr><td>${K('fullscreen')}</td><td>Полный экран</td></tr>
     </table>`;
+  }
+
+  /** Клавиши поменяли в настройках: подписи на метках, подсказки кнопок и док (он перерисуется на следующем кадре). */
+  refreshKeyLabels() {
+    const t = this._keyName('interact');
+    for (const el of Object.values(this.labelEls)) {
+      const kc = el.querySelector('.kc');
+      if (kc) kc.textContent = t;
+    }
+    const set = (id, text) => {
+      const b = $('#' + id);
+      if (b) b.title = text;
+    };
+    set('btn-recipe', `Книга рецептов (${this._keyName('recipe')})`);
+    set('btn-mute', `Звук (${this._keyName('mute')})`);
+    set('btn-pause', `Пауза (${this._keyName('pause')})`);
+    this.panelSig = null;
   }
 
   toggleControls() {
@@ -307,6 +335,7 @@ export class CampaignUI {
         <p class="small">Плита, духовка, доставка и кот ждут. Музыка тоже на паузе.</p>
         <div class="actions" style="justify-content:center">
           <button class="primary big" data-ui="resume">Продолжить</button>
+          <button class="ghost" data-ui="settings">Настройки</button>
           <button class="ghost" data-ui="restartDay">Начать день заново</button>
           <button class="ghost" data-ui="${day ? 'exitAsk' : 'menu'}">В меню</button>
         </div>
@@ -314,6 +343,28 @@ export class CampaignUI {
       'dim',
     );
     document.body.classList.add('paused-anim');
+  }
+
+  /** Экран «Настройки» из меню и из паузы. Закрывает его «Готово» или Esc: app.ui('settingsBack'). */
+  showSettings() {
+    const ctl = this.app.settings;
+    const fs = this.app.fullscreen;
+    const ctx = () => ({ settings: ctl.s, muted: this.sound.muted, keymap: ctl.keymap, fs, reduce: effectiveReduceMotion(ctl.s, systemReduceMotion()) });
+    this._overlay(settingsHTML(ctx()), 'dim');
+    const root = this.el.overlay.querySelector('.settings');
+    const h = bindSettings(root, { ctl, fs, sound: this.sound, keymap: ctl.keymap, onKeys: () => this.refreshKeyLabels(), onBack: () => this.app.ui('settingsBack') });
+    this._settingsH = h;
+    this._closeSettings = () => {
+      h.dispose();
+      this._settingsH = null;
+      this._closeSettings = null;
+    };
+    root.focus({ preventScroll: true });
+  }
+
+  /** Звук включили клавишей, пока открыты настройки: переключатель обновляется на месте. */
+  refreshSettings() {
+    this._settingsH?.refresh();
   }
 
   /** «В меню» посреди дня: день не сохраняется (он идёт 6–10 минут), поэтому предупреждаем заранее. */
@@ -549,6 +600,7 @@ export class CampaignUI {
     $('#btn-phone').addEventListener('click', () => this.act('goTo', 'phone'));
     $('#btn-mute').addEventListener('click', () => this.app.toggleMute());
     $('#btn-pause').addEventListener('click', () => this.app.pause());
+    this.refreshKeyLabels();
     this.panelSig = null;
     this.recipeOpen = false;
     this.el.recipe.classList.add('hidden');
@@ -1381,7 +1433,7 @@ export class CampaignUI {
         return `<h2>${it.grater ? '🧀 Тёрка' : it.peel ? '🔪 Чистка' : '🔪 Доска'} · ${esc(PRODUCTS[it.product].name)}${it.qty > 1 ? ' ×' + it.qty : ''}<span class="sub">${esc(s.recipes[it.dishId].name)}</span></h2>
           <div class="dock">${backBtn}<div class="dock-items">${chips}</div>
             <div class="dock-main">
-              ${it.body ? this._btn('⟲ <kbd>A</kbd>', 'boardTurn', [1], 'ghost turn', busy, 'Повернуть доску против часовой (держи A — плавно)') + this._btn('<kbd>D</kbd> ⟳', 'boardTurn', [-1], 'ghost turn', busy, 'Повернуть доску по часовой (держи D — плавно)') : ''}
+              ${it.body ? this._btn(`⟲ <kbd>${esc(this._keyName('left'))}</kbd>`, 'boardTurn', [1], 'ghost turn', busy, `Повернуть доску против часовой (держи ${this._keyName('left')} — плавно)`) + this._btn(`<kbd>${esc(this._keyName('right'))}</kbd> ⟳`, 'boardTurn', [-1], 'ghost turn', busy, `Повернуть доску по часовой (держи ${this._keyName('right')} — плавно)`) : ''}
               ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
               ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
               ${(it.grater && !s.practice) || it.peel ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : it.cutReady ? 'ready-pulse' : ''), busy, block ?? '')}
