@@ -36,6 +36,7 @@ html { --cam-w: 0px; --cam-h: 0px; --cam-gap: 12px; }
 .stream-set h2 { margin: 0 0 4px; font-size: 26px; }
 .stream-set h2::before { margin-bottom: 8px; }
 .stream-set .lead { margin: 0 0 8px; line-height: 1.4; }
+.stream-set .lead b { white-space: nowrap; }
 .stream-set .srow { display: grid; grid-template-columns: 138px 1fr; gap: 10px; align-items: start; padding: 7px 0; border-top: 1px solid var(--paper-line); }
 .stream-set .srow > label:first-child { font-weight: 800; font-size: 14px; padding-top: 5px; }
 .stream-set input[type=text], .stream-set input[type=number], .stream-set .ov-url { width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: var(--r-s); border: 1.5px solid var(--paper-line); font: inherit; font-size: 14px; background: #fff; color: var(--ink); }
