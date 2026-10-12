@@ -1,7 +1,7 @@
 // Десктопная оболочка «Симулятора новогодней суеты» (macOS, Windows).
 // Игра — та же веб-сборка dist/, загружается из файлов приложения через протокол app://,
 // чтобы работали ES-модули, localStorage и звук без веб-сервера.
-const { app, BrowserWindow, Menu, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -23,9 +23,12 @@ function createWindow() {
     backgroundColor: '#f3e6cf',
     show: false,
     // в собранной игре консоль разработчика выключена: через неё правятся баллы и сохранение (в запуске из исходников она нужна)
-    webPreferences: { contextIsolation: true, sandbox: true, autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false, devTools: !app.isPackaged },
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false, devTools: !app.isPackaged },
   });
   win.once('ready-to-show', () => win.show());
+  // полный экран по меню «Вид» или F11 игра узнаёт через мост (preload.cjs) и показывает в настройках
+  win.on('enter-full-screen', () => win.webContents.send('sueta:fullscreen', true));
+  win.on('leave-full-screen', () => win.webContents.send('sueta:fullscreen', false));
   // внешние ссылки — в системный браузер
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith('app://')) shell.openExternal(url);
@@ -35,6 +38,19 @@ function createWindow() {
   if (process.env.SUETA_SMOKE) smoke(win);
 }
 
+// Полный экран из настроек игры (0.11). Принимаем только от страницы игры (app://game/…), не от чужих кадров.
+function gameWindow(event) {
+  const url = event.senderFrame?.url ?? '';
+  return url.startsWith('app://game/') ? BrowserWindow.fromWebContents(event.sender) : null;
+}
+ipcMain.handle('sueta:fullscreen:get', (event) => gameWindow(event)?.isFullScreen() ?? false);
+ipcMain.handle('sueta:fullscreen:set', (event, on) => {
+  const win = gameWindow(event);
+  if (!win) return false;
+  win.setFullScreen(!!on);
+  return !!on;
+});
+
 // Самопроверка сборки (SUETA_SMOKE=путь.png): ошибки консоли, состояние игры, снимок окна, выход.
 function smoke(win) {
   const errors = [];
@@ -43,7 +59,7 @@ function smoke(win) {
   });
   win.webContents.on('did-finish-load', () => {
     setTimeout(async () => {
-      const state = await win.webContents.executeJavaScript(`({ mode: window.__sueta?.mode, ls: (() => { try { localStorage.setItem('t','1'); return localStorage.getItem('t'); } catch (e) { return String(e); } })(), webgl: !!document.createElement('canvas').getContext('webgl2') })`);
+      const state = await win.webContents.executeJavaScript(`({ mode: window.__sueta?.mode, ls: (() => { try { localStorage.setItem('t','1'); return localStorage.getItem('t'); } catch (e) { return String(e); } })(), webgl: !!document.createElement('canvas').getContext('webgl2'), fullscreenBridge: typeof window.suetaDesktop?.setFullscreen })`);
       const img = await win.webContents.capturePage();
       fs.writeFileSync(process.env.SUETA_SMOKE, img.toPNG());
       console.log('SMOKE', JSON.stringify({ state, errors }));

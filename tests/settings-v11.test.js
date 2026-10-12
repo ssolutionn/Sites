@@ -14,6 +14,7 @@ import { KitchenSession, arrive, waitAction } from './helpers-campaign.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
 import { CLAYOUT } from '../src/campaign/layout.js';
 import { Sound } from '../src/audio/sound.js';
+import { FullscreenControl } from '../src/fullscreen.js';
 
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} ≠ ${b}`);
 
@@ -719,4 +720,72 @@ test('кружочки в сессии: косой росчерк на гран�
   assert.equal(soft.res, 'cut', 'мягко: тот же росчерк режет');
   assert.ok(soft.events.some((e) => e.type === 'cut'));
   assert.equal(knifeTilted(SOFT, tol * K * 1.1).res, 'diagonal', 'мягкая граница + 10 % — снова отказ');
+});
+
+// ======================= полный экран и фразы отказа =======================
+
+/** Подделка document: Fullscreen API. */
+function fakeDoc({ enabled = true, denies = false } = {}) {
+  const handlers = [];
+  const doc = {
+    fullscreenEnabled: enabled,
+    fullscreenElement: null,
+    addEventListener: (t, f) => t === 'fullscreenchange' && handlers.push(f),
+    documentElement: { requestFullscreen: async () => { if (denies) throw new Error('нужен жест'); doc.fullscreenElement = doc.documentElement; handlers.forEach((f) => f()); } },
+    exitFullscreen: async () => { doc.fullscreenElement = null; handlers.forEach((f) => f()); },
+  };
+  return doc;
+}
+
+test('полный экран в браузере: включается, выключается, сообщает о смене; отказ браузера — false', async () => {
+  const fs = new FullscreenControl({ doc: fakeDoc(), desktop: null });
+  const seen = [];
+  fs.onChange((v) => seen.push(v));
+  assert.equal(fs.supported, true);
+  assert.equal(fs.active, false);
+  assert.equal(await fs.set(true), true);
+  assert.equal(fs.active, true);
+  assert.equal(await fs.toggle(), true);
+  assert.equal(fs.active, false);
+  assert.deepEqual(seen, [true, false]);
+  const denied = new FullscreenControl({ doc: fakeDoc({ denies: true }), desktop: null });
+  assert.equal(await denied.set(true), false, 'браузер без жеста игрока отказал');
+  assert.equal(denied.active, false);
+  assert.equal(new FullscreenControl({ doc: fakeDoc({ enabled: false }), desktop: null }).supported, false);
+});
+
+test('полный экран в настольной версии: команда идёт через мост, состояние — из событий окна', async () => {
+  const calls = [];
+  let push = () => {};
+  const desktop = { isFullscreen: async () => true, setFullscreen: async (on) => (calls.push(on), on), onFullscreen: (cb) => (push = cb) };
+  const fs = new FullscreenControl({ doc: fakeDoc(), desktop });
+  await Promise.resolve();
+  assert.equal(fs.supported, true);
+  assert.equal(fs.active, true, 'окно уже было в полном экране');
+  await fs.set(false);
+  assert.deepEqual(calls, [false]);
+  assert.equal(fs.active, false);
+  const seen = [];
+  fs.onChange((v) => seen.push(v));
+  push(true); // пользователь нажал F11 или «Вид → Полный экран»
+  assert.equal(fs.active, true);
+  assert.deepEqual(seen, [true]);
+  const broken = new FullscreenControl({ doc: fakeDoc(), desktop: { ...desktop, setFullscreen: async () => { throw new Error('нет окна'); } } });
+  assert.equal(await broken.set(true), false);
+});
+
+test('фразы отказа по клавишам: до 70 знаков для любых действий и клавиш, без слов «ошибка» и «неверно»', () => {
+  const k = new Keymap();
+  for (const action of ACTION_ORDER) {
+    for (const code of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyR', 'KeyQ', 'KeyF', 'KeyM', 'F11', 'ArrowUp', 'Backspace', 'Escape', 'Tab', 'ShiftLeft', 'нечто']) {
+      const r = k.bind(action, code);
+      if (r.ok) {
+        k.reset(action);
+        continue;
+      }
+      const text = explainBind(r, code);
+      assert.ok(text.length > 0 && text.length <= 70, `${action} ← ${code}: «${text}» (${text.length})`);
+      assert.doesNotMatch(text, /ошибк|неверн/i);
+    }
+  }
 });
