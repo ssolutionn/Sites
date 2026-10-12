@@ -16,18 +16,25 @@ export function sourceStatusLine(view) {
   return view.statusText || '';
 }
 
+/** Строка «Сейчас: …» на экране настроек (обновляется на месте, пока экран открыт). */
+export function nowLine(s, view) {
+  if (!s.on) return 'Сейчас: выключен';
+  const live = !s.test && s.channel;
+  const st = sourceStatusLine(view);
+  return `Сейчас: <b>включён</b>${live ? ` · канал ${esc(s.channel)}` : ' · тестовый чат'}${live && st ? ' · ' + esc(st) : ''}`;
+}
+
 /**
  * Экран «Режим стримера». s — нормализованные настройки (streamSettings), view — снимок голосования или null,
  * overlay — { available, running, url, error } (оверлей есть только в версии для компьютера), best — зачёт с чатом по дням.
  */
-export function settingsHtml({ s, view, overlay, rules = CAMPAIGN.stream }) {
+export function settingsHtml({ s, view, overlay, note = '', rules = CAMPAIGN.stream }) {
   const powers = Object.entries(rules.powers).map(([id, p]) => [id, p.label, p.note]);
   const power = rules.powers[s.power];
   const cams = Object.entries(CAM_CORNERS).map(([id, label]) => [id, label]);
   const cmds = Object.entries(STREAM_COMMANDS);
   const harm = cmds.filter(([, c]) => c.side === 'chaos').map(([k]) => `<b>${esc(k)}</b>`).join(', ');
   const help = cmds.filter(([, c]) => c.side === 'help').map(([k]) => `<b>${esc(k)}</b>`).join(', ');
-  const now = s.on ? `<b>включён</b>${s.test || !s.channel ? ' · тестовый чат' : ` · канал ${esc(s.channel)}`}${sourceStatusLine(view) && !s.test && s.channel ? ' · ' + esc(sourceStatusLine(view)) : ''}` : 'выключен';
   let ov;
   if (!overlay?.available) ov = '<span class="small">Оверлей для OBS работает в версии игры для компьютера.</span>';
   else if (overlay.error) ov = `<span class="small warn">${esc(overlay.error)}</span>`;
@@ -41,7 +48,8 @@ export function settingsHtml({ s, view, overlay, rules = CAMPAIGN.stream }) {
     <div class="srow"><label>Ники зрителей</label><label class="chk"><input type="checkbox" id="stream-nicks" ${s.nicks ? 'checked' : ''}/> показывать: курьер, гости за финальным столом</label></div>
     <div class="srow"><label>Веб-камера</label><div>${seg('cam', s.cam, cams)}<div class="small snote">Уведомления, подсказки и голосование обходят этот угол.</div></div></div>
     <div class="srow"><label>Оверлей для OBS</label><div class="ov">${ov}${overlay?.available ? `<div class="small snote">Источник «Браузер» → этот адрес. Порт: <input id="stream-port" type="number" min="1024" max="65535" value="${s.overlayPort}" class="port" /></div>` : ''}</div></div>
-    <p class="small now" id="stream-now">Сейчас: ${now}</p>
+    ${note ? `<p class="small warn">${esc(note)}</p>` : ''}
+    <p class="small now" id="stream-now">${nowLine(s, view)}</p>
     <div class="actions">
       <button class="primary" data-ui="streamToggle">${s.on ? 'Выключить' : 'Включить'}</button>
       <button class="ghost" data-ui="streamForget" title="Забыть самых активных зрителей">Забыть зрителей</button>

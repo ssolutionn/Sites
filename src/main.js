@@ -3,7 +3,7 @@
 import { CAMPAIGN, DAYS, DISH_ORDER } from './campaign/data.js';
 import { KitchenSession } from './campaign/session.js';
 import { SaveStore, recordDay, currentDayIndex } from './campaign/save.js';
-import { markInProgress, applyDecorPurchase, applyTreeEvent } from './campaign/persist.js';
+import { markInProgress, applyDecorPurchase, applyTreeEvent, recordStreamDay, rememberViewers } from './campaign/persist.js';
 import { CLAYOUT, TABLE_SLOTS } from './campaign/layout.js';
 import { SceneView } from './view/scene.js';
 import { CampaignView } from './view/campaign-view.js';
@@ -14,14 +14,16 @@ import { Sound } from './audio/sound.js';
 import { RadioMusic } from './audio/radio-music.js';
 import { RADIO } from './campaign/radio-data.js';
 import { clampFreq } from './campaign/st-radio.js';
-import { StreamVotes, dailyChallenge } from './stream.js';
+import { StreamVotes, STREAM_KEYS, dailyChallenge } from './stream.js';
+import { streamSettings, resolvePower } from './campaign/stream-rules.js';
+import { cleanChannel } from './stream-parse.js';
+import { overlayState } from './stream-overlay-state.js';
 import { loadModels, modelStatus } from './view/assets.js';
 
 const params = new URLSearchParams(location.search);
 const devMode = params.has('dev');
 const fixedSeed = params.has('seed') ? Number(params.get('seed')) >>> 0 : null;
 let booted = false;
-const STREAM_ENABLED = false;
 
 function fatal(title, details = '') {
   document.getElementById('loading')?.classList.add('hidden');
@@ -79,7 +81,11 @@ async function boot() {
   let lastLocal = null;
   let lastNdc = null;
   let challenge = null; // { key, mods } — день идёт как испытание
-  let stream = null; // голосование чата
+  let stream = null; // голосование чата (режим стримера, 0.11)
+  let lastStreamEvent = null; // последнее событие от чата — для оверлея OBS
+  let overlayInfo = null; // состояние локального сервера оверлея (только в версии для компьютера)
+  let overlaySent = '';
+  let viewerFlushT = 0;
   let speedStart = null;
 
   function applyQuality() {
@@ -145,6 +151,7 @@ async function boot() {
     }
     view.onEvent(e);
     ui.onEvent(e, session);
+    if (e.type === 'stream') lastStreamEvent = { id: (lastStreamEvent?.id ?? 0) + 1, text: e.text };
     if (e.type === 'speedDone') speedFinished(e.time);
     if (e.type === 'actionStart' && !['cut', 'shoo', 'cutEgg', 'cap', 'peel', 'split', 'pinch', 'taste', 'dilute', 'feedCat', 'playCat', 'gift'].includes(e.action)) sound.play('work');
     else if (SOUND_OF[e.type]) sound.play(SOUND_OF[e.type], e);
@@ -162,8 +169,16 @@ async function boot() {
     challenge = ch;
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
-    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [], setsDone: save.data.sets ?? [] });
+    // день с чатом (0.11) — отдельный зачёт: для кампании он как испытание (баллы, декор, медали, best не трогаем)
+    const live = !!stream && !ch;
+    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch || live, tableDishes: completedDishes(i), mods, bonus: ch || live ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [], setsDone: save.data.sets ?? [] });
     if (Number.isFinite(save.data.settings.radioFreq)) session.radio.freq = clampFreq(save.data.settings.radioFreq);
+    session.live = live;
+    session.streamViewers = viewerList;
+    if (live) {
+      stream.begin();
+      lastStreamEvent = null;
+    }
     view.reset();
     view.setActive(true);
     view.setTableDishes(completedDishes(i));
@@ -172,22 +187,110 @@ async function boot() {
     ui.showDayIntro(DAYS[i], save, resumed, ch?.mods ?? []);
   }
 
+  // ---------- режим стримера (0.11) ----------
+  const streamCfg = () => streamSettings(save.data.settings.stream);
+  // ники для игры: кто голосовал в этой игре (самые активные первыми) и самые активные из сохранения; ники уже очищены
+  const viewerNicks = () => [...new Set([...(stream?.activeNicks() ?? []), ...(save.data.stream?.viewers ?? []).map((v) => v.nick)])].slice(0, 12);
+  const viewerList = () => ({ nicks: viewerNicks(), show: streamCfg().nicks });
+
   function setupStream() {
     stream?.close();
     stream = null;
-    const st = save.data.settings.stream;
-    // режим стрима отключён в этом билде (кнопки нет в меню); код оставлен на будущее
-    if (!st?.on || !STREAM_ENABLED) return;
+    const st = streamCfg();
+    // CAMPAIGN.stream.enabled — единый флаг: false — режима нет совсем
+    if (!st.on || !CAMPAIGN.stream.enabled) return;
     stream = new StreamVotes({
-      channel: st.channel ?? '',
-      test: !!st.test,
-      onWinner: (kind, cmd) => {
-        if (session && mode === 'kitchen' && !session.practice) {
-          const ok = session.streamEvent(kind);
-          if (!ok) ui.toast(`📺 ${cmd}: сейчас нельзя — правила кухни`, '', 2.5);
-        }
-      },
+      channel: st.channel,
+      test: st.test,
+      power: st.power,
+      getState: () => ({ ...(session?.streamState() ?? { live: false }), ...ui.streamBusy() }),
+      fire: (kind) => !!(session && mode === 'kitchen' && session.live && session.streamEvent(kind)),
     });
+  }
+
+  // активность зрителей → сохранение (гости финального стола); пишем, только если что-то изменилось
+  function flushViewers() {
+    const a = stream?.takeActivity();
+    if (a && Object.keys(a).length && rememberViewers(save.data, a)) persist();
+  }
+
+  // локальный сервер оверлея OBS живёт в оболочке для компьютера (desktop/main.cjs); в браузере его нет
+  const overlayApi = () => window.suetaDesktop?.overlay ?? null;
+  function overlayView() {
+    const api = overlayApi();
+    if (!api) return { available: false };
+    const st = streamCfg();
+    return { available: true, running: !!overlayInfo?.running, url: overlayInfo?.url ?? `http://127.0.0.1:${st.overlayPort}/overlay`, error: overlayInfo?.error ?? '' };
+  }
+  async function configureOverlay() {
+    const api = overlayApi();
+    if (!api) return;
+    const st = streamCfg();
+    try {
+      overlayInfo = await api.configure({ enabled: st.on && st.overlay && CAMPAIGN.stream.enabled, port: st.overlayPort });
+    } catch {
+      overlayInfo = { running: false, error: 'Оверлей не запустился' };
+    }
+    overlaySent = '';
+    if (document.getElementById('stream-now')) showStreamScreen();
+  }
+  function showStreamScreen(note = '') {
+    ui.showStream(save, stream?.view() ?? null, overlayView(), note);
+  }
+  function publishOverlay() {
+    const send = window.suetaDesktop?.publishStream;
+    if (!send) return;
+    const view = stream && session?.live && (mode === 'kitchen' || mode === 'paused') ? stream.view() : null;
+    const sig = JSON.stringify(overlayState(view, lastStreamEvent));
+    if (sig === overlaySent) return;
+    overlaySent = sig;
+    try {
+      send(JSON.parse(sig));
+    } catch {
+      /* оверлей необязателен: игре он не нужен */
+    }
+  }
+
+  // изменение настройки режима из экрана настроек: key=value
+  function setStreamOption(key, raw) {
+    const cur = { ...(save.data.settings.stream ?? {}) };
+    let note = '';
+    const on = (v) => v === '1' || v === 'true' || v === true;
+    switch (key) {
+      case 'channel': {
+        const c = cleanChannel(raw);
+        cur.channel = c;
+        if (String(raw).trim() && !c) note = 'Имя канала: латиница, цифры и «_», от 3 до 25 знаков. Можно вставить ссылку на канал.';
+        break;
+      }
+      case 'test':
+        cur.test = on(raw);
+        break;
+      case 'nicks':
+        cur.nicks = on(raw);
+        break;
+      case 'power':
+        cur.power = resolvePower(raw).id;
+        break;
+      case 'cam':
+        cur.cam = raw;
+        break;
+      case 'overlayPort': {
+        const n = Math.round(Number(raw));
+        if (Number.isInteger(n) && n >= 1024 && n <= 65535) cur.overlayPort = n;
+        else note = 'Порт оверлея — число от 1024 до 65535.';
+        break;
+      }
+      default:
+        return;
+    }
+    save.data.settings.stream = streamSettings(cur);
+    persist();
+    if (key === 'power') stream?.setPower(streamCfg().power);
+    else if (['channel', 'test'].includes(key) && stream) setupStream();
+    if (key === 'cam') ui.setCam(streamCfg().cam);
+    if (key === 'overlayPort') configureOverlay();
+    showStreamScreen(note);
   }
 
   function speedFinished(t) {
@@ -214,6 +317,18 @@ async function boot() {
       return null;
     }
     if (session.practice) return r;
+    if (session.live) {
+      // день с чатом — отдельный зачёт: кампания, медали и баллы не меняются (persist.recordStreamDay)
+      r.medals = [];
+      r.stream = { ...recordStreamDay(save.data, session.dayIndex, r), D: r.D };
+      flushViewers();
+      persist(true);
+      sound.play('success');
+      mode = 'dayResult';
+      ui.hideKitchen();
+      ui.showDayResult(r, session.day, save, session.dayIndex === DAYS.length - 1);
+      return r;
+    }
     if (challenge) {
       r.challenge = true;
       const prev = save.data.challenges[challenge.key];
@@ -310,9 +425,14 @@ async function boot() {
       last = performance.now(); // без скачка времени
     },
     testVote(cmd) {
-      stream?.vote('tester' + Math.random(), cmd);
+      stream?.testVote(cmd);
+    },
+    // пауза чата стримера: окно и голоса стоят, события не выходят (клавиша STREAM_KEYS.pauseChat и кнопка на плашке)
+    toggleChatPause() {
+      if (stream && session?.live) stream.setPaused(!stream.paused);
     },
     toMenu() {
+      flushViewers();
       mode = 'menu';
       session = null;
       challenge = null;
@@ -428,18 +548,28 @@ async function boot() {
           startPractice('speed');
           break;
         case 'stream':
-          ui.showStream(save);
+          showStreamScreen();
           break;
-        case 'streamOn':
-        case 'streamOff': {
-          const ch = document.getElementById('stream-channel')?.value ?? '';
-          const test = !!document.getElementById('stream-test')?.checked;
-          save.data.settings.stream = { on: cmd === 'streamOn', channel: ch, test };
+        case 'streamToggle': {
+          const cur = streamCfg();
+          save.data.settings.stream = { ...cur, on: !cur.on };
           persist();
           setupStream();
-          ui.showStream(save);
+          configureOverlay();
+          showStreamScreen();
           break;
         }
+        case 'streamSet': {
+          const [k, ...rest] = String(arg).split('=');
+          setStreamOption(k, rest.join('='));
+          break;
+        }
+        case 'streamForget':
+          save.data.stream.viewers = [];
+          stream?.takeActivity();
+          persist();
+          showStreamScreen('Список зрителей очищен.');
+          break;
         case 'practiceGo': {
           const [a, p] = String(arg).split(':');
           startPractice(a, p);
@@ -613,6 +743,7 @@ async function boot() {
       sound.unlock();
       moveHeld.add(e.code);
     } else if (e.code === 'KeyM') app.toggleMute();
+    else if (e.code === STREAM_KEYS.pauseChat && mode === 'kitchen') app.toggleChatPause();
     else if (e.code === 'KeyQ' && mode === 'kitchen') ui.toggleRecipe();
   });
   window.addEventListener('keyup', (e) => {
@@ -661,6 +792,7 @@ async function boot() {
 
   // --- главный цикл ---
   let last = performance.now();
+  let streamNowT = 0;
   let fpsN = 0, fpsT0 = performance.now();
   const stats = {};
   function frame(now) {
@@ -674,9 +806,21 @@ async function boot() {
       }
       session.update(real);
       for (const e of session.drain()) dispatch(e);
-      if (stream && !session.practice) stream.update(Math.min(real, CAMPAIGN.maxFrameDt));
+      if (stream && session.live) {
+        stream.update(Math.min(real, CAMPAIGN.maxFrameDt));
+        if ((viewerFlushT += real) > 20) {
+          viewerFlushT = 0;
+          flushViewers();
+        }
+      }
     }
-    ui.renderVotes(stream && mode === 'kitchen' && session && !session.practice ? stream.view() : null);
+    if (stream) stream.active = mode === 'kitchen' && !!session?.live;
+    ui.renderVotes(stream && mode === 'kitchen' && session?.live ? stream.view() : null);
+    publishOverlay();
+    if (mode === 'menu' && stream && (streamNowT += real) > 0.5) {
+      streamNowT = 0;
+      ui.refreshStreamNow(save, stream.view());
+    }
     if (mode === 'final' && session) ui.updateFinal(Math.min(real, 0.25), dishScreen);
     const animDt = mode === 'paused' ? 0 : Math.min(real, CAMPAIGN.maxFrameDt);
     // радио звучит только на кухне во время дня: пауза, итоги, меню и практика — тишина
@@ -715,7 +859,9 @@ async function boot() {
   }
 
   sv.setCameraMode('menu', true);
+  ui.setCam(streamCfg().cam);
   setupStream();
+  configureOverlay();
   if (save.data.settings.inProgress) {
     const i = DAYS.findIndex((d) => d.id === save.data.settings.inProgress);
     if (i >= 0) {
@@ -723,7 +869,7 @@ async function boot() {
       booted = true;
       startDay(i, true);
       requestAnimationFrame(frame);
-      window.__sueta = { models: modelStatus(), get session() { return session; }, get mode() { return mode; }, sv, view, app, save, radio: radioMusic };
+      window.__sueta = { models: modelStatus(), get session() { return session; }, get stream() { return stream; }, get mode() { return mode; }, sv, view, app, save, radio: radioMusic };
       return;
     }
   }
@@ -731,7 +877,7 @@ async function boot() {
   document.getElementById('loading').classList.add('hidden');
   booted = true;
   requestAnimationFrame(frame);
-  window.__sueta = { models: modelStatus(), get session() { return session; }, get mode() { return mode; }, sv, view, app, save, stats, radio: radioMusic };
+  window.__sueta = { models: modelStatus(), get session() { return session; }, get stream() { return stream; }, get mode() { return mode; }, sv, view, app, save, stats, radio: radioMusic };
 }
 
 boot();

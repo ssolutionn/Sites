@@ -11,7 +11,7 @@ import { formatFreq } from '../campaign/st-radio.js';
 import { PICON } from './icons.js';
 import { tipClosedBy } from './tip-done.js';
 import { pts } from '../campaign/words.js';
-import { settingsHtml, votesHtml, voteSig } from './stream-ui.js';
+import { settingsHtml, votesHtml, voteSig, nowLine } from './stream-ui.js';
 import { tableGuests, streamSettings } from '../campaign/stream-rules.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -187,6 +187,7 @@ export class CampaignUI {
   }
 
   hideOverlay() {
+    this.streamScreen = false;
     this.el.overlay.innerHTML = '';
     this.el.overlay.className = '';
     document.body.classList.remove('paused-anim');
@@ -477,9 +478,10 @@ export class CampaignUI {
   }
 
   /** Экран «Режим стримера». view — снимок голосования (или null), overlay — состояние оверлея OBS (только в версии для компьютера). */
-  showStream(save, view = null, overlay = null) {
+  showStream(save, view = null, overlay = null, note = '') {
     const st = streamSettings(save.data.settings.stream);
-    this._overlay(settingsHtml({ s: st, view, overlay }), 'dim');
+    this.streamScreen = true;
+    this._overlay(settingsHtml({ s: st, view, overlay, note }), 'dim');
     const root = this.el.overlay;
     const set = (key, value) => this.app.ui('streamSet', `${key}=${value}`);
     $('#stream-channel', root)?.addEventListener('change', (e) => set('channel', e.target.value));
@@ -487,6 +489,14 @@ export class CampaignUI {
     $('#stream-nicks', root)?.addEventListener('change', (e) => set('nicks', e.target.checked ? 1 : 0));
     $('#stream-port', root)?.addEventListener('change', (e) => set('overlayPort', e.target.value));
     $('.ov-url', root)?.addEventListener('focus', (e) => e.target.select());
+  }
+
+  /** Пока экран настроек открыт, строка «Сейчас: …» живёт: статус подключения меняется на месте. */
+  refreshStreamNow(save, view) {
+    const el = $('#stream-now');
+    if (!el) return;
+    const html = nowLine(streamSettings(save.data.settings.stream), view);
+    if (el.innerHTML !== html) el.innerHTML = html;
   }
 
   /** Строка «С чатом» в итоге дня: { prev, best, isBest, events }. */

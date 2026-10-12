@@ -30,6 +30,7 @@ export class StreamVotes {
     this.round = new VoteRound({ power, rules });
     this.getState = getState;
     this.fire = fire;
+    this.active = false; // голоса считаются только пока идёт день с чатом (main.js ставит по кадру)
     this.activity = {}; // очищенный ник → принятые голоса (для гостей финального стола)
     this.testN = 0;
     this.source = makeSource(this.test ? 'test' : 'twitch', { channel: this.channel, onVote: (user, cmd, display) => this._onVote(user, cmd, display) });
@@ -37,7 +38,7 @@ export class StreamVotes {
   }
 
   _onVote(user, cmd, display) {
-    if (!this.round.vote(user, cmd)) return false;
+    if (!this.active || !this.round.vote(user, cmd)) return false;
     const nick = sanitizeNick(display);
     if (isRealNick(nick)) this.activity[nick] = (this.activity[nick] ?? 0) + 1;
     return true;
@@ -82,6 +83,13 @@ export class StreamVotes {
       const ok = !!this.fire(e.kind, e);
       this.round.settle(ok, e.line);
     }
+  }
+
+  /** Ники, голосовавшие в этой игре, от самого активного. */
+  activeNicks() {
+    return Object.entries(this.activity)
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .map(([nick]) => nick);
   }
 
   /** Накопленная активность зрителей { ник: голоса }; счётчик обнуляется. */

@@ -1,0 +1,68 @@
+/* Режим стримера (0.11): плашка голосования, экран настроек, безопасная зона под веб-камеру.
+   Подключается после theme.css; токены — оттуда. Зона камеры: класс cam-tl | cam-tr | cam-bl | cam-br на <html>,
+   размеры угла --cam-w / --cam-h задаёт игра из CAMPAIGN.stream.cam. */
+
+html { --cam-w: 0px; --cam-h: 0px; --cam-gap: 12px; }
+
+/* ---------- плашка голосования ---------- */
+#votes { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 30; width: 244px; padding: 10px 12px 10px; border-radius: var(--r-m); box-sizing: border-box; font-size: 13px; color: var(--on-glass); }
+#votes.hidden { display: none; }
+#votes .v-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
+#votes .v-st { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--on-glass-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#votes .dot { width: 8px; height: 8px; border-radius: 50%; background: #8fd6a6; flex: none; }
+#votes .dot.wait { background: var(--gold); animation: dotpulse 1.2s ease-in-out infinite; }
+#votes .dot.bad { background: #ff7a6b; }
+#votes .v-phase { margin: 4px 0 6px; font-size: 12.5px; font-weight: 800; color: var(--gold); }
+#votes .v-phase.paused { color: #ffb4a8; }
+#votes .v-phase.pending { color: #c9f2dc; }
+#votes .vote-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 13px; font-weight: 700; }
+#votes .v-cmd { width: 74px; flex: none; white-space: nowrap; }
+#votes .vbar { flex: 1; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); overflow: hidden; min-width: 40px; }
+#votes .vbar i { display: block; height: 100%; background: #e2736a; transition: width 0.25s; }
+#votes .vote-row.help .vbar i { background: #4cc28a; }
+#votes .vote-row b { width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
+#votes button.mini { padding: 0; width: 22px; height: 22px; font-size: 14px; line-height: 1; border-radius: 50%; }
+#votes .v-meter { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12.5px; font-weight: 800; color: var(--on-glass-2); }
+#votes .mbar { flex: 1; display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255, 255, 255, 0.14); }
+#votes .mbar i { background: #e2736a; transition: width 0.25s; }
+#votes .mbar u { background: #4cc28a; text-decoration: none; transition: width 0.25s; }
+#votes .v-line { margin-top: 7px; padding: 5px 8px; border-radius: var(--r-s); background: rgba(242, 181, 68, 0.2); color: #ffe2a6; font-size: 12.5px; font-weight: 800; line-height: 1.3; }
+#votes .v-line.drop, #votes .v-line.refused { background: rgba(210, 60, 60, 0.28); color: #ffd6cf; }
+#votes .v-pause { display: block; width: 100%; margin-top: 8px; padding: 5px 8px; height: auto; border-radius: var(--r-pill); font-size: 12.5px; }
+#votes kbd { font: inherit; font-size: 11.5px; padding: 0 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.18); margin-left: 4px; }
+
+/* ---------- экран настроек ---------- */
+.stream-set { width: min(660px, calc(100vw - 32px)); max-height: calc(100vh - 24px); overflow-y: auto; box-sizing: border-box; padding: 18px 22px 16px; }
+.stream-set h2 { margin: 0 0 4px; font-size: 26px; }
+.stream-set h2::before { margin-bottom: 8px; }
+.stream-set .lead { margin: 0 0 8px; line-height: 1.4; }
+.stream-set .srow { display: grid; grid-template-columns: 138px 1fr; gap: 10px; align-items: start; padding: 7px 0; border-top: 1px solid var(--paper-line); }
+.stream-set .srow > label:first-child { font-weight: 800; font-size: 14px; padding-top: 5px; }
+.stream-set input[type=text], .stream-set input[type=number], .stream-set .ov-url { width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: var(--r-s); border: 1.5px solid var(--paper-line); font: inherit; font-size: 14px; background: #fff; color: var(--ink); }
+.stream-set input.port { width: 86px; display: inline-block; padding: 3px 8px; }
+.stream-set .chk { display: flex; gap: 8px; align-items: center; font-size: 14px; padding-top: 4px; font-weight: 600; }
+.stream-set .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.stream-set .seg-b { padding: 5px 12px; font-size: 13.5px; box-shadow: inset 0 0 0 1.5px var(--paper-line); background: transparent; }
+.stream-set .seg-b.on { background: var(--pine-hi); color: #fff; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15); }
+.stream-set .snote { margin-top: 4px; line-height: 1.35; }
+.stream-set .ov { display: flex; flex-direction: column; gap: 4px; }
+.stream-set .now { margin: 8px 0 2px; }
+.stream-set .actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.stream-set .actions .big { margin-left: auto; }
+.stream-line { margin: 8px 0; padding: 8px 12px; border-radius: var(--r-m); background: var(--gold-soft); text-align: center; font-size: 15px; }
+.stream-line .small { margin-top: 2px; }
+
+/* ---------- безопасная зона под веб-камеру ---------- */
+/* слева сверху: задача уходит ниже камеры, подсказка и совет — тоже */
+html.cam-tl .hud2-task { top: calc(var(--cam-h) + var(--cam-gap)); }
+html.cam-tl #tip.side { top: calc(var(--cam-h) + 190px); }
+html.cam-tl #recipe { top: calc(var(--cam-h) + 126px); max-height: calc(100vh - var(--cam-h) - 290px); }
+/* справа сверху: кнопки HUD и уведомления ниже камеры */
+html.cam-tr .hud2-right { top: calc(var(--cam-h) + var(--cam-gap)); }
+html.cam-tr #alerts { top: calc(var(--cam-h) + 112px); }
+/* снизу: док станции сужается, подсказки и всплывающие записи поднимаются над камерой, плашка голосования уходит в другой угол */
+html.cam-bl #panel.station-panel, html.cam-br #panel.station-panel { width: min(880px, calc(100vw - 2 * (var(--cam-w) + var(--cam-gap)))); }
+html.cam-br #votes { right: auto; left: var(--sp-4); }
+html.cam-bl #tip.side.cat-tip, html.cam-br #tip.side.cat-tip { bottom: calc(var(--cam-h) + var(--sp-4)); }
+html.cam-bl #tip.side.cat-tip { left: var(--sp-4); }
+/* камера слева снизу занимает угол, где обычно «левый низ»: плашка остаётся справа снизу, как по умолчанию */
