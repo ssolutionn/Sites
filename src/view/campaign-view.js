@@ -153,17 +153,17 @@ export class CampaignView {
     this.root.add(this.foam);
     this.washDirt = null;
 
-    // духовка: свечение дверцы
-    this.ovenGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.22), new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0 }));
-    this.ovenGlow.position.set(1.45, 0.45, -1.888);
-    this.root.add(this.ovenGlow);
-    const ovenHit = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.05), new THREE.MeshBasicMaterial({ visible: false }));
-    ovenHit.position.set(1.45, 0.45, -1.88);
+    // духовка: свечение — внутри модели плиты, за стеклом дверцы; клик по дверце ведёт в духовку, курица стоит на решётке внутри
+    const sm = k.stoveModel, sp = k.stoveGroup.position, oh = sm.oven.hit, oc = sm.oven.chicken;
+    this.ovenGlow = sm.ovenGlowMesh;
+    this.ovenDoor = sm.ovenDoor;
+    const ovenHit = new THREE.Mesh(new THREE.BoxGeometry(oh.w, oh.h, oh.d), new THREE.MeshBasicMaterial({ visible: false }));
+    ovenHit.position.set(sp.x + oh.x, oh.y, sp.z + oh.z);
     this.root.add(ovenHit);
     tag(ovenHit, 'oven');
     this.ovenChicken = F.chicken();
     this.ovenChicken.scale.setScalar(0.8);
-    this.ovenChicken.position.set(1.45, 0.36, -1.99);
+    this.ovenChicken.position.set(sp.x + oc.x, oc.y, sp.z + oc.z);
     this.ovenChicken.visible = false;
     this.root.add(this.ovenChicken);
     for (const o of k.stations.stove) o.traverse((q) => q.isMesh && (q.userData.cstation = 'stove', this.clickables.push(q)));

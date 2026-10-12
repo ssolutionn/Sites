@@ -4,6 +4,8 @@ import { LAYOUT } from '../game/layout.js';
 import { tex, toon } from './textures.js';
 import { instantiateModel } from './assets.js';
 import { batchStaticChildren } from './static-batch.js';
+import { buildStove, stovePlacement } from './stove-model.js';
+import { STOVE } from '../campaign/layout.js';
 
 const GREEN_TOP = 0x3f9a4f;
 
@@ -98,40 +100,18 @@ export function buildKitchen(scene) {
 
   }
 
-  // плита
+  // плита — отдельный прибор (src/view/stove-model.js): варочная панель, панель с крутилками, духовка, ящик, ножки.
+  // Стоит между ручками шкафов back_counter, на 2,5 см впереди фасадов; конфорки — на местах STOVE.
   const st = LAYOUT.stations.stove;
-  const stove = new THREE.Group();
-  const stoveTop = box(0.62, 0.03, 0.6, toon(0x2e2e34));
-  stoveTop.position.set(0, bc.h + 0.005, 0);
-  stove.add(stoveTop);
-  const burnerMat = toon(0x151518);
-  for (const [x, z] of [[-0.15, -0.14], [0.15, -0.14], [-0.15, 0.14], [0.15, 0.14]]) {
-    const burner = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.012, 20), burnerMat);
-    burner.position.set(x, bc.h + 0.025, z);
-    stove.add(burner);
-  }
-  const oven = box(0.6, 0.5, 0.02, toon(0x30303a));
-  oven.position.set(0, 0.45, 0.36);
-  stove.add(oven);
-  const ovenGlass = box(0.44, 0.24, 0.01, new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.1, metalness: 0.4 }));
-  ovenGlass.position.set(0, 0.45, 0.375);
-  stove.add(ovenGlass);
-  // крутилки огня: белая метка показывает, на сколько повёрнута
-  k.stoveKnobs = [];
-  for (let i = 0; i < 4; i++) {
-    const knob = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.024, 0.025, 18), metal);
-    const mark = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.004, 0.018), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x331100, roughness: 0.4 }));
-    mark.position.set(0, 0.0135, 0.008);
-    knob.add(body, mark);
-    knob.rotation.x = Math.PI / 2;
-    knob.position.set(-0.2 + i * 0.13, 0.78, 0.37);
-    stove.add(knob);
-    k.stoveKnobs.push(knob);
-  }
-  batchStaticChildren(stove);
-  stove.position.set(st.anchor.x, 0, bc.z);
+  const stoveModel = buildStove(THREE, { burners: STOVE.burners, burnerR: STOVE.r });
+  const stove = stoveModel.group;
+  batchStaticChildren(stove, stoveModel.protect);
+  const sp = stovePlacement(st.anchor.x, bc.z);
+  stove.position.set(sp.x, 0, sp.z);
   scene.add(stove);
+  k.stoveKnobs = stoveModel.knobs; // белая метка на крутилке показывает, на сколько повёрнута
+  k.stoveModel = stoveModel;
+  k.stoveGroup = stove;
   // вытяжка
   const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.38, 0.35, 4, 1, false, Math.PI / 4), toon(0xe6e8ea));
   hood.scale.set(1, 1, 0.75);

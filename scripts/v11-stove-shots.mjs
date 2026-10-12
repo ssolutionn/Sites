@@ -45,7 +45,7 @@ async function freeCam(pos, look) {
   }, [pos, look]);
   await waitFor(() => window.__sueta.sv.camT >= 1, 30000); await wait(900);
 }
-const hideUi = (hide) => S((h) => { for (const sel of ['#panel', '#hud', '#alerts', '#tip', '.hud', '#dock']) document.querySelectorAll(sel).forEach((e) => (e.style.visibility = h ? 'hidden' : '')); }, hide);
+const hideUi = (hide) => S((h) => { for (const sel of ['#panel', '#hud', '#alerts', '#tip', '#labels', '#hint', '#toasts']) document.querySelectorAll(sel).forEach((e) => (e.style.visibility = h ? 'hidden' : '')); }, hide);
 
 try {
   if (want('overview') || want('angles')) {
