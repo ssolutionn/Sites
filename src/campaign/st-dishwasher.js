@@ -166,7 +166,6 @@ export const dishwasherMethods = {
     d.hum = 0;
     d.done = null;
     this._emit('dwStart', { items: d.run.items.slice(), min: this.cfg.dishwasher.cycleMin, sec });
-    this.setHint(`Запустила — будет готово через ${kitchenMin(sec, this.cfg.kitchenScale)}`, 3);
     return true;
   },
 

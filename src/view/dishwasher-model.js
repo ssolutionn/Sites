@@ -121,7 +121,12 @@ export class DishwasherView {
     for (const sx of [-1, 1]) mesh(new THREE.BoxGeometry(0.008, 0.05, RACK_D), wire, sx * (RACK_W / 2), 0.025, 0, this.rack);
     mesh(new THREE.BoxGeometry(RACK_W, 0.05, 0.008), wire, 0, 0.025, RACK_D / 2, this.rack);
     // корзинка для приборов спереди слева
-    mesh(F.rbox(0.2, 0.05, 0.12, 0.01), F.m(0xc9d0d6, 0.5, 0.4), G.slots.knife.x, 0.025, G.slots.knife.z - RACK_Z, this.rack);
+    const basket = new THREE.Group();
+    const bm = F.m(0xc9d0d6, 0.45, 0.5);
+    mesh(new THREE.BoxGeometry(0.2, 0.004, 0.12), bm, 0, 0.002, 0, basket);
+    for (const [w, d, x, z] of [[0.2, 0.004, 0, -0.058], [0.2, 0.004, 0, 0.058], [0.004, 0.12, -0.098, 0], [0.004, 0.12, 0.098, 0]]) mesh(new THREE.BoxGeometry(w, 0.03, d), bm, x, 0.015, z, basket);
+    basket.position.set(G.slots.knife.x, 0, G.slots.knife.z - RACK_Z);
+    this.rack.add(basket);
     this.rack.position.set(0, RACK_Y, -0.35);
     g.add(this.rack);
     // посуда
@@ -136,7 +141,7 @@ export class DishwasherView {
         wrap.rotation.x = Math.PI / 2 - 0.2;
         wrap.position.y = STANDING[id];
       } else if (id === 'knife') {
-        wrap.position.y = 0.05;
+        wrap.position.y = 0.02;
         wrap.rotation.y = sl.ry;
         wrap.rotation.z = 0.08;
       } else wrap.position.y = 0.012;
@@ -164,11 +169,11 @@ export class DishwasherView {
     this.dispTex = new THREE.CanvasTexture(this.dispCanvas);
     this.dispTex.colorSpace = THREE.SRGBColorSpace;
     const disp = new THREE.Mesh(new THREE.PlaneGeometry(G.display.w, G.display.h), new THREE.MeshBasicMaterial({ map: this.dispTex }));
-    disp.position.set(G.display.x, G.h / 2 - G.display.z, 0.0035);
+    disp.position.set(G.display.x, G.h / 2 - G.display.z, 0.0046);
     this.door.add(disp);
     // лампочки: идёт цикл / готово
-    this.ledRun = mesh(new THREE.CircleGeometry(0.008, 12), new THREE.MeshBasicMaterial({ color: 0xffa21a }), -0.2, G.h / 2 - G.display.z + 0.02, 0.004, this.door);
-    this.ledDone = mesh(new THREE.CircleGeometry(0.008, 12), new THREE.MeshBasicMaterial({ color: 0x41d36b }), -0.2, G.h / 2 - G.display.z - 0.02, 0.004, this.door);
+    this.ledRun = mesh(new THREE.CircleGeometry(0.008, 12), new THREE.MeshBasicMaterial({ color: 0xffa21a }), -0.2, G.h / 2 - G.display.z + 0.02, 0.0046, this.door);
+    this.ledDone = mesh(new THREE.CircleGeometry(0.008, 12), new THREE.MeshBasicMaterial({ color: 0x41d36b }), -0.2, G.h / 2 - G.display.z - 0.02, 0.0046, this.door);
     // кнопка пуска: круглая, с колечком
     this.button = new THREE.Group();
     this.button.position.set(G.start.x, G.h / 2 - G.start.z, 0.004);

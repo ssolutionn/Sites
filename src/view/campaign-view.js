@@ -444,9 +444,10 @@ export class CampaignView {
       }
       case 'c-dishwasher': {
         // дверца и выдвижная корзина: смотрим сверху-спереди, чтобы лежащая дверца и посуда на ней были над доком
+        // верх дверцы (планка с кнопкой) ниже плашки часов, корзина и посуда выше дока
         const dw = DISHWASHER;
-        look.set(dw.x, 0.26, dw.zFront + 0.3);
-        pos.set(dw.x, 1.28 * (back > 1 ? 1.1 : 1), dw.zFront + 1.55 * back);
+        look.set(dw.x, 0.27, dw.zFront);
+        pos.set(dw.x, 1.35 * (back > 1 ? 1.08 : 1), dw.zFront + 1.8 * back);
         return true;
       }
       case 'c-radio': {
