@@ -7,7 +7,7 @@ import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
 import { feedArt, dishArt, heartIcon } from './feed-art.js';
 import { PICON } from './icons.js';
-import { pts as ptsWord } from '../campaign/words.js';
+import { pts as ptsWord, kitchenMin } from '../campaign/words.js';
 import { CHATTER_AVATARS, QUICK_CHAT, QUICK_COMMENT } from '../campaign/chatter.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -486,7 +486,7 @@ export class PhoneUI {
   _timers(s) {
     const ring = (left, total, label, icon, cls = '') => {
       const k = total > 0 ? Math.max(0, Math.min(1, 1 - left / total)) : 1;
-      return `<div class="tmr ${cls}"><div class="ring" style="--k:${k}"><span>${icon}</span></div><div><b>${esc(label)}</b><small>${left > 0 ? fmt(left) : 'готово!'}</small></div></div>`;
+      return `<div class="tmr ${cls}"><div class="ring" style="--k:${k}"><span>${icon}</span></div><div><b>${esc(label)}</b><small>${left > 0 ? kitchenMin(left, s.cfg.kitchenScale) : 'готово!'}</small></div></div>`;
     };
     const rows = [];
     for (const b of s.burners) {
@@ -495,11 +495,11 @@ export class PhoneUI {
     }
     for (const x of s.hotList()) rows.push(ring(x.left, s.cfg.cool.time, `${PRODUCTS[x.product].name} остывает`, '🔥', 'hot'));
     if (s.oven.state === 'baking') rows.push(ring(s.oven.readyAt - s.t, s.cfg.oven.bake, 'Духовка', '🍗'));
-    for (const x of s.kitchenTimers) rows.push(`${ring(x.end - s.t, x.total, `Таймер ${Math.round(x.total / 60)} мин`, '⏲', s.t >= x.end ? 'done' : '')}`);
+    for (const x of s.kitchenTimers) rows.push(`${ring(x.end - s.t, x.total, `Таймер ${x.min} мин`, '⏲', s.t >= x.end ? 'done' : '')}`);
     return `${this._head('Таймеры кухни', 'всё, что варится и остывает')}<div class="app-body timers">
       ${rows.join('') || '<div class="empty">Сейчас ничего не варится.</div>'}
-      <h4>Поставить таймер</h4><div class="trow">${[1, 2, 3, 5].map((m) => btn(`${m} мин`, 'setKitchenTimer', [m * 60], 'mini')).join('')}</div>
-      <p class="fine">Таймеры считают время готовки. Часы телефона показывают твоё местное время.</p></div>`;
+      <h4>Поставить таймер</h4><div class="trow">${[5, 10, 25, 45].map((m) => btn(`${m} мин`, 'setKitchenTimer', [m], 'mini')).join('')}</div>
+      <p class="fine">Таймеры идут по часам кухни: яйца варятся 10 минут, картофель — 25. Часы телефона показывают твоё местное время.</p></div>`;
   }
 }
 

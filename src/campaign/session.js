@@ -940,6 +940,11 @@ export class KitchenSession {
       s -= o.radioLeft;
       notes.push('Радио осталось сломанным');
     }
+    const lit = this.burners.filter((b) => (b.heat ?? 0) > 0).length;
+    if (lit) {
+      s -= o.burnerLeft * lit;
+      notes.push('Конфорка осталась включённой');
+    }
     const wet = this.burners.filter((b) => b.dirty).length;
     if (wet) {
       s -= o.dirtyLeft * wet;
@@ -1030,6 +1035,7 @@ export class KitchenSession {
     if (dish.penalty.prep && parts.prep != null) parts.prep = Math.max(0, parts.prep - dish.penalty.prep);
     if (dish.penalty.prepSpill) notes.unshift('Кастрюля выкипела — картофель разварился');
     if (dish.penalty.overcook) notes.unshift(BOILED[dish.penalty.overcook]?.note ?? 'Переварено');
+    if (dish.penalty.burnt) notes.unshift('Кастрюля пригорела — продукт пришлось заказывать заново');
     dish.parts = parts;
     dish.Q = dishScore(parts);
     dish.notes = notes.slice(0, 3);
@@ -1057,7 +1063,7 @@ Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, 
 
 export function emptyBurner(i) {
   // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне
-  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0 };
+  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0, overcooked: false, level: 1, idleT: 0, lowWarned: false, dryUrgent: false, overWarned: false };
 }
 
 // ---------- практика ----------

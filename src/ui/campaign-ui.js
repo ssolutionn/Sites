@@ -10,7 +10,8 @@ import { LOGO_URL, NEUTRAL } from '../view/textures.js';
 import { formatFreq } from '../campaign/st-radio.js';
 import { PICON } from './icons.js';
 import { tipClosedBy } from './tip-done.js';
-import { pts, tsp, tspText, gramsText } from '../campaign/words.js';
+import { pts, tsp, tspText, gramsText, kitchenMin } from '../campaign/words.js';
+const kmin = (sec) => kitchenMin(sec, CAMPAIGN.kitchenScale); // время готовки — в кухонных минутах (0.11)
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -46,7 +47,7 @@ function burnerStatus(s, b) {
   if (b.state === 'ready') return 'готово — достань';
   if (b.state !== 'boiling') return (b.heat ?? 0) ? 'огонь горит впустую' : '';
   if (!(b.heat > 0)) return 'огонь выключен — поверни крутилку';
-  if (b.water === 'boil') return `кипит · ещё ${fmt(b.readyAt - s.t)}${b.heat >= CAMPAIGN.stove.foamHeat ? ' · убавь, убежит!' : ''}`;
+  if (b.water === 'boil') return `кипит · ещё ≈ ${kmin(b.readyAt - s.t)}${b.heat >= CAMPAIGN.stove.foamHeat ? ' · убавь, убежит!' : ''}`;
   const left = b.readyAt - s.t;
   return left > 5000 ? `вода ${Math.round(b.temp)}° · так не закипит` : `вода ${Math.round(b.temp)}° · греется`;
 }
@@ -87,7 +88,7 @@ export const TIPS = {
   stove: 'Плита: четыре конфорки и четыре крутилки. Подойди с продуктом в руках и нажми «Положить сюда» у нужной конфорки, огонь — только крутилкой (зажми и веди по кругу). На 6 закипает за ~25 с. 7–9 быстрее, но на кипении убежит пена и зальёт плиту — убавь до 4–5. Над кастрюлей кольцо: синее — греется, оранжевое — варится, зелёное ✓ — готово, сними с огня, иначе переварится.',
   fridge: 'Для варки продукт сначала берут в руки: и яйца, и картофель — из холодильника. Руки одни: отнеси, что держишь, к доске (почистить) или к плите (в кастрюлю).',
   stoveWipe: 'Конфорку залило убежавшей пеной. Сними кастрюлю, потом зажми кнопку на пятне и три туда-обратно — как тряпкой.',
-  hot: 'Сваренное горячее: резать сразу нельзя. Подожди полминуты или остуди под холодной водой у раковины — это быстрее.',
+  hot: 'Сваренное горячее: резать сразу нельзя. Подожди около шести минут по часам кухни или остуди под холодной водой у раковины — это быстрее.',
   season: 'Вкус как в жизни: сначала посоли и поперчи (встряхивай солонку над миской), потом перемешай ложкой — и только потом пробуй. Пока не перемешано, соль лежит сверху и проба обманет. Досолила после — ещё оборот ложкой.',
   catHungry: 'Кот проголодался. Голодный кот сам полезет к колбасе, селёдке или сыру на доске. Покорми его у миски кота — сытый кот спит. Мячик отвлекает, но голод не утоляет.',
   catbowl: 'Миска кота: «Покормить» обнуляет голод. «Мячик» занимает кота на 45 секунд.',
@@ -998,11 +999,11 @@ export class CampaignUI {
     // активные таймеры: кастрюли, горячее, духовка, курьер
     const timers = [];
     for (const b of s.burners) {
-      if (b.state === 'boiling') timers.push(`<span class="timer">${PICON[b.product]} ${b.readyAt - s.t > 5000 ? '🔥?' : fmt(b.readyAt - s.t)}</span>`);
+      if (b.state === 'boiling') timers.push(`<span class="timer">${PICON[b.product]} ${b.readyAt - s.t > 5000 ? '🔥?' : '≈ ' + kmin(b.readyAt - s.t)}</span>`);
       else if (b.state === 'ready') timers.push(`<span class="timer done">${PICON[b.product]} готово</span>`);
     }
-    for (const x of s.hotList()) timers.push(`<span class="timer hot">${PICON[x.product]} горячо ${Math.ceil(x.left)} с</span>`);
-    if (s.oven.state === 'baking') timers.push(`<span class="timer">🍗 ${fmt(s.oven.readyAt - s.t)}</span>`);
+    for (const x of s.hotList()) timers.push(`<span class="timer hot">${PICON[x.product]} горячо ещё ${kmin(x.left)}</span>`);
+    if (s.oven.state === 'baking') timers.push(`<span class="timer">🍗 ≈ ${kmin(s.oven.readyAt - s.t)}</span>`);
     if (s.delivery.order) timers.push(`<span class="timer">🛵 ${({ accepted: 'принят', assembling: 'собирают', onTheWay: 'в пути', arrived: 'у двери', collecting: 'забираем' })[s.delivery.order.status]}</span>`);
     this._set('hud-timers', timers.join(''));
     $('#btn-finish').classList.toggle('hidden', s.phase !== 'ready' || !!s.practice);
@@ -1384,7 +1385,7 @@ export class CampaignUI {
       case 'stove':
         return '<span>Сильный огонь — быстрее закипит, но может убежать. Закипело — убавь до 4–5.</span>';
       case 'oven':
-        return s.oven.state === 'baking' ? `Запекание: ${Math.round(s.oven.doneness * 100)} % · готово через ${fmt(s.oven.readyAt - s.t)}` : '';
+        return s.oven.state === 'baking' ? `Запекание: ${Math.round(s.oven.doneness * 100)} % · готово через ≈ ${kmin(s.oven.readyAt - s.t)}` : '';
       default:
         return '';
     }
@@ -1491,7 +1492,7 @@ export class CampaignUI {
         if (s.oven.state !== 'empty') rows.push(this._btn(s.oven.state === 'baking' ? 'Достать (ещё рано)' : '🧤 Достать курицу', 'ovenTake', [], s.oven.state === 'baking' ? 'ghost' : 'danger big', busy));
         rows.push(back);
         const stage = { empty: 'Духовка пустая', baking: 'Запекается…', ready: 'Готово — достань!', over: 'Перегревается!', burnt: 'Сгорела' }[s.oven.state];
-        return `<h2>🍗 Духовка<span class="sub">${stage}</span></h2><div class="row">${rows.join('')}</div><div class="row">${bar}</div>${live}<p class="note">${ch ? 'Готовность через 2:30; после сигнала есть окно, чтобы достать.' : 'Сегодня духовка не нужна.'}</p>`;
+        return `<h2>🍗 Духовка<span class="sub">${stage}</span></h2><div class="row">${rows.join('')}</div><div class="row">${bar}</div>${live}<p class="note">${ch ? 'Курица запекается около часа (по часам кухни); после сигнала есть окно, чтобы достать.' : 'Сегодня духовка не нужна.'}</p>`;
       }
       case 'sink': {
         const dirty = s.dirtyItems();

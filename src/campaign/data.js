@@ -1,6 +1,12 @@
 // Данные кампании: продукты, рецепты, главы, события, оценка.
 // Это стартовые проектные параметры (раздел 2.2 ТЗ): меняются здесь, без правки логики.
 
+// Кухонное время (0.11, «тайминги как в жизни»): секунда игры = 15 секунд на часах кухни. Всё, что варится, печётся и остывает,
+// задано настоящими минутами и переводится одной функцией; игроку показывают кухонные минуты («≈ 22 мин»).
+export const KITCHEN_SCALE = 15;
+/** Кухонные минуты → секунды игры: яйца 10 мин → 40 с. */
+export const kitchenSec = (min) => (min * 60) / KITCHEN_SCALE;
+
 export const CAMPAIGN = {
   version: '0.10.0',
   saveVersion: 1,
@@ -19,19 +25,24 @@ export const CAMPAIGN = {
   board: { turn: 7.5, spin: 1.9 }, // A/D: доворот на четверть оборота (рад/с) и свободное вращение при удержании (рад/с)
   crumbs: { area: 0.12, thick: 0.15 }, // кусок меньше 12 мм² или тоньше 1,5 мм — крошка, осыпается с доски
   cutRules: { angleTolerance: 28, cover: 0.6, maxWobble: 3.8, minLength: 1.2 }, // кружочки: допуски росчерка (gestures.js), см
-  potatoReadyAfter: 120, // 2:00 после установки кастрюли (поправка тестового билда)
-  boilTimes: { potato: 96, egg: 36, beet: 126 }, // сколько секунд варится после закипания (на огне 6 закипает за ~24 с: итого 2:00 и 1:00); конфорок две
+  kitchenScale: KITCHEN_SCALE,
+  potatoReadyAfter: kitchenSec(25),
+  boilTimes: { potato: kitchenSec(25), egg: kitchenSec(10), beet: kitchenSec(45) }, // сколько варится после закипания: картофель 25 мин, яйца вкрутую 10, свёкла 45 (кухонных)
   // Крутилка огня 0–9: вода греется на heatRate·огонь °C/с и остывает на loss·(T−20); на 2 и ниже не закипает.
   // Огонь ≥ foamHeat дольше foamAfter секунд кипения — пена убегает; simmer — «убавить огонь».
   // overcook — сколько секунд после «готово» можно не снимать с огня, потом продукт переваривается (−overcookPenalty к подготовке).
   // Убежала пена — конфорку залило: wipe — сколько метров «потереть» тряпкой; пока не вытерта, на ней не варят.
+  // 0.11: на огне 6 вода закипает за ~8 кухонных минут; полная кастрюля на кипении выкипает за 40 кухонных минут при огне 6 (evap —
+  // доля воды в секунду на единицу огня); 0,35 — «вода выкипает», 0,15 — срочно, 0 — пригорело. Включённая пустая конфорка через idleWarn с — напоминание.
   stove: {
-    heatRate: 0.7, loss: 0.02, boilAt: 99.5, simmer: 4, foamHeat: 7, foamAfter: 8, placeHeat: 6, eventHeat: 6, maxHeat: 9,
-    overcook: { egg: 40, potato: 60, beet: 90, default: 60 }, overcookPenalty: 10,
+    heatRate: 0.56, loss: 0.02, boilAt: 99.5, simmer: 4, foamHeat: 7, foamAfter: 8, placeHeat: 6, eventHeat: 6, maxHeat: 9,
+    evap: 1 / (kitchenSec(40) * 6), levelWarn: 0.35, levelUrgent: 0.15, idleWarn: 20,
+    burnPrepPenalty: 20,
+    overcook: { egg: kitchenSec(4), potato: kitchenSec(10), beet: kitchenSec(15), default: kitchenSec(10) }, overcookPenalty: 10, overcookPenaltyBy: { egg: 15 },
     wipe: { need: 0.55, maxStep: 0.12, reverseBonus: 1.6 },
   },
   burners: 4, // как на настоящей плите: четыре конфорки, четыре крутилки
-  cool: { time: 25, sinkCool: 1.5, underTap: 2.5 }, // сваренное горячее: ждать или остудить под холодной водой (держать кран открытым underTap с)
+  cool: { time: kitchenSec(6), sinkCool: 1.5, underTap: 2.5 }, // сваренное горячее: ждать или остудить под холодной водой (держать кран открытым underTap с)
   minCutFraction: 0.2,
   maxPiecesPerProduct: 150,
   edgeTrimAllowance: 0.1, // до 10 % исходного объёма порции — краевые обрезки без штрафа;
@@ -130,12 +141,12 @@ export const CAMPAIGN = {
     deliveryWait: [45, 75],
   },
 
-  oven: { bake: 150, burnAfter: 60 }, // 2:30 запекания, после окна — перегрев, ещё через 60 с — порча
+  oven: { bake: kitchenSec(60), burnAfter: 60 }, // 60 кухонных минут запекания, после окна — перегрев, ещё через 60 с — порча
 
   scoring: {
     weights: { prep: 0.3, comp: 0.2, asm: 0.2, taste: 0.15, wish: 0.15 },
     day: { dishes: 0.75, order: 0.15, pace: 0.1 },
-    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, starLeft: 6, toysLeft: 4, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
+    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, starLeft: 6, toysLeft: 4, radioLeft: 8, dirtyLeft: 4, hotCut: 3, burnerLeft: 4, burntPot: 8 },
   },
 };
 
@@ -566,7 +577,7 @@ export const DAYS = [
     title: 'Слой за слоем',
     dishes: ['shuba'],
     intro: 'Селёдка под шубой: тёрка, порядок слоёв и майонез. Последний слой можно отменить. Майонеза на все слои не хватит — закажи.',
-    newSkills: ['Слои', 'Свёкла варится 2:30', 'Грязная доска после сельди', 'Отмена слоя'],
+    newSkills: ['Слои', 'Свёкла варится 45 минут', 'Грязная доска после сельди', 'Отмена слоя'],
     targetMinutes: 10,
     budget: 500,
     wishes: 1,
@@ -585,7 +596,7 @@ export const DAYS = [
     dishes: ['canape', 'fruit'],
     intro: 'Канапе и фруктовая тарелка. Хлеб и сыр — кубиками по 2,5 см, колбаса и огурец — кружочками. Канапе собирают как в жизни: хлеб на блюдо, сверху остальное, потом шпажка сверху вниз. Винограда нет — закажи. Осторожно со стаканом компота — кот рядом.',
     newSkills: ['Кружочки', 'Сборка шпажек', 'Выкладка', 'Уборка лужи'],
-    targetMinutes: 6,
+    targetMinutes: 7, // 0.11: замена украденного приезжает курьером
     budget: 600,
     wishes: 1,
     stock: { bread: 1, cheese: 1, sausage: 1, cucumber: 1, skewer: 8, mandarin: 3, apple: 1, grapes: 0 },
@@ -602,9 +613,9 @@ export const DAYS = [
     id: 7,
     title: 'Последние приготовления',
     dishes: ['chicken'],
-    intro: 'Маринад закончился — закажи его, а пока курьер едет, начни сервировку стола. Курица запекается 2:30 — не пропусти сигнал духовки!',
+    intro: 'Маринад закончился — закажи его, а пока курьер едет, начни сервировку стола. Курица запекается около часа — не пропусти сигнал духовки!',
     newSkills: ['Маринад', 'Духовка', 'Финальная сервировка'],
-    targetMinutes: 6,
+    targetMinutes: 8, // 0.11: курица запекается 60 кухонных минут (4 мин игры), пока идёт сервировка
     budget: 600,
     wishes: 0,
     stock: { chicken: 1, marinade: 0 },

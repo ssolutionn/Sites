@@ -1,7 +1,7 @@
 // Тесты механик 0.5: две конфорки, остывание, вкус, кот как система, пожелания, деньги, доска, темп и медали.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CAMPAIGN } from '../src/campaign/data.js';
+import { CAMPAIGN, kitchenSec } from '../src/campaign/data.js';
 import { emptySave, recordDay, parseSave } from '../src/campaign/save.js';
 import { KitchenSession, run, arrive, waitAction, cutCubes, seasonTo, tasteDone, stir, peel, startBoil, take } from './helpers-campaign.js';
 
@@ -11,9 +11,10 @@ test('плита: две кастрюли варятся параллельно,
   startBoil(s, 'olivier:boilEgg');
   assert.equal(s.burners[0].product, 'potato');
   assert.equal(s.burners[1].product, 'egg');
-  assert.equal(Math.round(s.burners[0].readyAt - s.burners[0].startT), 120);
-  assert.equal(Math.round(s.burners[1].readyAt - s.burners[1].startT), 60);
-  run(s, 61);
+  const heatUp = kitchenSec(8); // огонь 6: вода закипает за ~8 кухонных минут
+  assert.ok(Math.abs(s.burners[0].readyAt - s.burners[0].startT - (heatUp + kitchenSec(25))) < 3);
+  assert.ok(Math.abs(s.burners[1].readyAt - s.burners[1].startT - (heatUp + kitchenSec(10))) < 3);
+  run(s, heatUp + kitchenSec(10) + 2);
   assert.equal(s.burners[1].state, 'ready');
   assert.equal(s.burners[0].state, 'boiling');
   const one = new KitchenSession({ dayIndex: 0, seed: 2, mods: { oneBurner: true } });
@@ -29,7 +30,7 @@ test('плита: две кастрюли варятся параллельно,
 test('остывание: горячее не режется, через срок или после раковины — можно', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 2 });
   startBoil(s, 'olivier:boilEgg');
-  run(s, 61);
+  run(s, kitchenSec(8) + kitchenSec(10) + 2);
   arrive(s, 'stove');
   assert.ok(s.takePot());
   waitAction(s);

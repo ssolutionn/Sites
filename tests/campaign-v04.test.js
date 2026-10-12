@@ -1,7 +1,7 @@
 // Тесты кампании 0.4: наблюдаемые правила по группам раздела 19 ТЗ.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CAMPAIGN, DAYS, RECIPES } from '../src/campaign/data.js';
+import { CAMPAIGN, DAYS, RECIPES, kitchenSec } from '../src/campaign/data.js';
 import { Inventory } from '../src/campaign/inventory.js';
 import { buildNav } from '../src/campaign/session.js';
 import { CoverageMask } from '../src/campaign/coverage.js';
@@ -372,15 +372,16 @@ test('помехи: радио, выключенное игроком, не ло
 });
 
 // ---------- 6. Время ----------
-test('время: картофель кампании готов через 2:00 даже при пропуске кадров', () => {
+test('время: картофель кампании готов через ≈ 33 кухонные минуты (нагрев на огне 6 + 25 варки) даже при пропуске кадров', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
   startBoil(s, 'olivier:boil');
   const t0 = s.stove.startT;
-  // огонь 6: вода закипает ~24 с, потом 96 с варки — около 2:00
-  assert.ok(Math.abs(s.stove.readyAt - t0 - 120) < 1, `${s.stove.readyAt - t0}`);
-  while (s.t < t0 + 118.5) s.update(0.25);
+  // 0.11: огонь 6 — вода закипает за ~8 кухонных минут (≈32 с), потом 25 кухонных минут (100 с) варки
+  const total = s.stove.readyAt - t0;
+  assert.ok(Math.abs(total - (kitchenSec(8) + kitchenSec(25))) < 3, `${total}`);
+  while (s.t < t0 + total - 1.5) s.update(0.25);
   assert.equal(s.stove.state, 'boiling');
-  while (s.t < t0 + 121) s.update(0.25);
+  while (s.t < t0 + total + 1) s.update(0.25);
   assert.equal(s.stove.state, 'ready');
 });
 
@@ -579,7 +580,7 @@ test('данные: семь глав и десять блюд, у каждог�
   const dishes = DAYS.flatMap((d) => d.dishes);
   assert.equal(new Set(dishes).size, 10);
   for (const id of dishes) assert.ok(RECIPES[id].steps.length >= 1);
-  assert.equal(CAMPAIGN.potatoReadyAfter, 120);
+  assert.equal(CAMPAIGN.potatoReadyAfter, kitchenSec(25));
   assert.ok(CLAYOUT.stations.table && CLAYOUT.stations.sink && CLAYOUT.stations.oven);
   assert.ok(SINK.w > 0 && FRUIT_PILES.apple);
 });

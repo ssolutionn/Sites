@@ -50,7 +50,7 @@ test('готовое блюдо даёт баллы, его фото — ещё 
 
 test('кухонный таймер срабатывает уведомлением', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
-  assert.ok(s.setKitchenTimer(60));
+  assert.ok(s.setKitchenTimer(15)); // 15 кухонных минут = 60 секунд игры
   run(s, 59);
   assert.ok(!s.alerts.some((a) => a.key === 'timer'));
   run(s, 2);

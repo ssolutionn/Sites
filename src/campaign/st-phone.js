@@ -1,5 +1,5 @@
 // Телефон: сообщения, список покупок, заказ доставки, получение за кадром.
-import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR } from './data.js';
+import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR, kitchenSec } from './data.js';
 import { CLAYOUT } from './layout.js';
 import { FEED_POSTS, FEED_BY_ID, FEED_AUTHORS, MY_POST, FEED_TUNE, COMMENT_REPLIES, COMMENT_REACTIONS, repliedVerb } from './feed-data.js';
 import { CHAT_REPLIES, CHAT_REACTIONS, CROWD_COMMENTS } from './chatter.js';
@@ -192,10 +192,12 @@ export const phoneMethods = {
   },
 
   // ---------- таймеры кухни ----------
-  setKitchenTimer(seconds) {
-    const sec = Math.max(10, Math.min(600, Math.round(seconds)));
-    this.kitchenTimers.push({ id: this._id(), end: this.t + sec, total: sec });
-    this._emit('timerSet', { sec });
+  /** Таймер в кухонных минутах (0.11): 10 мин на таймере — те же 10 минут на часах кухни, 40 секунд игры. */
+  setKitchenTimer(minutes) {
+    const min = Math.max(1, Math.min(120, Math.round(minutes)));
+    const sec = kitchenSec(min);
+    this.kitchenTimers.push({ id: this._id(), end: this.t + sec, total: sec, min });
+    this._emit('timerSet', { sec, min });
     return true;
   },
 
@@ -208,7 +210,7 @@ export const phoneMethods = {
     for (const x of this.kitchenTimers) {
       if (x.done || this.t < x.end) continue;
       x.done = true;
-      this._alert('timer', `Таймер сработал`, { until: this.t + 6, detail: `Таймер на ${Math.round(x.total / 60) || 1} мин сработал` });
+      this._alert('timer', `Таймер сработал`, { until: this.t + 6, detail: `Таймер на ${x.min} мин сработал` });
       this._emit('timerDone', { id: x.id });
     }
     this.kitchenTimers = this.kitchenTimers.filter((x) => !x.done || this.t < x.end + 8);

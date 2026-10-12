@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KitchenSession, arrive, waitAction, run, startBoil } from './helpers-campaign.js';
-import { CAMPAIGN } from '../src/campaign/data.js';
+import { CAMPAIGN, kitchenSec } from '../src/campaign/data.js';
 
 function potOn(heat) {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
@@ -18,7 +18,7 @@ test('огонь выключен — вода не греется и карто
   assert.ok(b.temp < 21);
   assert.equal(b.cooked, 0);
   assert.ok(s.setHeat(0, 6));
-  run(s, 26);
+  run(s, kitchenSec(8) + 3); // огонь 6 — закипает за ~8 кухонных минут
   assert.equal(b.water, 'boil');
   assert.ok(b.cooked > 0);
 });
@@ -63,18 +63,19 @@ test('тихий огонь — плановое «убегает» не слу�
   assert.equal(s.burners[0].overflow, null);
 });
 
-test('сняла кастрюлю — огонь выключен', () => {
+test('сняла кастрюлю — огонь остаётся там, где был (0.11: сам не выключается)', () => {
   const s = potOn(6);
-  run(s, 125);
+  run(s, kitchenSec(8) + kitchenSec(25) + 2);
   assert.equal(s.burners[0].state, 'ready');
   assert.ok(s.takePot(0));
   waitAction(s);
-  assert.equal(s.burners[0].heat, 0);
+  assert.equal(s.burners[0].state, 'empty');
+  assert.equal(s.burners[0].heat, 6);
 });
 
 test('остудить под краном руками: держишь кнопку над раковиной — вода льётся, отпустила — стоит', () => {
   const s = potOn(6);
-  run(s, 125);
+  run(s, kitchenSec(8) + kitchenSec(25) + 2);
   s.takePot(0);
   waitAction(s);
   assert.ok(s.hot.potato > s.t);

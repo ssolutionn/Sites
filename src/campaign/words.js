@@ -47,3 +47,9 @@ export function gramsText(g) {
   const kg = Math.round(g / 100) / 10;
   return `${String(kg).replace('.', ',')} кг`;
 }
+
+/** «через 22 мин» / «совсем скоро»: сколько ждать в кухонных минутах (для подсказок у плиты). */
+export function kitchenIn(gameSeconds, scale) {
+  const t = kitchenMin(gameSeconds, scale);
+  return t === 'меньше минуты' ? 'совсем скоро' : `через ${t}`;
+}

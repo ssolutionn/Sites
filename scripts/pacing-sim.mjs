@@ -47,6 +47,7 @@ function catReact() {
 const think = (sec, bucket = 'cook') => tick(sec, bucket);
 function go(st) {
   catReact();
+  tendStove();
   think(PACE.stationChoice);
   if (!s.goTo(st)) throw new Error('goTo ' + st + ' ' + s.hint?.text);
   let t = 0;
@@ -313,6 +314,38 @@ function catCheck() {
     ui(() => s.playCat());
   }
 }
+// 0.11: кто следит за плитой. Между делами (при каждой смене станции) игрок смотрит на кастрюли: убегающую убавляет,
+// готовую снимает сразу (яйца переваривают за ~16 с), у свёклы после закипания делает огонь тише, пустую конфорку выключает.
+let tending = false;
+function tendStove() {
+  if (tending || !s) return;
+  tending = true;
+  try {
+    for (const b of s.burners) if (b.overflow) { go('stove'); ui(() => s.reduceHeat(b.i)); }
+    for (const b of s.burners.filter((x) => x.state === 'ready')) coolPot(b.product);
+    for (const b of s.burners) {
+      if (b.state === 'boiling' && b.water === 'boil' && b.product === 'beet' && b.heat > s.cfg.stove.simmer) { go('stove'); ui(() => s.setHeat(b.i, s.cfg.stove.simmer)); }
+    }
+    for (const b of s.burners) if (b.state === 'empty' && b.heat > 0 && s.panel === 'stove') ui(() => s.setHeat(b.i, 0));
+  } finally {
+    tending = false;
+  }
+}
+// Снять кастрюлю, выключить огонь, остудить у раковины.
+function coolPot(product) {
+  go('stove');
+  const b = s.burners.find((x) => x.product === product && x.state === 'ready');
+  if (!b) return;
+  ui(() => s.takePot(b.i));
+  ui(() => s.setHeat(b.i, 0));
+  tip('hot');
+  go('sink');
+  // под кран: положить и держать кнопку, пока не уйдёт пар
+  ui(() => s.coolPick(product));
+  s.pointer('down', 0, 0);
+  tick(s.cfg.cool.underTap + 0.2);
+  s.pointer('up', 0, 0);
+}
 // Дождаться продукта, достать, остудить у раковины.
 function boiled(product) {
   for (;;) {
@@ -322,15 +355,7 @@ function boiled(product) {
     if (b.state === 'ready') break;
     tick(0.5, 'wait');
   }
-  go('stove');
-  ui(() => s.takePot(s.burners.find((x) => x.product === product && x.state === 'ready').i));
-  tip('hot');
-  go('sink');
-  // под кран: положить и держать кнопку, пока не уйдёт пар
-  ui(() => s.coolPick(product));
-  s.pointer('down', 0, 0);
-  tick(s.cfg.cool.underTap + 0.2);
-  s.pointer('up', 0, 0);
+  coolPot(product);
 }
 function stir(turns = 4.2) {
   tip('bowl');
