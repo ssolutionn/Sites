@@ -1,6 +1,7 @@
 // Сохранение кампании в localStorage: версия формата, дни, лучшие оценки, настройки.
 // Повреждённые или устаревшие данные не роняют игру.
 import { CAMPAIGN, DAYS, TOYS, GIFTS, TOY_SETS } from './data.js';
+import { sanitizeNick, isRealNick } from '../stream-nick.js';
 
 export const SAVE_KEY = 'novogodnyaya-sueta.campaign';
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}.backup`;
@@ -25,6 +26,7 @@ export function emptySave(version = CAMPAIGN.saveVersion) {
     toys: [], // ёлочные игрушки: { id, slot } — slot на ёлке или null (в коробке)
     gifts: {}, // id дня → номера открытых подарков
     sets: [], // 0.10: собранные наборы игрушек (награда за набор — один раз)
+    stream: { best: {}, viewers: [] }, // 0.11: отдельный зачёт дней с чатом (best[индекс дня]) и самые активные зрители для финального стола
   };
 }
 
@@ -85,8 +87,31 @@ export function parseSave(raw, { version = CAMPAIGN.saveVersion, migrations = MI
   if (data.gifts && typeof data.gifts === 'object')
     for (const [k, v] of Object.entries(data.gifts)) if (Array.isArray(v)) base.gifts[k] = v.filter((i) => Number.isInteger(i) && i >= 0 && i < GIFTS.perDay);
   base.sets = Array.isArray(data.sets) ? [...new Set(data.sets.filter((id) => TOY_SETS[id]))] : [];
+  base.stream = normalizeStream(data.stream);
   base.finished = base.days.every((d) => d.completed);
   return { save: base, status: migrated ? 'migrated' : 'ok' };
+}
+
+/**
+ * 0.11: зачёт с чатом и зрители из сохранения. Битое отбрасывается; ники при чтении очищаются заново (сохранение правили руками —
+ * на экран всё равно попадёт только очищенное).
+ */
+export function normalizeStream(raw) {
+  const out = { best: {}, viewers: [] };
+  if (!raw || typeof raw !== 'object') return out;
+  if (raw.best && typeof raw.best === 'object')
+    for (const [k, v] of Object.entries(raw.best)) {
+      const i = Number(k);
+      if (!Number.isInteger(i) || i < 0 || i >= DAYS.length || !v || !Number.isFinite(v.D)) continue;
+      out.best[i] = { D: v.D, stars: Number.isFinite(v.stars) ? v.stars : 0, time: Number.isFinite(v.time) ? v.time : null, events: Number.isInteger(v.events) && v.events >= 0 ? v.events : 0 };
+    }
+  if (Array.isArray(raw.viewers))
+    for (const v of raw.viewers.slice(0, 50)) {
+      if (!v || typeof v.nick !== 'string' || !Number.isFinite(v.n) || v.n <= 0) continue;
+      const nick = sanitizeNick(v.nick);
+      if (isRealNick(nick) && !out.viewers.some((x) => x.nick === nick)) out.viewers.push({ nick, n: Math.round(v.n) });
+    }
+  return out;
 }
 
 function validResult(r) {

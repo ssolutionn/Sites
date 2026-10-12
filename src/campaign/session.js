@@ -16,6 +16,7 @@ import { phoneMethods } from './st-phone.js';
 import { extraMethods, BOILED } from './st-extra.js';
 import { radioMethods } from './st-radio.js';
 import { treeMethods } from './st-tree.js';
+import { streamMethods } from './st-stream.js';
 import { RADIO } from './radio-data.js';
 import { CHATTER } from './chatter.js';
 
@@ -1054,7 +1055,7 @@ export class KitchenSession {
 }
 
 // Методы станций в отдельных модулях — общий источник состояния остаётся один.
-Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods);
+Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods, streamMethods);
 
 export function emptyBurner(i) {
   // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне

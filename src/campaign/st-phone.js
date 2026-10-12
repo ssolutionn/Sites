@@ -63,7 +63,7 @@ export const phoneMethods = {
   // Одновременно в пути — один ответ на пост; задержка и выбор фразы детерминированы (без общего ГСЧ дня).
   _queueCommentReply(it, to, text) {
     if (this.commentQueue.some((q) => q.key === it.key)) return;
-    const friends = this.postComments(it.key).filter((c) => c.who !== 'me');
+    const friends = this.postComments(it.key).filter((c) => c.who !== 'me' && FEED_AUTHORS[c.who]); // зрители стрима (0.11) — не друзья: ответа от них нет
     const who = to ?? (it.mine ? friends.at(-1)?.who ?? 'mom' : it.author);
     const pool = COMMENT_REPLIES[who];
     if (!pool?.length) return;
@@ -79,6 +79,7 @@ export const phoneMethods = {
   },
 
   _updateCommentReplies() {
+    this._updateViewerComments();
     for (const q of this.commentQueue) {
       if (this.t < q.at) continue;
       q.done = true;
@@ -180,6 +181,7 @@ export const phoneMethods = {
     const d = this.dishes[dishId];
     if (!d?.done || this.phone.posts.some((p) => p.dishId === dishId)) return false;
     this.phone.posts.unshift({ id: this._id(), dishId, t: this.t, Q: d.Q });
+    this._viewerReacts(this.phone.posts[0]); // 0.11: зритель стрима оставит заготовленный комментарий (st-stream.js)
     this._earn(BONUS.perPhoto, `Фото: ${d.recipe.name}`);
     this._emit('posted', { dishId });
     return true;
@@ -380,10 +382,10 @@ export const phoneMethods = {
     if (next === o.status) return;
     o.status = next;
     this._emit('orderStatus', { status: next });
-    if (next === 'onTheWay') this.pushMessage('Доставка', 'Курьер в пути.');
+    if (next === 'onTheWay') this.pushMessage('Доставка', `${this.courierName()} в пути.`);
     if (next === 'arrived') {
-      this.pushMessage('Доставка', 'Курьер приехал. Можно забрать заказ.');
-      this._alert('delivery', 'Курьер у двери', { action: 'collect', dismissable: false, detail: 'Курьер приехал — забери заказ' });
+      this.pushMessage('Доставка', `${this.courierName()} приехал. Можно забрать заказ.`);
+      this._alert('delivery', `${this.courierName()} у двери`, { action: 'collect', dismissable: false, detail: 'Курьер приехал — забери заказ' });
     }
   },
 

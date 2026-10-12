@@ -1,6 +1,7 @@
 // Что из прохождения попадает в сохранение кампании (0.8). Чистые функции: main.js только вызывает их и пишет в хранилище.
 // Правило: испытания и практика кампанию не трогают; баллы дня попадают в сохранение только итогом дня.
-import { DECOR, TOYS, GIFTS, TOY_SETS } from './data.js';
+import { DECOR, TOYS, GIFTS, TOY_SETS, CAMPAIGN } from './data.js';
+import { mergeViewers } from './stream-rules.js';
 
 /** Отметить, что идёт день кампании (чтобы после перезагрузки начать его заново). Возвращает true, если сохранение изменилось. */
 export function markInProgress(saveData, { dayId, practice = false, challenge = false }) {
@@ -54,4 +55,28 @@ export function applyTreeEvent(saveData, e, { toys = null, practice = false, cha
   } else if (!['toyHung', 'toyTaken', 'toysKnocked', 'toysPicked'].includes(e.type)) return false;
   if (toys) saveData.toys = toys.filter((t) => TOYS[t.id]).map((t) => ({ id: t.id, slot: Number.isInteger(t.slot) ? t.slot : null }));
   return true;
+}
+
+/**
+ * 0.11, режим стримера: день, сыгранный с чатом, — отдельный зачёт. Кампанию он не трогает вовсе (как испытание): ни best, ни last,
+ * ни медалей, звёзд, времени, баллов, декора, открытия следующего дня. Лучший результат с чатом по дню — saveData.stream.best[dayIndex].
+ * Возвращает { prev, best, isBest, events } для строки «С чатом: …» в итоге дня.
+ */
+export function recordStreamDay(saveData, dayIndex, result) {
+  saveData.stream ??= { best: {}, viewers: [] };
+  saveData.stream.best ??= {};
+  const prev = saveData.stream.best[dayIndex] ?? null;
+  const rec = { D: result.D, stars: result.stars ?? 0, time: Number.isFinite(result.time) ? result.time : null, events: result.stats?.chatEvents ?? 0 };
+  const isBest = !prev || rec.D > prev.D;
+  if (isBest) saveData.stream.best[dayIndex] = rec;
+  return { prev, best: isBest ? rec : prev, isBest, events: rec.events };
+}
+
+/** Самые активные зрители (для гостей финального стола): добавить активность { ник: голоса } к сохранённым и оставить лучших. */
+export function rememberViewers(saveData, counts, keep = CAMPAIGN.stream.viewers.keep) {
+  saveData.stream ??= { best: {}, viewers: [] };
+  const merged = mergeViewers(saveData.stream.viewers, counts, keep);
+  const changed = JSON.stringify(merged) !== JSON.stringify(saveData.stream.viewers);
+  saveData.stream.viewers = merged;
+  return changed;
 }
