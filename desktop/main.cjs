@@ -1,11 +1,12 @@
 // Десктопная оболочка «Симулятора новогодней суеты» (macOS, Windows).
 // Игра — та же веб-сборка dist/, загружается из файлов приложения через протокол app://,
 // чтобы работали ES-модули, localStorage и звук без веб-сервера.
-const { app, BrowserWindow, Menu, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const fs = require('node:fs');
+const { registerStreamIpc } = require('./stream-ipc.cjs');
 // в собранном приложении игра лежит рядом (game/), при запуске из исходников — в ../dist
 const GAME_DIR = fs.existsSync(path.join(__dirname, 'game')) ? path.join(__dirname, 'game') : path.join(__dirname, '..', 'dist');
 
@@ -23,7 +24,7 @@ function createWindow() {
     backgroundColor: '#f3e6cf',
     show: false,
     // в собранной игре консоль разработчика выключена: через неё правятся баллы и сохранение (в запуске из исходников она нужна)
-    webPreferences: { contextIsolation: true, sandbox: true, autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false, devTools: !app.isPackaged },
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: false, devTools: !app.isPackaged },
   });
   win.once('ready-to-show', () => win.show());
   // внешние ссылки — в системный браузер
@@ -43,7 +44,7 @@ function smoke(win) {
   });
   win.webContents.on('did-finish-load', () => {
     setTimeout(async () => {
-      const state = await win.webContents.executeJavaScript(`({ mode: window.__sueta?.mode, ls: (() => { try { localStorage.setItem('t','1'); return localStorage.getItem('t'); } catch (e) { return String(e); } })(), webgl: !!document.createElement('canvas').getContext('webgl2') })`);
+      const state = await win.webContents.executeJavaScript(`({ mode: window.__sueta?.mode, ls: (() => { try { localStorage.setItem('t','1'); return localStorage.getItem('t'); } catch (e) { return String(e); } })(), webgl: !!document.createElement('canvas').getContext('webgl2'), bridge: typeof window.suetaDesktop?.publishStream, overlay: typeof window.suetaDesktop?.overlay?.configure })`);
       const img = await win.webContents.capturePage();
       fs.writeFileSync(process.env.SUETA_SMOKE, img.toPNG());
       console.log('SMOKE', JSON.stringify({ state, errors }));
@@ -63,7 +64,11 @@ function buildMenu() {
   );
 }
 
+// режим стримера: сервер оверлея для OBS (127.0.0.1) включает и настраивает сама игра через preload.cjs
+let streamIpc = null;
+
 app.whenReady().then(() => {
+  streamIpc = registerStreamIpc({ ipcMain, staticDir: GAME_DIR });
   protocol.handle('app', (req) => {
     const { pathname } = new URL(req.url);
     const file = path.normalize(path.join(GAME_DIR, decodeURIComponent(pathname)));
@@ -79,3 +84,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => {
+  streamIpc?.stop();
+});

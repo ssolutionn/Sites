@@ -1,0 +1,45 @@
+/* Оверлей чата для OBS (Browser Source): прозрачный фон, крупный читаемый текст. Шрифт Nunito — из репозитория. */
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 200 1000; font-display: swap; src: url(../ui/fonts/nunito-cyrillic.woff2) format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 200 1000; font-display: swap; src: url(../ui/fonts/nunito-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+:root {
+  --s: 1; /* размер: ?scale=1.25 */
+  --ink: #fffaf2;
+  --ink-2: rgba(255, 250, 242, 0.72);
+  --glass: rgba(26, 21, 18, 0.82);
+  --line: rgba(255, 255, 255, 0.16);
+  --gold: #f2b544;
+  --chaos: #e2736a;
+  --help: #4cc28a;
+  --font: 'Nunito', ui-rounded, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+html, body { margin: 0; background: transparent; overflow: hidden; }
+body { font-family: var(--font); color: var(--ink); font-size: calc(26px * var(--s)); line-height: 1.25; }
+.hidden { display: none !important; }
+
+#ov { position: fixed; left: calc(20px * var(--s)); top: calc(20px * var(--s)); width: calc(500px * var(--s)); display: flex; flex-direction: column; gap: calc(12px * var(--s)); }
+body.right #ov { left: auto; right: calc(20px * var(--s)); }
+
+.card { background: var(--glass); border: 1px solid var(--line); border-radius: calc(22px * var(--s)); padding: calc(16px * var(--s)) calc(20px * var(--s)); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+.head { display: flex; justify-content: space-between; align-items: baseline; gap: calc(12px * var(--s)); }
+.title { font-weight: 900; font-size: 1.05em; }
+.timer { font-weight: 1000; font-size: 1.5em; font-variant-numeric: tabular-nums; color: var(--gold); line-height: 1; }
+.timer.pending, .timer.paused { color: var(--ink-2); }
+.sub { display: flex; justify-content: space-between; gap: calc(12px * var(--s)); margin: calc(4px * var(--s)) 0 calc(10px * var(--s)); font-size: 0.68em; font-weight: 700; color: var(--ink-2); }
+.dot { display: inline-block; width: 0.5em; height: 0.5em; border-radius: 50%; margin-right: 0.4em; background: var(--help); vertical-align: 0.05em; }
+.dot.connecting { background: var(--gold); }
+.dot.offline { background: var(--chaos); }
+.row { display: grid; grid-template-columns: 6.2em 1fr 1.6em; align-items: center; gap: calc(10px * var(--s)); margin: calc(7px * var(--s)) 0; font-weight: 800; }
+.row .bar { height: 0.55em; border-radius: 0.3em; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.row .bar i { display: block; height: 100%; width: 0; background: var(--chaos); transition: width 0.3s; }
+.row.help .bar i { background: var(--help); }
+.row b { text-align: right; font-variant-numeric: tabular-nums; }
+.meter { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(10px * var(--s)); margin-top: calc(12px * var(--s)); font-size: 0.7em; font-weight: 800; color: var(--ink-2); }
+.meter .bar { display: flex; height: 0.7em; border-radius: 0.4em; overflow: hidden; background: rgba(255, 255, 255, 0.14); }
+.meter .bar i { background: var(--chaos); transition: width 0.3s; }
+.meter .bar u { background: var(--help); text-decoration: none; transition: width 0.3s; }
+.result { margin-top: calc(12px * var(--s)); padding: calc(8px * var(--s)) calc(12px * var(--s)); border-radius: calc(12px * var(--s)); background: rgba(242, 181, 68, 0.2); color: #ffe2a6; font-size: 0.72em; font-weight: 800; }
+.event { background: rgba(163, 42, 47, 0.92); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: calc(18px * var(--s)); padding: calc(12px * var(--s)) calc(18px * var(--s)); font-weight: 900; font-size: 0.9em; animation: ev-in 0.35s ease-out; }
+.event.help { background: rgba(31, 92, 70, 0.94); }
+@keyframes ev-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
