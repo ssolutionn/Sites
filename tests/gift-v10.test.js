@@ -100,8 +100,8 @@ test('Esc посреди — подарок отложен под ёлку, ст
 });
 
 test('пока подарок в руках, ёлку не трогаем: повесить игрушку нельзя', () => {
-  const s = atTree({ toys: [{ id: 'ballRed', slot: null }] });
+  const s = atTree({ toys: [{ id: 'ballRed', at: null }] });
   s.startGift(0);
   assert.equal(s.pickToy(1), false);
-  assert.equal(s.treeClick(0), false);
+  assert.equal(s.treeClick({ x: 0, y: 0.5, z: 0.5 }), false);
 });

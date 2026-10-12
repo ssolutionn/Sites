@@ -5,10 +5,12 @@ import assert from 'node:assert/strict';
 import { KitchenSession, arrive } from './helpers-campaign.js';
 import { TOYS, TOY_SETS, BAZAAR, DAYS } from '../src/campaign/data.js';
 import { dealToy } from '../src/campaign/st-tree.js';
-import { TREE_SLOTS } from '../src/campaign/layout.js';
+import { slotToAt } from '../src/campaign/tree-geo.js';
 import { applyTreeEvent } from '../src/campaign/persist.js';
 import { emptySave, parseSave } from '../src/campaign/save.js';
 
+// 0.11: игрушки висят в любой точке ёлки; для тестов берём точки бывших мест TREE_SLOTS
+const P = (i) => slotToAt(i);
 const rich = (dayIndex = 0, extra = {}) => new KitchenSession({ dayIndex, seed: 1, bonus: 1000, ...extra });
 
 test('каждая игрушка базара входит ровно в один набор, награда за набор меньше его цены', () => {
@@ -51,14 +53,14 @@ test('весь набор на ёлке — разовая награда бал
   set.toys.forEach((id, k) => {
     const t = s.toys.find((x) => x.id === id && x.slot == null);
     s.pickToy(t.uid);
-    s.treeClick(k);
+    s.treeClick(P(k));
   });
   assert.equal(s.bonus.points, before + set.reward);
   const ev = s.drain().find((e) => e.type === 'setComplete');
   assert.deepEqual([ev.id, ev.n], ['classic', set.reward]);
   assert.equal(s.setProgress('classic').done, true);
-  s.treeClick(0); // снять
-  s.treeClick(0); // повесить обратно
+  s.treeClick(P(0)); // снять
+  s.treeClick(P(0)); // повесить обратно
   assert.equal(s.bonus.points, before + set.reward);
   assert.equal(s.drain().some((e) => e.type === 'setComplete'), false);
   const sv = emptySave();
@@ -69,47 +71,47 @@ test('весь набор на ёлке — разовая награда бал
 });
 
 test('собранный в прошлые дни набор не награждается снова', () => {
-  const toys = TOY_SETS.forest.toys.map((id, i) => ({ id, slot: i }));
+  const toys = TOY_SETS.forest.toys.map((id, i) => ({ id, at: P(i) }));
   const s = rich(1, { toys, setsDone: ['forest'] });
   assert.equal(s.setProgress('forest').done, true);
   assert.equal(s.setProgress('forest').hung, 3);
   arrive(s, 'tree');
-  s.treeClick(0);
-  s.treeClick(TREE_SLOTS.length - 1);
+  s.treeClick(P(0));
+  s.treeClick(P(17));
   assert.equal(s.drain().some((e) => e.type === 'setComplete'), false);
 });
 
-// 0.10 Ф5: наряжать руками — перетаскивание. Отпустил над свободной веткой — висит; мимо — вернулась туда, откуда взяли.
-test('перетащить игрушку из коробки на ветку; мимо ёлки — назад в коробку', () => {
+// 0.10 Ф5: наряжать руками — перетаскивание. Отпустил над свободной точкой — висит; мимо — вернулась туда, откуда взяли.
+test('перетащить игрушку из коробки на ёлку; мимо ёлки — назад в коробку', () => {
   const s = rich(0);
   s.buyToy('ballRed');
   s.buyToy('cone');
   arrive(s, 'tree');
   const [a, b] = s.toysInBox();
   s.pickToy(a.uid);
-  assert.ok(s.dropToy(5));
-  assert.equal(a.slot, 5);
+  assert.ok(s.dropToy(P(5)));
+  assert.deepEqual(a.at, P(5));
   assert.equal(s.treeHand, null);
   s.pickToy(b.uid);
   assert.equal(s.dropToy(null), false);
-  assert.equal(b.slot, null);
+  assert.equal(b.at, null);
   assert.equal(s.treeHand, null, 'вернулась в коробку');
   assert.ok(s.drain().some((e) => e.type === 'toyReturned'));
 });
 
-test('висящую игрушку перетащили на занятую ветку — она возвращается на свою', () => {
+test('висящую игрушку перетащили вплотную к соседней — она возвращается на своё место', () => {
   const s = rich(0);
   s.buyToy('ballRed');
   s.buyToy('cone');
   arrive(s, 'tree');
   const [a, b] = s.toysInBox();
   s.pickToy(a.uid);
-  s.dropToy(1);
+  s.dropToy(P(1));
   s.pickToy(b.uid);
-  s.dropToy(2);
-  s.treeClick(1); // взяли с ветки 1
+  s.dropToy(P(2));
+  s.treeClick(P(1)); // взяли с места 1
   assert.equal(s.treeHand, a.uid);
-  assert.equal(s.dropToy(2, 1), false); // ветка 2 занята — назад на 1
-  assert.equal(a.slot, 1);
+  assert.equal(s.dropToy(P(2)), false); // вплотную к соседней — назад на своё место
+  assert.deepEqual(a.at, P(1));
   assert.equal(s.treeHand, null);
 });

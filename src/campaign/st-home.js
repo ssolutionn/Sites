@@ -11,6 +11,7 @@ const MISCHIEF = {
   garland: ['Кот тянется к гирлянде', 'Кот тянется к гирлянде. Помаши на него мышью, крикни или отгони сама'],
   star: ['Кот лезет на ёлку', 'Кот лезет на ёлку. Помаши на него мышью, крикни или отгони сама'],
   toys: ['Кот сбивает игрушки', 'Кот сбивает игрушки с ёлки. Помаши на него мышью, крикни или отгони сама'],
+  tree: ['Кот раскачивает ёлку', 'Кот раскачивает ёлку — сейчас уронит! Помаши на него мышью, крикни или отгони сама'],
 };
 
 export const homeMethods = {
@@ -616,11 +617,15 @@ export const homeMethods = {
     if (!this.garland.broken) opts.push('garland');
     if (!this.star.broken) opts.push('star');
     if (this._toysOnTree?.() > 0) opts.push('toys');
+    if (this._treeCanFall?.()) opts.push('tree');
+    const wts = c.mischiefWeights ?? {};
+    opts.splice(0, opts.length, ...opts.filter((k) => (wts[k] ?? 1) > 0)); // вес 0 — такую шалость кот не затевает
     if (!opts.length) {
       n.boredom = c.afterMischief; // ломать уже нечего — кот поскучал и улёгся
       return false;
     }
-    const kind = opts[Math.floor(this.rng.next() * opts.length)];
+    let r = this.rng.next() * opts.reduce((a, k) => a + (wts[k] ?? 1), 0);
+    const kind = opts.find((k) => (r -= wts[k] ?? 1) < 0) ?? opts[opts.length - 1];
     const w = rand(this.rng, c.mischiefWindow);
     this.cat = { state: 'mischief', kind, deadline: this.t + w, startedAt: this.t };
     this._alert('cat', MISCHIEF[kind][0], { deadline: this.t + w, window: w, action: 'shoo', detail: MISCHIEF[kind][1] });
@@ -695,6 +700,7 @@ export const homeMethods = {
       this._removeAlert('cat');
       this.cat = { state: 'home' };
       if (c.kind === 'toys') this._knockToys?.();
+      else if (c.kind === 'tree') this._dropTree?.();
       else this.lightsOff(c.kind, { by: 'cat' });
       const n = this.catNeeds;
       n.boredom = this.cfg.cat.afterMischief; // набезобразничал — на время успокоился

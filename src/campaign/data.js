@@ -12,6 +12,12 @@ export const CAMPAIGN = {
   // 0.10: подарок открывают руками (st-tree.js, локальные метры подарка 24×24 см): бант — зажать в радиусе bowR и
   // потянуть на bowPull; бумага — тереть по коробке (|x|,|z| ≤ box) путь tearPath; крышка — сдвинуть на lidSlide.
   gift: { bowR: 0.07, bowPull: 0.1, maxStep: 0.2, box: 0.13, tearPath: 0.6, lidSlide: 0.12, reveal: 1.6 }, // reveal — сколько секунд камера держит открытый подарок
+  // 0.11: игрушки висят в любой точке ёлки (tree-geo.js): не ближе minDist друг к другу, не больше maxToys; tol — допуск «точка на ёлке»;
+  // pickR — радиус, в котором клик по ёлке цепляет висящую игрушку; fallTilt — наклон упавшей ёлки (°), liftDone — с какого наклона она считается стоящей
+  tree: { maxToys: 60, minDist: 0.08, tol: 0.03, pickR: 0.09, hookOut: 0.05, fallTilt: 75, liftDone: 6 },
+  // 0.11: мишура — нитка из точек на поверхности ёлки, длина списывается с мотка (st-tree.js). Метры; точки округляются до round,
+  // между соседними точками не меньше step; рывок мыши дальше maxJump обрывает нитку и начинает новую
+  tinsel: { roll: 2, step: 0.03, maxThreads: 30, maxPoints: 80, round: 0.01, maxJump: 0.4, colors: ['gold', 'silver', 'red', 'blue'] },
   keys: { reach: 0.75, frontZ: 1.7, urgentBias: 0.3 }, // 0.10: WASD — ходьба той же скоростью, к камере не дальше frontZ (ниже — ноги уходят за кадр 16:9); пробел — станция в пределах reach м, срочная «ближе» на urgentBias
   knifeDuration: 0.22, // кружочки: нож прошёл росчерком — короткий удар до доски
   // Доска: единица u = 1 см продукта, целевой кубик оливье — 1 см (st-board.js, raster-cut.js)
@@ -64,7 +70,6 @@ export const CAMPAIGN = {
     dilute: 3.5, // разбавить пересоленное
     feedCat: 1.5,
     playCat: 1,
-    pickToys: 1.2, // поднять сбитые котом игрушки
   },
 
   // Ручные механики
@@ -98,6 +103,10 @@ export const CAMPAIGN = {
     boredStart: 15, boredRate: 0.45, boredRateFirstDay: 0.3, wantPlayAt: 50, mischiefAt: 85, mischiefWindow: [12, 16], afterMischief: 25, afterShooMischief: -30,
     // прогнать — помахать мышью над котом в обзоре: reversals разворотов за window секунд, каждый не короче minAmp (доля высоты экрана)
     wave: { reversals: 3, minAmp: 0.035, window: 2.5, hitRadius: 0.08 },
+    // 0.11: что кот затеял от скуки — вес шалости при выборе (0 — не затевает); tree — роняет ёлку целиком;
+    // toyBreakChance — шанс, что стеклянная игрушка (шар, сосулька) разобьётся, упав на пол
+    mischiefWeights: { garland: 3, star: 3, toys: 3, tree: 2 },
+    toyBreakChance: 0.3,
   },
   phone: { typingAhead: 3, replyDelay: 4, maxChatLength: 120, maxCommentLength: 140, commentPreview: 6, doubleTapMs: 350, commentReply: [5, 9] }, // commentReply: через сколько секунд друг отвечает на комментарий (0.10)
   // сообщения «просто так» (chatter.js): первое через start с, дальше раз в every с; в первый день реже
@@ -133,7 +142,7 @@ export const CAMPAIGN = {
   scoring: {
     weights: { prep: 0.3, comp: 0.2, asm: 0.2, taste: 0.15, wish: 0.15 },
     day: { dishes: 0.75, order: 0.15, pace: 0.1 },
-    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, starLeft: 6, toysLeft: 4, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
+    order: { theft: 6, spillEvent: 6, puddleLeft: 15, garlandLeft: 10, starLeft: 6, toysLeft: 4, treeLeft: 10, radioLeft: 8, dirtyLeft: 4, hotCut: 3 },
   },
 };
 
@@ -187,17 +196,27 @@ export const DECOR = {
 
 // Ёлочные игрушки (0.9, пункт 24 владельца): покупают в «Ёлочном базаре» (0.10) за баллы или находят в подарках под ёлкой;
 // вешают на ёлку в крупном плане. Ёлка наряжается от дня к дню (save.toys). shape — модель в src/view/toys.js.
+// 0.11: rub — цена в рублях в доставке (покупка в «Ёлочном базаре» — за очки, price); glass — стеклянная: может разбиться, если ёлка упала.
 export const TOYS = {
-  ballRed: { name: 'Красный шар', icon: '🔴', price: 25, color: 0xd7262b, shape: 'ball' },
-  ballBlue: { name: 'Синий шар', icon: '🔵', price: 25, color: 0x1e6fd9, shape: 'ball' },
-  ballGold: { name: 'Золотой шар', icon: '🟡', price: 35, color: 0xe6b548, shape: 'ball' },
-  icicle: { name: 'Сосулька', icon: '🧊', price: 30, color: 0xcfefff, shape: 'icicle' },
-  cone: { name: 'Шишка', icon: '🌰', price: 30, color: 0x9a6a3a, shape: 'cone' },
-  snowflake: { name: 'Снежинка', icon: '❄️', price: 40, color: 0xf4fbff, shape: 'flake' },
-  bell: { name: 'Колокольчик', icon: '🔔', price: 40, color: 0xf2c14e, shape: 'bell' },
-  bird: { name: 'Птичка на прищепке', icon: '🐦', price: 50, color: 0xff8a3d, shape: 'bird' },
-  santa: { name: 'Дед Мороз', icon: '🎅', price: 60, color: 0xd7262b, shape: 'figure' },
-  snowmaiden: { name: 'Снегурочка', icon: '👧', price: 60, color: 0x4f9fe0, shape: 'figure' },
+  ballRed: { name: 'Красный шар', icon: '🔴', price: 25, rub: 59, glass: true, color: 0xd7262b, shape: 'ball' },
+  ballBlue: { name: 'Синий шар', icon: '🔵', price: 25, rub: 59, glass: true, color: 0x1e6fd9, shape: 'ball' },
+  ballGold: { name: 'Золотой шар', icon: '🟡', price: 35, rub: 79, glass: true, color: 0xe6b548, shape: 'ball' },
+  icicle: { name: 'Сосулька', icon: '🧊', price: 30, rub: 69, glass: true, color: 0xcfefff, shape: 'icicle' },
+  cone: { name: 'Шишка', icon: '🌰', price: 30, rub: 69, color: 0x9a6a3a, shape: 'cone' },
+  snowflake: { name: 'Снежинка', icon: '❄️', price: 40, rub: 99, color: 0xf4fbff, shape: 'flake' },
+  bell: { name: 'Колокольчик', icon: '🔔', price: 40, rub: 99, color: 0xf2c14e, shape: 'bell' },
+  bird: { name: 'Птичка на прищепке', icon: '🐦', price: 50, rub: 129, color: 0xff8a3d, shape: 'bird' },
+  santa: { name: 'Дед Мороз', icon: '🎅', price: 60, rub: 149, color: 0xd7262b, shape: 'figure' },
+  snowmaiden: { name: 'Снегурочка', icon: '👧', price: 60, rub: 149, color: 0x4f9fe0, shape: 'figure' },
+};
+
+// 0.11: мишура продаётся мотками (CAMPAIGN.tinsel.roll метров): за очки в «Ёлочном базаре» (price) и за рубли в доставке (rub).
+// color — цвет ленты в сцене (src/view/tinsel.js).
+export const TINSEL = {
+  gold: { name: 'Золотая мишура', icon: '🟡', price: 45, rub: 119, color: 0xf2c14e },
+  silver: { name: 'Серебряная мишура', icon: '⚪', price: 40, rub: 99, color: 0xdfe6ee },
+  red: { name: 'Красная мишура', icon: '🔴', price: 30, rub: 79, color: 0xd7262b },
+  blue: { name: 'Синяя мишура', icon: '🔵', price: 30, rub: 79, color: 0x2b6fdc },
 };
 
 // 0.10: наборы игрушек «Ёлочного базара». Повесил на ёлку весь набор разом — разовая награда баллами (save.sets).

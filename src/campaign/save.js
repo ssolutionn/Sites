@@ -1,6 +1,7 @@
 // Сохранение кампании в localStorage: версия формата, дни, лучшие оценки, настройки.
 // Повреждённые или устаревшие данные не роняют игру.
-import { CAMPAIGN, DAYS, TOYS, GIFTS, TOY_SETS } from './data.js';
+import { CAMPAIGN, DAYS, TOYS, GIFTS, TOY_SETS, TINSEL } from './data.js';
+import { cleanAt, slotToAt } from './tree-geo.js';
 
 export const SAVE_KEY = 'novogodnyaya-sueta.campaign';
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}.backup`;
@@ -22,7 +23,9 @@ export function emptySave(version = CAMPAIGN.saveVersion) {
     finished: false,
     bonus: 0, // баллы бонусной программы
     decor: [], // купленный декор кухни
-    toys: [], // ёлочные игрушки: { id, slot } — slot на ёлке или null (в коробке)
+    toys: [], // ёлочные игрушки: { id, at } — at: {x, y, z} на ёлке (tree-geo.js) или null (в коробке); до 0.11 было slot
+    tinsel: [], // 0.11: мишура на ёлке — { color, pts: [[x, y, z], …] }, точки до 0,01 м
+    tinselRolls: {}, // 0.11: сколько метров мишуры осталось в мотках, { gold: 1.4, … }
     gifts: {}, // id дня → номера открытых подарков
     sets: [], // 0.10: собранные наборы игрушек (награда за набор — один раз)
   };
@@ -80,13 +83,45 @@ export function parseSave(raw, { version = CAMPAIGN.saveVersion, migrations = MI
   base.bonus = Number.isFinite(data.bonus) && data.bonus >= 0 ? Math.round(data.bonus) : 0;
   base.decor = Array.isArray(data.decor) ? data.decor.filter((x) => typeof x === 'string') : [];
   // 0.9: новые поля без смены версии — у старых сохранений их просто нет (пустая ёлка, подарки не открыты)
-  base.toys = Array.isArray(data.toys) ? data.toys.filter((t) => t && TOYS[t.id]).map((t) => ({ id: t.id, slot: Number.isInteger(t.slot) && t.slot >= 0 ? t.slot : null })) : [];
+  // 0.11: игрушка хранит точку at; старое место slot (0.10) переносится через TREE_SLOTS (tree-geo.js slotToAt)
+  base.toys = Array.isArray(data.toys) ? data.toys.filter((t) => t && TOYS[t.id]).map((t) => ({ id: t.id, at: toyAt(t) })) : [];
+  base.tinsel = cleanThreads(data.tinsel);
+  base.tinselRolls = cleanRolls(data.tinselRolls);
   base.gifts = {};
   if (data.gifts && typeof data.gifts === 'object')
     for (const [k, v] of Object.entries(data.gifts)) if (Array.isArray(v)) base.gifts[k] = v.filter((i) => Number.isInteger(i) && i >= 0 && i < GIFTS.perDay);
   base.sets = Array.isArray(data.sets) ? [...new Set(data.sets.filter((id) => TOY_SETS[id]))] : [];
   base.finished = base.days.every((d) => d.completed);
   return { save: base, status: migrated ? 'migrated' : 'ok' };
+}
+
+function toyAt(t) {
+  if (t.at != null) return cleanAt(t.at, CAMPAIGN.tree.tol);
+  return slotToAt(t.slot);
+}
+
+// Нитки мишуры из сохранения: цвет из TINSEL, ≥ 2 точек на ёлке, не больше maxPoints точек и maxThreads ниток, округление до 0,01 м.
+function cleanThreads(raw) {
+  const K = CAMPAIGN.tinsel;
+  const out = [];
+  if (!Array.isArray(raw)) return out;
+  for (const th of raw) {
+    if (out.length >= K.maxThreads) break;
+    if (!th || !TINSEL[th.color] || !Array.isArray(th.pts)) continue;
+    const pts = th.pts.slice(0, K.maxPoints).map((q) => (Array.isArray(q) ? cleanAt({ x: q[0], y: q[1], z: q[2] }, CAMPAIGN.tree.tol * 2) : null));
+    if (pts.length >= 2 && pts.every(Boolean)) out.push({ color: th.color, pts: pts.map((p) => [p.x, p.y, p.z]) });
+  }
+  return out;
+}
+
+function cleanRolls(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const c of CAMPAIGN.tinsel.colors) {
+    const v = Number(raw[c]);
+    if (Number.isFinite(v) && v > 0) out[c] = Math.round(Math.min(v, 100) * 100) / 100;
+  }
+  return out;
 }
 
 function validResult(r) {
