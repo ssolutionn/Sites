@@ -110,8 +110,9 @@ test('учёт: один заход берёт всю порцию рецепт�
   assert.equal(s.boardTasks().filter((t) => t.product === 'carrot').length, 1);
 });
 
-test('учёт: кража конкретного фрагмента сохраняет остальные, замена берёт запасную порцию и тот же контур', () => {
+test('учёт: кража конкретного фрагмента сохраняет остальные, замена берёт привезённую порцию и тот же контур', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.inventory.add('sausage', 1); // 0.11: запасной порции у дня нет — замену привозит доставка
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
   const it = s.boardCur();
@@ -417,7 +418,8 @@ test('время: духовка — готовность, окно, перег�
   assert.equal(s.dishes.chicken.done, false);
   assert.equal(s.stepDone('chicken', 'marinade'), false);
   assert.equal(s.equipment.form.clean, false);
-  assert.equal(s.inventory.available('chicken'), 1);
+  assert.equal(s.inventory.available('chicken'), 0); // 0.11: сгоревшую курицу заменяет только доставка
+  assert.equal(s.shopping().find((x) => x.id === 'chicken')?.lack, 1);
 });
 
 // ---------- 7. Доставка ----------

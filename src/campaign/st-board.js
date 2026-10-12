@@ -523,7 +523,7 @@ export const boardMethods = {
     const it = this.boardCur();
     if (!it || !it.missing.length) return false;
     if (this.inventory.available(it.product) < 1) {
-      this.setHint(`Запасной порции нет — закажи «${this.productName(it.product)}» в телефоне`);
+      this.setHint(`${this.productName(it.product)}: запас кончился — закажи в телефоне`, 3.5);
       return false;
     }
     return this._startAction('replacement', this.cfg.durations.replacement, () => {

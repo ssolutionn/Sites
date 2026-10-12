@@ -292,16 +292,18 @@ export class PhoneUI {
         <p class="fine">Один заказ за раз. Позиции подтверждённого заказа не меняются.</p></div>`;
     }
     const m = s.money();
-    const lack = Object.fromEntries(s.shopping().filter((x) => x.lack).map((x) => [x.id, x.lack]));
+    const lackList = s.shopping().filter((x) => x.lack);
+    const lack = Object.fromEntries(lackList.map((x) => [x.id, x.lack]));
+    const repl = new Set(lackList.filter((x) => x.repl).map((x) => x.id)); // 0.11: нужно для замены украденного
     const need = Object.entries(lack);
     const total = Object.entries(s.delivery.draft).reduce((a, [id, q]) => a + (PRODUCTS[id].price ?? 0) * q, 0);
-    const cat = s.catalog();
+    const cat = s.catalog().sort((a, b) => repl.has(b.id) - repl.has(a.id)); // «для замены» стоит первой
     const card = (c) => {
       const q = s.delivery.draft[c.id] ?? 0;
       const price = PRODUCTS[c.id].price ?? 0;
       const tooMuch = price > m.left + s.bonus.points && !q;
-      return `<div class="pcard ${lack[c.id] ? 'need' : ''} ${tooMuch ? 'na' : ''}"><div class="pi">${PICON[c.id] ?? '🛒'}</div><div class="pn">${esc(c.name)}</div><div class="pp">${price} ₽</div>
-        <div class="pq">${btn('−', 'draftSet', [c.id, q - 1], 'mini', q <= 0)}<span>${q}</span>${btn('+', 'draftSet', [c.id, q + 1], 'mini', q >= 6 || tooMuch)}</div>${lack[c.id] ? '<i class="tag">нужно</i>' : ''}</div>`;
+      return `<div class="pcard ${lack[c.id] ? 'need' : ''} ${repl.has(c.id) ? 'repl' : ''} ${tooMuch ? 'na' : ''}"><div class="pi">${PICON[c.id] ?? '🛒'}</div><div class="pn">${esc(c.name)}</div><div class="pp">${price} ₽</div>
+        <div class="pq">${btn('−', 'draftSet', [c.id, q - 1], 'mini', q <= 0)}<span>${q}</span>${btn('+', 'draftSet', [c.id, q + 1], 'mini', q >= 6 || tooMuch)}</div>${lack[c.id] ? `<i class="tag">${repl.has(c.id) ? 'для замены' : 'нужно'}</i>` : ''}</div>`;
     };
     const extras = STORE_EXTRAS.map((x) => `<div class="pcard na"><div class="pi">${x.icon}</div><div class="pn">${esc(x.name)}</div><div class="pp">${x.price} ₽</div><div class="pq"><span class="muted">не по карману</span></div></div>`).join('');
     const pts = s.pointsFor(total);
@@ -316,7 +318,7 @@ export class PhoneUI {
       .join('');
     return `${head}<div class="app-body shop">
       <div class="wallet-row"><span>💰 <b>${m.left} ₽</b> на сегодня</span><span>⭐ ${s.bonus.points}</span></div>
-      ${need.length ? `<div class="need-box"><b>Не хватает для рецептов</b>${need.map(([id, q]) => `<div>${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)} — ${q} шт. ${btn('В корзину', 'draftSet', [id, Math.max(q, s.delivery.draft[id] ?? 0)], 'mini primary')}</div>`).join('')}</div>` : '<div class="ok-box">✓ Всё для сегодняшних рецептов есть</div>'}
+      ${need.length ? `<div class="need-box"><b>Не хватает для рецептов</b>${need.map(([id, q]) => `<div>${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)} — ${q} шт.${repl.has(id) ? ' <i class="repl-tag">для замены</i>' : ''} ${btn('В корзину', 'draftSet', [id, Math.max(q, s.delivery.draft[id] ?? 0)], 'mini primary')}</div>`).join('')}</div>` : '<div class="ok-box">✓ Всё для сегодняшних рецептов есть</div>'}
       <h4>Продукты</h4><div class="pgrid">${cat.map(card).join('')}</div>
       <h4>К празднику</h4><div class="pgrid">${extras}</div>
       </div>

@@ -6,6 +6,7 @@ import { KitchenSession, arrive, cutCubes, waitAction } from './helpers-campaign
 
 test('замена кубика размером с кубик — дорезать не нужно, можно в миску', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.inventory.add('sausage', 1); // замену привезла доставка
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
   cutCubes(s);
@@ -20,6 +21,7 @@ test('замена кубика размером с кубик — дореза�
 
 test('крупную замену (целый брусок) всё ещё нужно дорезать', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.inventory.add('sausage', 1); // замену привезла доставка
   arrive(s, 'board');
   s.boardSelect('olivier:sausage');
   const it = s.boardCur();

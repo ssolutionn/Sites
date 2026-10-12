@@ -501,7 +501,7 @@ export const DAYS = [
     targetMinutes: 7, // 0.7: крутилки, кран и кубик 1 см — уверенный игрок ~6:30
     budget: 300,
     wishes: 0,
-    stock: { potato: 2, carrot: 2, sausage: 2, pickle: 2, egg: 2, peas: 1, mayo: 1 },
+    stock: { potato: 2, carrot: 2, sausage: 1, pickle: 2, egg: 2, peas: 1, mayo: 1 },
     dirty: [],
     events: [
       { type: 'pot', after: 'boilStart', delay: 70 },
@@ -524,7 +524,7 @@ export const DAYS = [
     targetMinutes: 6,
     budget: 400,
     wishes: 1,
-    stock: { crab: 3, egg: 2, cucumber: 1, corn: 0, mayo: 1 },
+    stock: { crab: 2, egg: 2, cucumber: 1, corn: 0, mayo: 1 },
     dirty: ['bowl'],
     events: [{ type: 'radio', at: 140 }, { type: 'star', at: 110 }],
     messages: [
@@ -570,7 +570,7 @@ export const DAYS = [
     targetMinutes: 10,
     budget: 500,
     wishes: 1,
-    stock: { potato: 2, herring: 3, onion: 1, carrot: 1, beet: 2, mayo: 1 },
+    stock: { potato: 2, herring: 2, onion: 1, carrot: 1, beet: 2, mayo: 1 },
     dirty: [],
     events: [
       { type: 'pot', after: 'boilStart', delay: 60 },
@@ -588,7 +588,7 @@ export const DAYS = [
     targetMinutes: 6,
     budget: 600,
     wishes: 1,
-    stock: { bread: 1, cheese: 1, sausage: 2, cucumber: 1, skewer: 8, mandarin: 3, apple: 1, grapes: 0 },
+    stock: { bread: 1, cheese: 1, sausage: 1, cucumber: 1, skewer: 8, mandarin: 3, apple: 1, grapes: 0 },
     dirty: [],
     events: [
       { type: 'cat', when: 'sausageOnBoard', delay: 8 },
@@ -607,7 +607,7 @@ export const DAYS = [
     targetMinutes: 6,
     budget: 600,
     wishes: 0,
-    stock: { chicken: 2, marinade: 0 },
+    stock: { chicken: 1, marinade: 0 },
     dirty: [],
     finalServe: true,
     events: [{ type: 'garland', at: 90 }, { type: 'cat', when: 'idle', at: 60 }, { type: 'star', at: 200 }],

@@ -730,7 +730,7 @@ export class CampaignUI {
         this.tipWhenFree('star');
         break;
       case 'catStole':
-        this.toast(`Кот утащил кусок (${esc(PRODUCTS[e.product ?? 'sausage'].name.toLowerCase())})! На доске — «Взять замену»`, 'bad', 3.5);
+        this.toast(`Кот утащил кусок (${esc(PRODUCTS[e.product ?? 'sausage'].name.toLowerCase())})! ${s.inventory.available(e.product ?? 'sausage') >= 1 ? 'На доске — «Взять замену»' : 'Запаса нет — закажи в телефоне'}`, 'bad', 3.5);
         this.popup('🐈 Утащил!', 'bad');
         break;
       case 'catHungry':

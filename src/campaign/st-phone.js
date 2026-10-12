@@ -305,7 +305,16 @@ export const phoneMethods = {
         need.mayo = Math.max(0, (need.mayo ?? 0) - mayoDone);
       }
     }
-    return Object.entries(need).map(([id, q]) => ({ id, name: PRODUCTS[id].name, need: q, have: Math.max(0, this.inventory.available(id)), lack: Math.max(0, q - this.inventory.available(id)) }));
+    // 0.11: кот унёс кусок, а запасной порции нет — для замены нужна ещё одна, такая позиция идёт в корзине первой
+    const repl = new Set();
+    for (const it of Object.values(this.board.items)) {
+      if (!it.missing?.length || this.inventory.available(it.product) >= 1) continue;
+      need[it.product] = (need[it.product] ?? 0) + 1;
+      repl.add(it.product);
+    }
+    return Object.entries(need)
+      .map(([id, q]) => ({ id, name: PRODUCTS[id].name, need: q, have: Math.max(0, this.inventory.available(id)), lack: Math.max(0, q - this.inventory.available(id)), repl: repl.has(id) }))
+      .sort((a, b) => b.repl - a.repl);
   },
 
   catalog() {

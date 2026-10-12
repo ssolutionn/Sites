@@ -225,6 +225,14 @@ function work(it) {
   }
   if (s.cat.state === 'theft') shoo();
   if (it.missing?.length) {
+    if (s.inventory.available(it.product) < 1) {
+      // 0.11: запасной порции нет — заказать замену, дождаться курьера и вернуться к доске (заказ один за раз)
+      if (s.delivery.order) collect();
+      order({ [it.product]: 1 });
+      collect();
+      go('board');
+      ui(() => s.boardSelect(it.key));
+    }
     ui(() => s.takeReplacement());
     if (it.body) freshCubes(it);
     else if (it.pieces) cubes(it);
@@ -385,11 +393,10 @@ function collect() {
   while (s.delivery.order && s.delivery.order.status !== 'arrived') tick(0.5, 'wait');
   ui(() => s.collectOrder(true));
   let t = 0;
-  while (s.panel !== 'bag' && t < 60) {
+  while (s.delivery.order && t < 60) { // 0.11: привезённое сразу в запасе, разбирать пакет не нужно
     tick(0.1, 'walk');
     t += 0.1;
   }
-  for (const [i, it] of s.delivery.bag.items.entries()) ui(() => s.unpack(i, PRODUCTS[it.id].storage));
 }
 function tray(dish) {
   go('tray');

@@ -375,6 +375,8 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 #phone .pcard .pq span { font-weight: 900; }
 #phone .pcard .pq .muted { font-size: 11px; color: var(--ink-2); font-weight: 700; }
 #phone .pcard.need { box-shadow: 0 0 0 2px var(--berry); }
+#phone .pcard.repl { box-shadow: 0 0 0 3px var(--gold); }
+#phone .repl-tag { font-style: normal; font-size: 12px; font-weight: 800; color: var(--gold); }
 #phone .pcard.na { opacity: 0.5; filter: grayscale(0.7); }
 #phone .pcard .tag { position: absolute; top: 6px; right: 6px; font-style: normal; font-size: 10px; font-weight: 900; color: #fff; background: var(--berry); border-radius: 8px; padding: 1px 6px; }
 #phone .cart { background: #fff; border-top: 1px solid #eee3d3; padding: 8px 12px 30px; }
