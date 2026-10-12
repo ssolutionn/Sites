@@ -11,6 +11,8 @@ import { formatFreq } from '../campaign/st-radio.js';
 import { PICON } from './icons.js';
 import { tipClosedBy } from './tip-done.js';
 import { pts } from '../campaign/words.js';
+import { settingsHtml, votesHtml, voteSig } from './stream-ui.js';
+import { tableGuests, streamSettings } from '../campaign/stream-rules.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -216,6 +218,7 @@ export class CampaignUI {
             <button data-ui="practice">🔪 Практика</button>
             <button data-ui="challenges">🏆 Испытания</button>
           </div>
+          ${CAMPAIGN.stream.enabled ? `<button class="big" data-ui="stream">📺 Режим стримера${streamSettings(save.data.settings.stream).on ? ' · включён' : ''}</button>` : ''}
           <div class="settings">
             <button class="icon" data-ui="controls" title="Управление">⌨</button>
             <button class="icon" data-ui="mute" title="Звук (M)">${this.app.isMuted() ? '🔇' : '🔊'}</button>
@@ -241,6 +244,7 @@ export class CampaignUI {
       <tr><td><kbd>A</kbd><kbd>D</kbd> у доски</td><td>Повернуть доску</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Закрыть рецепт, отойти от места, иначе пауза</td></tr>
       <tr><td><kbd>M</kbd></td><td>Звук</td></tr>
+      <tr><td><kbd>P</kbd></td><td>Пауза чата (режим стримера)</td></tr>
     </table>`;
   }
 
@@ -354,7 +358,7 @@ export class CampaignUI {
         return `<div class="dish-res"><div class="dish-q">${r.dishes[id]}</div><div><b>${ICON[id]} ${RECIPES[id].name}</b><ul>${notes}</ul>${L ? `<p class="bp-check">📖 ${esc(L.check)}</p><button class="ghost small-btn" data-card="${id}">💾 Карточка рецепта</button>` : ''}</div></div>`;
       })
       .join('');
-    const best = r.challenge ? null : save.data.days[day.id - 1].best;
+    const best = r.challenge || r.stream ? null : save.data.days[day.id - 1].best;
     const wish = (r.wishes ?? []).map((w) => `<div>${w.met ? '✅' : '⚠️'} ${ICON[w.recipe]} «${esc(w.label)}» — ${w.met ? 'выполнено' : 'не выполнено'}</div>`).join('');
     const medals = (r.medals ?? []).map((m) => `<span class="medal" title="${esc(MEDALS[m].hint)}">${MEDALS[m].icon} ${esc(MEDALS[m].name)}</span>`).join('');
     const guests = day.dishes.map((id, k) => `<div class="guest-line">💬 <b>${['Оля', 'Дима', 'Катя', 'Серёжа'][k % 4]}:</b> ${esc(guestLine(id, r.dishes[id], r.D))}</div>`).join('');
@@ -362,6 +366,7 @@ export class CampaignUI {
       `<div class="card dialog result">
         <div class="head"><div class="emoji">${r.D >= 85 ? '🏆' : r.D >= 60 ? '🎄' : '😅'}</div><h2>День ${day.id} завершён</h2><div class="small">${esc(day.title)}</div></div>
         <div style="text-align:center"><span class="score">${r.D}</span><span class="small"> / 100 за день${best && best.D > r.D ? ` · лучший ${best.D}` : ''}</span><div class="stars big">${stars(r.stars ?? 0)}</div></div>
+        ${r.stream ? this._streamLine(r.stream) : ''}
         ${medals ? `<div class="medals-row">${medals}</div>` : ''}
         ${rows}
         ${wish ? `<div class="wishes">${wish}</div>` : ''}
@@ -370,7 +375,7 @@ export class CampaignUI {
         ${save.writeError ? `<p class="small warn">⚠ Результат дня не сохранён. ${esc(saveNote(save))}</p>` : ''}
         <p class="small">Время на кухне: ${fmt(r.time)} при ориентире ${fmt(r.par ?? 0)} — темп ${r.pace ?? '—'} (ходьба ${fmt(r.stats.walk)}, крупный план ${fmt(r.stats.closeup)}, телефон ${fmt(r.stats.phone)}). Покупки: ${r.spent ?? 0} из ${r.budget ?? 0} ₽.</p>
         <div class="actions" style="justify-content:center">
-          ${r.challenge ? '<button class="primary big" data-ui="challenges">🏆 К испытаниям</button>' : isLast ? '<button class="primary big" data-ui="final">🎄 Финальный стол</button>' : '<button class="primary big" data-ui="nextDay">Следующий день →</button>'}
+          ${r.stream ? `<button class="primary big" data-ui="menu">В меню</button>${!isLast && save.data.days[day.id]?.unlocked ? '<button class="ghost" data-ui="nextDay">Следующий день →</button>' : ''}` : r.challenge ? '<button class="primary big" data-ui="challenges">🏆 К испытаниям</button>' : isLast ? '<button class="primary big" data-ui="final">🎄 Финальный стол</button>' : '<button class="primary big" data-ui="nextDay">Следующий день →</button>'}
           <button class="ghost" data-ui="replay">Переиграть день</button>
           <button class="ghost" data-ui="journal">Журнал</button>
         </div>
@@ -401,7 +406,9 @@ export class CampaignUI {
     save.data.days.forEach((d, i) => {
       for (const id of DAYS[i].dishes) q[id] = d.best?.dishes?.[id] ?? 75;
     });
-    this.finalGuests = DISH_ORDER.map((id, k) => ({ id, who: ['Дима', 'Оля', 'Серёжа', 'Катя', 'Миша'][k % 5], text: guestLine(id, q[id], k), at: 1.5 + k * 2.2 }));
+    // 0.11: за столом — самые активные зрители стрима; зрителей меньше, чем гостей, — остальные обычные
+    const names = tableGuests(['Дима', 'Оля', 'Серёжа', 'Катя', 'Миша'], save.data.stream?.viewers, streamSettings(save.data.settings.stream).nicks);
+    this.finalGuests = DISH_ORDER.map((id, k) => ({ id, who: names[k % 5], text: guestLine(id, q[id], k), at: 1.5 + k * 2.2 }));
     this.finalT = 0;
     let box = $('#final-bubbles');
     if (!box) {
@@ -469,23 +476,40 @@ export class CampaignUI {
     );
   }
 
-  showStream(save) {
-    const st = save.data.settings.stream ?? {};
-    this._overlay(
-      `<div class="card dialog">
-        <h2>📺 Режим стрима</h2>
-        <p class="small">Зрители голосуют в чате Twitch командами <b>!кот</b>, <b>!гость</b>, <b>!радио</b>, <b>!гирлянда</b>. Каждые 45 секунд побеждает самая популярная команда, и событие случается на кухне — в пределах обычных правил (не больше двух срочных дел сразу). Подключение только на чтение, анонимно; без канала игра работает офлайн.</p>
-        <label class="field">Канал Twitch: <input id="stream-channel" value="${esc(st.channel ?? '')}" placeholder="имя_канала" /></label>
-        <label class="field"><input type="checkbox" id="stream-test" ${st.test ? 'checked' : ''}/> Тестовый чат (без сети: кнопки голосования на экране)</label>
-        <div class="actions">
-          <button class="primary" data-ui="streamOn">Включить</button>
-          <button class="ghost" data-ui="streamOff">Выключить</button>
-          <button class="ghost big" data-ui="menu">← В меню</button>
-        </div>
-        <p class="small">Сейчас: ${st.on ? `<b>включён</b>${st.channel ? ' · канал ' + esc(st.channel) : ''}${st.test ? ' · тестовый чат' : ''}` : 'выключен'}</p>
-      </div>`,
-      'dim',
-    );
+  /** Экран «Режим стримера». view — снимок голосования (или null), overlay — состояние оверлея OBS (только в версии для компьютера). */
+  showStream(save, view = null, overlay = null) {
+    const st = streamSettings(save.data.settings.stream);
+    this._overlay(settingsHtml({ s: st, view, overlay }), 'dim');
+    const root = this.el.overlay;
+    const set = (key, value) => this.app.ui('streamSet', `${key}=${value}`);
+    $('#stream-channel', root)?.addEventListener('change', (e) => set('channel', e.target.value));
+    $('#stream-test', root)?.addEventListener('change', (e) => set('test', e.target.checked ? 1 : 0));
+    $('#stream-nicks', root)?.addEventListener('change', (e) => set('nicks', e.target.checked ? 1 : 0));
+    $('#stream-port', root)?.addEventListener('change', (e) => set('overlayPort', e.target.value));
+    $('.ov-url', root)?.addEventListener('focus', (e) => e.target.select());
+  }
+
+  /** Строка «С чатом» в итоге дня: { prev, best, isBest, events }. */
+  _streamLine(r) {
+    const tail = r.isBest ? (r.prev ? ' — новый лучший с чатом' : '') : ` · лучший с чатом ${r.best.D}`;
+    return `<div class="stream-line">📺 С чатом: <b>${r.D}</b> из 100${tail} · событий от чата: ${r.events}<div class="small">Этот день записан отдельно: кампания, медали и очки домохозяйки не изменились.</div></div>`;
+  }
+
+  /** Безопасная зона под веб-камеру: класс на корне страницы и размеры угла (доли экрана — CAMPAIGN.stream.cam). */
+  setCam(cam) {
+    const root = document.documentElement;
+    for (const c of ['tl', 'tr', 'bl', 'br']) root.classList.toggle('cam-' + c, cam === c);
+    const z = CAMPAIGN.stream.cam;
+    root.style.setProperty('--cam-w', cam && cam !== 'none' ? `${Math.round(z.w * 100)}vw` : '0px');
+    root.style.setProperty('--cam-h', cam && cam !== 'none' ? `${Math.round(z.h * 100)}vh` : '0px');
+    this._votesSig = null;
+  }
+
+  /** Что видно только интерфейсу, но важно для canFire: заметка из книги, открытая книга рецептов, ввод в телефоне. */
+  streamBusy() {
+    const phone = this.el.phone;
+    const typing = !phone.classList.contains('hidden') && /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '') && phone.contains(document.activeElement);
+    return { lesson: !this.el.note.classList.contains('hidden'), book: !!this.recipeOpen, typing };
   }
 
   // Плашка голосования чата во время дня.
@@ -498,22 +522,30 @@ export class CampaignUI {
     if (!el) {
       el = document.createElement('div');
       el.id = 'votes';
-      this.voteSig = null;
-      el.className = 'card';
+      el.className = 'glass';
       document.body.appendChild(el);
       el.addEventListener('click', (e) => {
         const b = e.target.closest('[data-vote]');
         if (b) this.app.testVote(b.dataset.vote);
+        else if (e.target.closest('[data-chat="pause"]')) this.app.toggleChatPause();
       });
     }
     el.classList.remove('hidden');
-    const host = $('.hud-left');
-    if (host && el.parentElement !== host) host.appendChild(el);
-    const sig = Math.ceil(v.left) + v.status + v.options.map((o) => o.n).join();
-    if (sig === this.voteSig) return;
-    this.voteSig = sig;
-    const rows = v.options.map((o) => `<div class="vote-row"><span>${esc(o.cmd)}</span><span class="vbar"><i style="width:${v.total ? (o.n / v.total) * 100 : 0}%"></i></span><b>${o.n}</b>${v.test ? `<button class="ghost mini" data-vote="${esc(o.cmd)}">+</button>` : ''}</div>`).join('');
-    el.innerHTML = `<div class="small"><b>📺 Чат решает</b> · ${Math.ceil(v.left)} с ${v.status ? '· ' + esc(v.status) : ''}</div>${rows}`;
+    this._placeVotes(el);
+    const sig = voteSig(v);
+    if (sig === this._votesSig) return;
+    this._votesSig = sig;
+    el.innerHTML = votesHtml(v);
+  }
+
+  // Плашка не прячет док станции: если док открыт и они пересекаются по ширине, плашка встаёт над ним.
+  _placeVotes(el) {
+    const dock = this.el.panel && !this.el.panel.classList.contains('hidden') ? this.el.panel.getBoundingClientRect() : null;
+    const bottom = dock && dock.height ? Math.max(16, innerHeight - dock.top + 10) : 16;
+    if (this._votesBottom !== bottom) {
+      this._votesBottom = bottom;
+      el.style.bottom = `${bottom}px`;
+    }
   }
 
   // ---------- кухня ----------
@@ -755,7 +787,10 @@ export class CampaignUI {
         this.popup('💸 Не хватает денег', 'bad');
         break;
       case 'stream':
-        this.toast(`📺 ${esc(e.text)}`, 'bad', 3.5);
+        this.toast(`📺 ${esc(e.text)}`, e.kind === 'help' ? 'good' : 'bad', 3.5);
+        break;
+      case 'viewerComment':
+        this.toast(`📺 ${esc(e.nick)} прокомментировал твоё фото`, '', 2.6);
         break;
       case 'phoneMsg':
         if (e.from === 'Гости' && s.requests?.some((r) => r.known && !r.tipped && (r.tipped = true))) this.tip('wish');
