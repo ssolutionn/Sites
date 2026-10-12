@@ -8,7 +8,7 @@ import { toyModel, ghostify } from './toys.js';
 
 const GIFT_TOP = 0.2; // 0.10: верх подарка, который открывают руками (крышка под бумагой)
 const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
-import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, TREE_SLOTS } from '../campaign/layout.js';
+import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, TREE_SLOTS, DISHWASHER } from '../campaign/layout.js';
 import { CAMPAIGN, PRODUCTS, DISH_ORDER, TOYS } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
@@ -21,6 +21,7 @@ import { BowlView } from './bowl3d.js';
 import { DecorView } from './decor.js';
 import { RadioView } from './radio3d.js';
 import { RADIO } from '../campaign/radio-data.js';
+import { DishwasherView, rackItemModel } from './dishwasher-model.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
 const UNIT = BOARD_UNIT;
@@ -152,6 +153,9 @@ export class CampaignView {
     this.foam.visible = false;
     this.root.add(this.foam);
     this.washDirt = null;
+
+    // посудомойка под столешницей между гирляндой и раковиной (dishwasher-model.js)
+    this.dishwasherView = new DishwasherView(this.root, tag);
 
     // духовка: свечение дверцы
     this.ovenGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.22), new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0 }));
@@ -438,6 +442,13 @@ export class CampaignView {
         pos.set(a.x, ISLAND_H + 0.55 * back, a.z + 0.42 * back);
         return true;
       }
+      case 'c-dishwasher': {
+        // дверца и выдвижная корзина: смотрим сверху-спереди, чтобы лежащая дверца и посуда на ней были над доком
+        const dw = DISHWASHER;
+        look.set(dw.x, 0.26, dw.zFront + 0.3);
+        pos.set(dw.x, 1.28 * (back > 1 ? 1.1 : 1), dw.zFront + 1.55 * back);
+        return true;
+      }
       case 'c-radio': {
         // лицевая панель радио выше дока и левее колонки уведомлений: смотрим чуть ниже и правее центра корпуса
         const a = S.radio.anchor;
@@ -497,6 +508,7 @@ export class CampaignView {
     if (p === 'board') return 'board';
     // 0.10: подарок в руках — крупно; номер в режиме, чтобы к следующему подарку камера перелетала плавно
     if (p === 'tree' && (session.gift || session.giftShow)) return 'c-gift' + (session.gift ?? session.giftShow).index;
+    if (p === 'dishwasher') return 'c-dishwasher';
     if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove' || p === 'radio' || p === 'tree') return 'c-' + p;
     return 'c-overview';
   }
@@ -552,6 +564,10 @@ export class CampaignView {
         if (!this.session?.gift) return null;
         const c = this._giftPos();
         return { c: new THREE.Vector3(c.x, GIFT_TOP, c.z), y: GIFT_TOP };
+      }
+      case 'dishwasher': {
+        // передняя плоскость шкафа, как у радио: x — вправо от середины дверцы, z — вниз (открытая дверца лежит под проёмом)
+        return { c: new THREE.Vector3(DISHWASHER.x, DISHWASHER.y, DISHWASHER.zFront), y: DISHWASHER.y, vertical: true };
       }
       case 'radio': {
         // вертикальная лицевая панель: x — вправо, z — вниз по панели (как на экране)
@@ -611,6 +627,8 @@ export class CampaignView {
     this.puddleMeshes.clear();
     this.washDirt = null;
     this.washKey = null;
+    this.dishwasherView.reset();
+    this.dwHot = false;
     for (const c of this.sinkItem.children.slice()) F.disposeGroup(c);
     this.shreds.clear();
     this.roundGroup.clear();
@@ -643,6 +661,7 @@ export class CampaignView {
   }
 
   onEvent(e) {
+    if (e.type.startsWith('dw')) this.dishwasherView.onEvent(e);
     switch (e.type) {
       case 'toyHung': {
         // 0.10: повесила — игрушка качается, искры цвета игрушки и золота
@@ -1194,6 +1213,7 @@ export class CampaignView {
     this._updateSink(s, t);
     this._updatePuddles(s, t);
     this._updateTable(s, mode);
+    this._updateDishwasher(s, dt, t);
   }
 
   _updateRings(s, t, closeup) {
@@ -1918,6 +1938,18 @@ export class CampaignView {
     this.dragGhost.position.set(d.x, 0.05, d.z);
   }
 
+  // ---------- посудомойка ----------
+  // Посуда в машине исчезает со своего места на кухне (миска, поднос, доска); грязное пятно на пустом месте не рисуем.
+  _updateDishwasher(s, dt, t) {
+    const gone = this.dishwasherView.sync(s, dt, t, this.dwHot);
+    this.k.bowl.group.visible = !gone.bowl;
+    const trayModel = this.trayGroup.children[0];
+    if (trayModel) trayModel.visible = !gone.tray;
+    if (gone.tray) this.trayDirt.visible = false;
+    for (const o of this.k.stations.board ?? []) o.visible = !gone.board;
+    if (gone.board) this.boardDirt.visible = false;
+  }
+
   // ---------- раковина и лужи ----------
   _updateSink(s, t) {
     // остужаем под краном: горячее в дуршлаге, струя из крана, пар уходит
@@ -1989,10 +2021,13 @@ export class CampaignView {
           model = F.trayModel(0.32, 0.22);
         } else if (job.item === 'board') {
           model = new THREE.Mesh(F.rbox(0.3, 0.02, 0.2, 0.015), F.m(0xd9a866, 0.7));
+        } else if (job.item === 'knife') {
+          model = rackItemModel('knife');
+          model.scale.setScalar(1.05);
         } else model = F.bakingForm();
         if (job.item === 'form') model.scale.setScalar(0.9);
         this.sinkItem.add(model);
-        const geometry = job.item === 'bowl' ? new THREE.CircleGeometry(0.115, 32) : new THREE.PlaneGeometry(0.28, 0.18);
+        const geometry = job.item === 'bowl' ? new THREE.CircleGeometry(0.115, 32) : job.item === 'knife' ? new THREE.PlaneGeometry(0.27, 0.07) : new THREE.PlaneGeometry(0.28, 0.18);
         this.washDirt = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x8a6a3a, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }));
         this.washDirt.rotation.x = -Math.PI / 2;
         this.washDirt.position.y = job.item === 'bowl' ? 0.075 : 0.025;

@@ -25,6 +25,8 @@ export const trayMethods = {
     if (this.tray.owner === dishId) return null;
     if (this.tray.owner && !this.dishes[this.tray.owner].done) return `На подносе уже ${this.recipes[this.tray.owner].name.toLowerCase()} — закончи его`;
     const needsTray = dishId !== 'chicken';
+    const washer = this.equipBlock(needsTray ? 'tray' : 'form'); // поднос или форма в посудомойке
+    if (washer) return washer;
     if (needsTray && !this.equipment.tray.clean) return 'Поднос грязный — помой его у раковины';
     if (dishId === 'chicken' && !this.equipment.form.clean) return 'Форма грязная — помой её у раковины';
     return null;

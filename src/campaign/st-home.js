@@ -448,8 +448,9 @@ export const homeMethods = {
   },
 
   // ---------- раковина ----------
+  // Грязная посуда, которую ещё надо мыть: то, что стоит в посудомойке, к утру чистое — штрафа и мытья не требует (st-dishwasher.js).
   dirtyItems() {
-    return Object.entries(this.equipment).filter(([, e]) => !e.clean).map(([id, e]) => ({ id, label: e.label }));
+    return Object.entries(this.equipment).filter(([id, e]) => !e.clean && !this.inWasher(id)).map(([id, e]) => ({ id, label: e.label }));
   },
 
   sinkSelect(item) {
@@ -482,7 +483,7 @@ export const homeMethods = {
       return 'hover';
     }
     const c = this.cfg.wash;
-    const onItem = job.item === 'bowl' ? Math.hypot(x, z) <= c.bowlRadius : Math.abs(x) <= c.width / 2 && Math.abs(z) <= c.depth / 2;
+    const onItem = job.item === 'bowl' ? Math.hypot(x, z) <= c.bowlRadius : job.item === 'knife' ? Math.abs(x) <= c.knifeW / 2 && Math.abs(z) <= c.knifeD / 2 : Math.abs(x) <= c.width / 2 && Math.abs(z) <= c.depth / 2;
     if (!onItem) {
       job.scrub.release();
       return 'off';
