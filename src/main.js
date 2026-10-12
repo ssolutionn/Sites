@@ -128,7 +128,7 @@ async function boot() {
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
     delivered: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select',
     stir: 'stir', peel: 'peelSkin', cutDenied: 'scuff', // перемешивание, чистка и отказ ножа раньше молчали
-    cutReady: 'ready', taken: 'select', returned: 'select', eggCrack: 'crack', overcooked: 'deny', stoveClean: 'fixed', wipe: 'scrub', wash: 'scrub', // 0.9: руки, яйцо, плита, мытьё
+    cutReady: 'ready', taken: 'select', returned: 'select', eggCrack: 'crack', overcooked: 'deny', potLow: 'boil', potDry: 'hiss', potBurnt: 'fail', burnerIdle: 'select', stoveClean: 'fixed', wipe: 'scrub', wash: 'scrub', // 0.9: руки, яйцо, плита, мытьё
     feedLike: 'select', // лайк в ленте «Андрея»; новые посты приходят без звука — только значок
     commentReply: 'phone', // 0.10: друг ответил на комментарий
   };

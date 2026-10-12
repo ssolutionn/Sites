@@ -694,6 +694,19 @@ export class CampaignView {
         p.content.children.forEach((o) => o.scale.set(egg ? 0.85 : 1.2, egg ? 0.75 : 0.9, egg ? 1.15 : 1));
         break;
       }
+      case 'potLow':
+      case 'potDry': {
+        const p = this.pots[e.burner ?? 0];
+        this.particles.emit(p.on.clone().add(new THREE.Vector3(0, 0.3, 0)), 0xdadada, e.type === 'potDry' ? 16 : 8, { spread: 0.06, up: 0.55, life: 1.1, size: 0.03, gravity: -0.25 });
+        break;
+      }
+      case 'potBurnt': {
+        const p = this.pots[e.burner ?? 0];
+        p.content.visible = false;
+        p.move = { from: p.group.position.clone(), to: p.home.clone(), t: 0, hideAfter: p.hideHome };
+        this.particles.emit(p.on.clone().add(new THREE.Vector3(0, 0.25, 0)), 0x2b2724, 36, { spread: 0.1, up: 0.8, life: 2.2, size: 0.05, gravity: -0.3 });
+        break;
+      }
       case 'potatoTaken': {
         const p = this.pots[e.burner ?? 0];
         p.content.visible = false;
@@ -1239,11 +1252,15 @@ export class CampaignView {
         bb.position.set(Math.cos(a) * 0.08 * ((i % 3) / 3 + 0.3), 0.06 + ph * 0.09, Math.sin(a) * 0.08 * ((i % 3) / 3 + 0.3));
         bb.scale.setScalar(0.6 + ph);
       });
-      if (pot.water) pot.water.position.y = 0.15 + (temp > 98 ? Math.sin(t * 20 + bi) * 0.003 : 0);
+      // уровень воды в кастрюле падает по мере выкипания (0.11): полная — 0.15, на донышке — 0.06
+      if (pot.water) pot.water.position.y = 0.06 + 0.09 * (b?.level ?? 1) + (temp > 98 ? Math.sin(t * 20 + bi) * 0.003 : 0);
       // залитая конфорка: пятно, бледнеет, пока её трут
       const wipe = s.stoveWipe?.i === bi ? s.stoveWipe.scrub.progress : 0;
       pot.stain.visible = !!b?.dirty;
-      if (pot.stain.visible) pot.stain.material.opacity = 0.85 * (1 - wipe);
+      if (pot.stain.visible) {
+        pot.stain.material.opacity = 0.85 * (1 - wipe);
+        pot.stain.material.color.setHex(b?.soot ? 0x1c1612 : 0xc9b27a); // пригорело — копоть, убежало — пена
+      }
       this._potRing(pot, s, b);
       const boiling = !!b && ((b.state === 'boiling' && (b.water == null || b.water === 'boil')) || b.state === 'ready');
       const over = !!b?.overflow;

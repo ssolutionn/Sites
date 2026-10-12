@@ -303,7 +303,7 @@ export const homeMethods = {
     this._removeAlert(this._potKey(b.i));
     this._removeAlert('potReady' + (b.i || ''));
     this._removeAlert('dry' + b.i);
-    this.burners[b.i] = { ...emptyBurnerFields(b.i), startT: b.startT, heat: b.heat ?? 0, dirty: true };
+    this.burners[b.i] = { ...emptyBurnerFields(b.i), startT: b.startT, heat: b.heat ?? 0, dirty: true, soot: true };
     const dish = this.dishes[owner];
     if (dish) {
       dish.penalty.prep += this.cfg.stove.burnPrepPenalty;
@@ -798,5 +798,5 @@ export const homeMethods = {
 
 // Поля пустой конфорки (как emptyBurner в session.js) — без циклического импорта.
 function emptyBurnerFields(i) {
-  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0, overcooked: false, level: 1, idleT: 0, lowWarned: false, dryUrgent: false, overWarned: false };
+  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0, overcooked: false, level: 1, idleT: 0, lowWarned: false, dryUrgent: false, overWarned: false, soot: false };
 }

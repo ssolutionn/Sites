@@ -1063,7 +1063,7 @@ Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, 
 
 export function emptyBurner(i) {
   // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне
-  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0, overcooked: false, level: 1, idleT: 0, lowWarned: false, dryUrgent: false, overWarned: false };
+  return { i, state: 'empty', owner: null, step: null, product: null, startT: 0, readyAt: 0, overflow: null, heat: 0, temp: 20, cooked: 0, foamT: 0, water: 'cold', dirty: false, overT: 0, overcooked: false, level: 1, idleT: 0, lowWarned: false, dryUrgent: false, overWarned: false, soot: false };
 }
 
 // ---------- практика ----------
