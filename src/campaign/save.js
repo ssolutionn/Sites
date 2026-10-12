@@ -1,6 +1,7 @@
 // Сохранение кампании в localStorage: версия формата, дни, лучшие оценки, настройки.
 // Повреждённые или устаревшие данные не роняют игру.
 import { CAMPAIGN, DAYS, TOYS, GIFTS, TOY_SETS } from './data.js';
+import { defaultSettings, normalizeSettings, pickPreferences } from '../settings.js';
 
 export const SAVE_KEY = 'novogodnyaya-sueta.campaign';
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}.backup`;
@@ -15,7 +16,7 @@ export function emptySave(version = CAMPAIGN.saveVersion) {
   return {
     version,
     days: DAYS.map((d, i) => ({ id: d.id, unlocked: i === 0, completed: false, best: null, last: null, medals: [], stars: 0, bestTime: null })),
-    settings: { quality: 'high' },
+    settings: defaultSettings(), // качество, громкость, мягкие жесты, размер текста, клавиши (settings.js)
     challenges: {}, // дата испытания → лучший результат
     speed: { best: null }, // скоростная нарезка: лучшее время
     lastCompletedAt: null,
@@ -75,7 +76,7 @@ export function parseSave(raw, { version = CAMPAIGN.saveVersion, migrations = MI
   base.days.forEach((d, i) => {
     if (d.completed && base.days[i + 1]) base.days[i + 1].unlocked = true;
   });
-  base.settings = { ...base.settings, ...(data.settings || {}) };
+  base.settings = normalizeSettings(data.settings); // 0.11: старые сохранения без новых полей читаются, лишнее не падает
   base.lastCompletedAt = data.lastCompletedAt ?? null;
   base.bonus = Number.isFinite(data.bonus) && data.bonus >= 0 ? Math.round(data.bonus) : 0;
   base.decor = Array.isArray(data.decor) ? data.decor.filter((x) => typeof x === 'string') : [];
@@ -178,7 +179,10 @@ export class SaveStore {
     }
   }
   reset() {
+    // настройки — не прогресс: новая кампания их не стирает
+    const prefs = pickPreferences(this.data.settings);
     this.data = emptySave();
+    Object.assign(this.data.settings, prefs);
     this.protected = false;
     this.write();
   }

@@ -241,7 +241,7 @@ function kitFor(ctx) {
  * Станции «вещают» по общему эфирному времени: переключился — попал в середину песни, как на настоящем радио.
  */
 export class RadioMusic {
-  /** @param {{ctx: AudioContext|null, master?: AudioNode, muted?: boolean}} sound — общий Sound игры */
+  /** @param {{ctx: AudioContext|null, music?: AudioNode, master?: AudioNode, muted?: boolean}} sound — общий Sound игры */
   constructor(sound, { cfg = RADIO, stations = RADIO_STATIONS, scores = SCORES } = {}) {
     this.sound = sound;
     this.cfg = cfg;
@@ -315,7 +315,7 @@ export class RadioMusic {
     const out = ctx.createGain();
     out.gain.setValueAtTime(0, now);
     out.gain.setTargetAtTime(A.volume, now, 0.08);
-    out.connect(this.sound.master ?? ctx.destination);
+    out.connect(this.sound.music ?? this.sound.master ?? ctx.destination); // шина «радио и музыка» (sound.js), запасной вариант — общая
     const musicGain = ctx.createGain();
     musicGain.gain.value = 0;
     musicGain.connect(out);
