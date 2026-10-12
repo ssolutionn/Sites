@@ -189,6 +189,7 @@ export class CampaignUI {
   }
 
   hideOverlay() {
+    this._closeSettings?.();
     this.el.overlay.innerHTML = '';
     this.el.overlay.className = '';
     document.body.classList.remove('paused-anim');
@@ -360,6 +361,11 @@ export class CampaignUI {
       this._closeSettings = null;
     };
     root.focus({ preventScroll: true });
+  }
+
+  /** Открыт ли экран настроек (Esc тогда возвращает назад, а не ставит паузу). */
+  get settingsOpen() {
+    return !!this._settingsH;
   }
 
   /** Звук включили клавишей, пока открыты настройки: переключатель обновляется на месте. */

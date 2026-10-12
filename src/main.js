@@ -16,6 +16,12 @@ import { RADIO } from './campaign/radio-data.js';
 import { clampFreq } from './campaign/st-radio.js';
 import { StreamVotes, dailyChallenge } from './stream.js';
 import { loadModels, modelStatus } from './view/assets.js';
+import { assistConfig } from './campaign/assist.js';
+import { Keymap } from './keymap.js';
+import { SettingsController } from './settings-controller.js';
+import { FullscreenControl } from './fullscreen.js';
+import { effectiveReduceMotion } from './settings.js';
+import { applyTextScale, applyReduceMotionClass, systemReduceMotion } from './ui/settings-ui.js';
 
 const params = new URLSearchParams(location.search);
 const devMode = params.has('dev');
@@ -107,6 +113,37 @@ async function boot() {
     return ok;
   }
 
+  // --- настройки 0.11: громкость, мягкие жесты, размер текста, меньше движения, клавиши, полный экран ---
+  const keymap = new Keymap(save.data.settings.keys);
+  const fullscreen = new FullscreenControl();
+  // «мягкие жесты»: сессия получает копию CAMPAIGN с допусками шире в CAMPAIGN.assist.k раз (campaign/assist.js)
+  const cfgNow = () => (save.data.settings.assist ? assistConfig(CAMPAIGN) : CAMPAIGN);
+  function applyMotion(choice) {
+    const on = effectiveReduceMotion({ reduceMotion: choice }, systemReduceMotion());
+    applyReduceMotionClass(on);
+    sv.reduceMotion = on; // камера без качки и с быстрым переездом (view/scene.js)
+    view.particles.density = on ? 0.5 : 1; // искр вдвое меньше (view/campaign-view.js)
+  }
+  const settings = new SettingsController({
+    settings: () => save.data.settings,
+    persist: () => persist(),
+    sound,
+    keymap,
+    hooks: {
+      assist: () => {
+        if (!session) return;
+        session.cfg = cfgNow();
+        session.catWaver = null; // взмах считается заново по новым допускам
+      },
+      textScale: (v) => applyTextScale(v),
+      quality: () => applyQuality(),
+      motion: applyMotion,
+      fullscreen: (on) => fullscreen.set(on),
+    },
+  });
+  // игрок вышел из полного экрана сам (Esc, F11, меню окна) — запоминаем как выбор
+  fullscreen.onChange((on) => settings.setFullscreen(on));
+
   const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'unpack', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'feedCat', 'playCat', 'reduceHeat']);
   function act(name, ...args) {
     if (!session || mode !== 'kitchen') return false;
@@ -163,6 +200,7 @@ async function boot() {
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
     session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [], setsDone: save.data.sets ?? [] });
+    session.cfg = cfgNow();
     if (Number.isFinite(save.data.settings.radioFreq)) session.radio.freq = clampFreq(save.data.settings.radioFreq);
     view.reset();
     view.setActive(true);
@@ -242,6 +280,7 @@ async function boot() {
   function startPractice(activity, product) {
     challenge = null;
     session = new KitchenSession({ practice: { activity, product: product || undefined }, seed: 1 });
+    session.cfg = cfgNow();
     view.reset();
     view.setActive(true);
     view.setTableDishes([]);
@@ -291,9 +330,13 @@ async function boot() {
       return session;
     },
     isMuted: () => sound.muted,
+    settings,
+    keymap,
+    fullscreen,
     toggleMute() {
       sound.unlock();
       sound.setMuted(!sound.muted);
+      ui.refreshSettings();
     },
     pause() {
       if (mode !== 'kitchen') return;
@@ -453,10 +496,16 @@ async function boot() {
           ui.showMenu(save);
           break;
         case 'quality':
-          save.data.settings.quality = save.data.settings.quality === 'low' ? 'high' : 'low';
-          persist();
-          applyQuality();
+          settings.setQuality(save.data.settings.quality === 'low' ? 'high' : 'low');
           ui.showMenu(save);
+          break;
+        case 'settings':
+          // настройки открываются из меню и из паузы; «Готово» и Esc возвращают туда же
+          if (mode === 'menu' || mode === 'paused') ui.showSettings();
+          break;
+        case 'settingsBack':
+          if (mode === 'paused') ui.showPause(!session?.practice && !session?.challenge);
+          else if (mode === 'menu') ui.showMenu(save);
           break;
         default:
       }
@@ -542,17 +591,19 @@ async function boot() {
     if (hit.station) act('goTo', hit.station);
     else if (hit.floor) act('goToPoint', hit.floor.x, hit.floor.z);
   });
-  const TURN_KEYS = { KeyA: 1, KeyD: -1 };
   let turnHeld = null;
-  // 0.10: WASD и стрелки — ходьба в обзоре (камера смотрит вдоль −z: W — вглубь кухни, D — вправо); пробел — контакт
-  const MOVE_KEYS = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
+  // 0.10: WASD и стрелки — ходьба в обзоре (камера смотрит вдоль −z: W — вглубь кухни, D — вправо); пробел — контакт.
+  // 0.11: какая клавиша что делает — keymap.js (настройки); здесь только направления действий
+  const MOVE_DIR = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const moveHeld = new Set();
   let moveSent = '', moveFor = null;
   const syncMove = () => {
     let x = 0, z = 0;
     for (const c of moveHeld) {
-      x += MOVE_KEYS[c][0];
-      z += MOVE_KEYS[c][1];
+      const d = MOVE_DIR[keymap.actionOf(c)];
+      if (!d) continue;
+      x += d[0];
+      z += d[1];
     }
     const sig = `${x},${z}`;
     if (!session || (sig === moveSent && moveFor === session)) return;
@@ -588,36 +639,45 @@ async function boot() {
 
   window.addEventListener('keydown', (e) => {
     if (typing(e)) return;
+    const key = keymap.actionOf(e.code); // действие по настройкам клавиш (keymap.js)
     // пробел не должен «нажимать» кнопку, на которой остался фокус после клика мышью
-    if (e.code === 'Space' && mode === 'kitchen') e.preventDefault();
+    if (key === 'interact' && mode === 'kitchen') e.preventDefault();
     if (e.repeat) return;
-    if (e.code === 'Space' && mode === 'kitchen') {
+    if (key === 'interact' && mode === 'kitchen') {
       sound.unlock();
       const r = act('interact');
       if (r === false && !session.panel) sound.play('deny');
-    } else if (e.key === 'Escape') {
-      if (mode === 'kitchen') {
+    } else if (key === 'pause') {
+      if (ui.settingsOpen) app.ui('settingsBack');
+      else if (mode === 'kitchen') {
         // Esc — «назад»: закрыть рецепт, выйти со станции (крупный план → обзор, как подписано на «←»), в обзоре — пауза
         if (ui.recipeOpen) ui.toggleRecipe(false);
         else if (session?.panel) act('closePanel');
         else app.pause();
       } else if (mode === 'paused') app.resume();
-    } else if (e.code === 'KeyR') {
+    } else if (key === 'rotate') {
       sound.unlock();
       act('rotate');
-    } else if (TURN_KEYS[e.code] && mode === 'kitchen' && session?.panel === 'board') {
+    } else if ((key === 'left' || key === 'right') && keymap.isPrimary(key, e.code) && mode === 'kitchen' && session?.panel === 'board') {
       // A/D: короткое нажатие — доска на четверть оборота, удержание — плавно на любой угол
       sound.unlock();
-      turnHeld = { code: e.code, dir: TURN_KEYS[e.code], t0: performance.now(), spun: false };
-    } else if (MOVE_KEYS[e.code] && mode === 'kitchen') {
+      turnHeld = { code: e.code, dir: key === 'left' ? 1 : -1, t0: performance.now(), spun: false };
+    } else if (MOVE_DIR[key] && mode === 'kitchen') {
       sound.unlock();
       moveHeld.add(e.code);
-    } else if (e.code === 'KeyM') app.toggleMute();
-    else if (e.code === 'KeyQ' && mode === 'kitchen') ui.toggleRecipe();
+    } else if (key === 'mute') app.toggleMute();
+    else if (key === 'recipe' && mode === 'kitchen') ui.toggleRecipe();
+    else if (key === 'fullscreen') {
+      // F11 по умолчанию: свой переключатель вместо системного, чтобы состояние совпадало с настройками
+      e.preventDefault();
+      settings.requestFullscreen(!fullscreen.active);
+    } else if (key === 'shout') {
+      // «Крикнуть на кота» (клавиша F): действие и клавиша объявлены в keymap.js, обработчик добавит блок D1 0.11
+    }
   });
   window.addEventListener('keyup', (e) => {
     moveHeld.delete(e.code);
-    if (e.code === 'Space') {
+    if (keymap.actionOf(e.code) === 'interact') {
       if (!typing(e) && mode === 'kitchen') e.preventDefault();
       session?.interactUp();
     }
@@ -714,6 +774,20 @@ async function boot() {
     requestAnimationFrame(frame);
   }
 
+  settings.applyAll();
+  // полный экран прошлого раза: в настольной версии сразу, в браузере — с первого действия игрока (иначе браузер откажет)
+  if (save.data.settings.fullscreen && fullscreen.supported && !fullscreen.active) {
+    if (window.suetaDesktop) fullscreen.set(true);
+    else {
+      const again = () => {
+        window.removeEventListener('pointerdown', again, true);
+        window.removeEventListener('keydown', again, true);
+        fullscreen.set(true);
+      };
+      window.addEventListener('pointerdown', again, true);
+      window.addEventListener('keydown', again, true);
+    }
+  }
   sv.setCameraMode('menu', true);
   setupStream();
   if (save.data.settings.inProgress) {

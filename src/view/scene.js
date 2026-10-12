@@ -148,11 +148,11 @@ export class SceneView {
 
   _updateCamera(dt) {
     this._cameraTarget(this.camMode, this.camPos, this.camTargetLook ?? this.camLook);
-    if (this.camT < 1) this.camT = Math.min(1, this.camT + dt / 0.6);
+    if (this.camT < 1) this.camT = Math.min(1, this.camT + dt / (this.reduceMotion ? 0.15 : 0.6)); // «меньше движения»: переезд камеры почти мгновенный
     const e = ease(this.camT);
     const look = new THREE.Vector3().lerpVectors(this.camFrom.look, this.camTargetLook, e);
     this.camera.position.lerpVectors(this.camFrom.pos, this.camPos, e);
-    if (this.shake > 0) {
+    if (this.shake > 0 && !this.reduceMotion) {
       this.camera.position.x += (Math.random() - 0.5) * this.shake * 0.03;
       this.shake = Math.max(0, this.shake - dt * 2);
     }
