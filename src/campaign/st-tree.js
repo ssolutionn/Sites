@@ -631,7 +631,7 @@ export const treeMethods = {
     const tn = this.tinsel;
     return {
       threads: tn.threads.filter((t) => t.pts.length >= 2).map((t) => ({ color: t.color, pts: t.pts.map((p) => [p.x, p.y, p.z]) })),
-      rolls: Object.fromEntries(Object.entries(tn.rolls).map(([c, v]) => [c, Math.round(v * 100) / 100])),
+      rolls: Object.fromEntries(Object.entries(tn.rolls).map(([c, v]) => [c, Math.round(v * 100) / 100]).filter(([, v]) => v > 0)),
     };
   },
 
