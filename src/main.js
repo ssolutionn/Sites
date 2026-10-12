@@ -107,7 +107,7 @@ async function boot() {
     return ok;
   }
 
-  const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'unpack', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'feedCat', 'playCat', 'reduceHeat']);
+  const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'feedCat', 'playCat', 'reduceHeat']);
   function act(name, ...args) {
     if (!session || mode !== 'kitchen') return false;
     if (name === 'finishDay') return finishDay();
@@ -126,7 +126,7 @@ async function boot() {
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
     pinch: 'salt', taste: 'taste', dilute: 'pour', seasoned: 'ready', catFed: 'feed', catPlay: 'ball', catHungry: 'meow', catSleep: 'purr', cooled: 'fizz', heat: 'select', potBoils: 'boil', coolStart: 'select',
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
-    unpacked: 'added', bagArrived: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select', unpackWrong: 'deny',
+    delivered: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select',
     stir: 'stir', peel: 'peelSkin', cutDenied: 'scuff', // перемешивание, чистка и отказ ножа раньше молчали
     cutReady: 'ready', taken: 'select', returned: 'select', eggCrack: 'crack', overcooked: 'deny', stoveClean: 'fixed', wipe: 'scrub', wash: 'scrub', // 0.9: руки, яйцо, плита, мытьё
     feedLike: 'select', // лайк в ленте «Андрея»; новые посты приходят без звука — только значок

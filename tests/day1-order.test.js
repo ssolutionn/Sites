@@ -6,7 +6,7 @@ import { KitchenSession, run, arrive, waitAction, cutCubes, stir, seasonTo, tast
 const guard = (s) => { if (s.cat.state === 'theft') s.shoo(); };
 
 function pots(s) {
-  startBoil(s, 'olivier:boil'); // картофель: из кладовой, почистить сырым, в кастрюлю
+  startBoil(s, 'olivier:boil'); // картофель: из холодильника, почистить сырым, в кастрюлю
   startBoil(s, 'olivier:boilEgg'); // яйца: из холодильника в кастрюлю
 }
 function cut(s, key) {

@@ -58,7 +58,6 @@ export const CAMPAIGN = {
     ovenLoad: 1.2,
     ovenTake: 1.2,
     awayForDelivery: 3, // героиня за кадром
-    unpackItem: 0.6,
     pinch: 0.35, // щепотка соли или перца
     taste: 1.2, // попробовать ложкой
     dilute: 3.5, // разбавить пересоленное
@@ -102,6 +101,7 @@ export const CAMPAIGN = {
   },
   phone: { typingAhead: 3, replyDelay: 4, maxChatLength: 120, maxCommentLength: 140, commentPreview: 6, doubleTapMs: 350, commentReply: [5, 9] }, // commentReply: через сколько секунд друг отвечает на комментарий (0.10)
   // сообщения «просто так» (chatter.js): первое через start с, дальше раз в every с; в первый день реже
+  delivery: { bagShow: 6 }, // 0.11: сколько секунд пакет стоит на столешнице после доставки (украшение, разбирать не нужно)
   ui: { dishQuiet: 2.5 }, // 0.11: после готового блюда столько секунд видна одна карточка, остальные всплывашки и заметки молчат
   notify: { start: 20, every: [30, 45], startFirstDay: 45, everyFirstDay: [50, 70] },
 
@@ -142,32 +142,32 @@ export const CAMPAIGN = {
 // --- Продукты ---
 // unit — игровые порции; storage — где хранится; cut — профиль для доски.
 export const PRODUCTS = {
-  potato: { name: 'Картофель', price: 40, unit: 'порц.', storage: 'pantry', color: 0xf0d28a, cut: { w: 8, d: 6, profile: 'oval' }, grate: true, peel: 0x9a7448, peelDone: ['Картофелина почищена', 'Картошка почищена'], note: 'для оливье чистим сырым и варим; в шубу — в мундире' },
-  carrot: { name: 'Морковь', price: 30, unit: 'порц.', storage: 'fridge', color: 0xf28c28, cut: { w: 13, d: 3.4, profile: 'carrot' }, grate: true, note: 'варёная' },
-  sausage: { name: 'Колбаса', price: 180, unit: 'порц.', storage: 'fridge', color: 0xe7909a, cut: { w: 8, d: 6, profile: 'rectangle' }, round: { length: 10, radius: 1.8 } },
-  cucumber: { name: 'Огурец свежий', price: 60, unit: 'шт.', storage: 'fridge', color: 0x8cc84b, cut: { w: 12, d: 3.4, profile: 'oval' }, round: { length: 10, radius: 1.5 } },
-  pickle: { name: 'Огурец солёный', price: 70, unit: 'шт.', storage: 'fridge', color: 0x8a9a3e, cut: { w: 9, d: 3.2, profile: 'oval' }, note: 'для оливье — солёные или маринованные' },
-  egg: { name: 'Яйцо', price: 15, unit: 'шт.', storage: 'fridge', color: 0xfff6dc, cut: { w: 5.6, d: 4.2, profile: 'egg', trim: 0.14 }, peel: 0xe6cba0, peelByHand: true, peelDone: ['Яйцо почищено', 'Яйца почищены'], note: 'варится в кастрюле, потом чистим руками' },
-  peas: { name: 'Горошек', price: 90, unit: 'банка', storage: 'pantry', color: 0x6dbb3a },
-  mayo: { name: 'Майонез', price: 110, unit: 'порц.', storage: 'fridge', color: 0xfffbea },
-  crab: { name: 'Крабовые палочки', price: 150, unit: 'упак.', storage: 'fridge', color: 0xf3f0ea, cut: { w: 10, d: 4, profile: 'rectangle' } },
-  corn: { name: 'Кукуруза', price: 90, unit: 'банка', storage: 'pantry', color: 0xf4c430 },
-  bread: { name: 'Хлеб', price: 10, unit: 'ломтик', storage: 'pantry', color: 0xe3b778, cut: { w: 12.5, d: 5, profile: 'rectangle' } },
-  butter: { name: 'Сливочное масло', price: 160, unit: 'пачка', storage: 'fridge', color: 0xfff1a8 },
-  caviar: { name: 'Красная икра', price: 350, unit: 'банка', storage: 'fridge', color: 0xe8461f },
-  tartlet: { name: 'Корзинки', price: 20, unit: 'шт.', storage: 'pantry', color: 0xd9a35a },
-  cheese: { name: 'Сыр', price: 170, unit: 'порц.', storage: 'fridge', color: 0xf7d55b, cut: { w: 12.5, d: 5, profile: 'rectangle' }, grate: true },
-  greens: { name: 'Зелень', price: 60, unit: 'пучок', storage: 'fridge', color: 0x3f9b3a },
-  tomato: { name: 'Помидор', price: 35, unit: 'шт.', storage: 'fridge', color: 0xe23b2e },
-  onion: { name: 'Лук', price: 15, unit: 'шт.', storage: 'pantry', color: 0xf3ecd6, cut: { w: 6, d: 4, profile: 'oval' } },
-  herring: { name: 'Сельдь', price: 220, unit: 'филе', storage: 'fridge', messy: true, color: 0xc9b6a6, cut: { w: 8, d: 4, profile: 'rectangle' } },
-  beet: { name: 'Свёкла', price: 35, unit: 'порц.', storage: 'fridge', messy: true, color: 0x8e1b4a, grate: true, note: 'варится дольше всех' },
-  skewer: { name: 'Шпажки', price: 5, unit: 'шт.', storage: 'pantry', color: 0xd8b07a },
-  mandarin: { name: 'Мандарин', price: 30, unit: 'шт.', storage: 'pantry', color: 0xff8c1a },
-  apple: { name: 'Яблоко', price: 40, unit: 'порц.', storage: 'fridge', color: 0xc8e06a, note: 'дольки подготовлены' },
-  grapes: { name: 'Виноград', price: 180, unit: 'гроздь', storage: 'fridge', color: 0x7b3fa0 },
-  chicken: { name: 'Курица', price: 400, unit: 'шт.', storage: 'fridge', color: 0xf6d7b0, note: 'подготовлена' },
-  marinade: { name: 'Маринад со специями', price: 120, unit: 'порц.', storage: 'fridge', color: 0xb5501e },
+  potato: { name: 'Картофель', price: 40, unit: 'порц.', color: 0xf0d28a, cut: { w: 8, d: 6, profile: 'oval' }, grate: true, peel: 0x9a7448, peelDone: ['Картофелина почищена', 'Картошка почищена'], note: 'для оливье чистим сырым и варим; в шубу — в мундире' },
+  carrot: { name: 'Морковь', price: 30, unit: 'порц.', color: 0xf28c28, cut: { w: 13, d: 3.4, profile: 'carrot' }, grate: true, note: 'варёная' },
+  sausage: { name: 'Колбаса', price: 180, unit: 'порц.', color: 0xe7909a, cut: { w: 8, d: 6, profile: 'rectangle' }, round: { length: 10, radius: 1.8 } },
+  cucumber: { name: 'Огурец свежий', price: 60, unit: 'шт.', color: 0x8cc84b, cut: { w: 12, d: 3.4, profile: 'oval' }, round: { length: 10, radius: 1.5 } },
+  pickle: { name: 'Огурец солёный', price: 70, unit: 'шт.', color: 0x8a9a3e, cut: { w: 9, d: 3.2, profile: 'oval' }, note: 'для оливье — солёные или маринованные' },
+  egg: { name: 'Яйцо', price: 15, unit: 'шт.', color: 0xfff6dc, cut: { w: 5.6, d: 4.2, profile: 'egg', trim: 0.14 }, peel: 0xe6cba0, peelByHand: true, peelDone: ['Яйцо почищено', 'Яйца почищены'], note: 'варится в кастрюле, потом чистим руками' },
+  peas: { name: 'Горошек', price: 90, unit: 'банка', color: 0x6dbb3a },
+  mayo: { name: 'Майонез', price: 110, unit: 'порц.', color: 0xfffbea },
+  crab: { name: 'Крабовые палочки', price: 150, unit: 'упак.', color: 0xf3f0ea, cut: { w: 10, d: 4, profile: 'rectangle' } },
+  corn: { name: 'Кукуруза', price: 90, unit: 'банка', color: 0xf4c430 },
+  bread: { name: 'Хлеб', price: 10, unit: 'ломтик', color: 0xe3b778, cut: { w: 12.5, d: 5, profile: 'rectangle' } },
+  butter: { name: 'Сливочное масло', price: 160, unit: 'пачка', color: 0xfff1a8 },
+  caviar: { name: 'Красная икра', price: 350, unit: 'банка', color: 0xe8461f },
+  tartlet: { name: 'Корзинки', price: 20, unit: 'шт.', color: 0xd9a35a },
+  cheese: { name: 'Сыр', price: 170, unit: 'порц.', color: 0xf7d55b, cut: { w: 12.5, d: 5, profile: 'rectangle' }, grate: true },
+  greens: { name: 'Зелень', price: 60, unit: 'пучок', color: 0x3f9b3a },
+  tomato: { name: 'Помидор', price: 35, unit: 'шт.', color: 0xe23b2e },
+  onion: { name: 'Лук', price: 15, unit: 'шт.', color: 0xf3ecd6, cut: { w: 6, d: 4, profile: 'oval' } },
+  herring: { name: 'Сельдь', price: 220, unit: 'филе', messy: true, color: 0xc9b6a6, cut: { w: 8, d: 4, profile: 'rectangle' } },
+  beet: { name: 'Свёкла', price: 35, unit: 'порц.', messy: true, color: 0x8e1b4a, grate: true, note: 'варится дольше всех' },
+  skewer: { name: 'Шпажки', price: 5, unit: 'шт.', color: 0xd8b07a },
+  mandarin: { name: 'Мандарин', price: 30, unit: 'шт.', color: 0xff8c1a },
+  apple: { name: 'Яблоко', price: 40, unit: 'порц.', color: 0xc8e06a, note: 'дольки подготовлены' },
+  grapes: { name: 'Виноград', price: 180, unit: 'гроздь', color: 0x7b3fa0 },
+  chicken: { name: 'Курица', price: 400, unit: 'шт.', color: 0xf6d7b0, note: 'подготовлена' },
+  marinade: { name: 'Маринад со специями', price: 120, unit: 'порц.', color: 0xb5501e },
 };
 
 // Бонусная программа: баллы за покупки и за блюда, тратятся на продукты (до половины заказа) и декор кухни.

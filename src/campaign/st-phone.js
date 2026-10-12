@@ -324,8 +324,8 @@ export const phoneMethods = {
   // Подтверждение: один активный заказ; повторный клик не создаёт второй.
   // mode: express — быстро и дорого, standard — обычная, self — сходить самой (бесплатно, но долго без присмотра).
   confirmOrder(mode = 'standard') {
-    if (this.delivery.order || this.delivery.bag) {
-      this.setHint('Предыдущий заказ ещё не разобран', 2);
+    if (this.delivery.order) {
+      this.setHint('Предыдущий заказ ещё в пути', 2);
       return false;
     }
     const items = { ...this.delivery.draft };
@@ -433,10 +433,11 @@ export const phoneMethods = {
     if (!o) return;
     this.heroine.x = CLAYOUT.exit.x;
     this.heroine.z = CLAYOUT.exit.z;
-    this.delivery.bag = { items: Object.entries(o.items).map(([id, qty]) => ({ id, qty, placed: false })) };
+    // 0.11: привезённое сразу в запасе — пакет разбирать не нужно («зачем из пакета сначала в холодильник, если можно сразу использовать»)
+    const items = Object.entries(o.items).map(([id, qty]) => ({ id, qty }));
+    for (const it of items) this.inventory.add(it.id, it.qty);
     this.delivery.order = null;
-    this._alert('bag', 'Пакет на столешнице — разбери покупки', { station: 'bag', dismissable: false });
-    this._emit('bagArrived');
-    this.goTo('bag');
+    this.delivery.dropped = { items, until: this.t + this.cfg.delivery.bagShow }; // пакет на столешнице — только для вида
+    this._emit('delivered', { items });
   },
 };

@@ -134,7 +134,8 @@ test('деньги: бюджет дня, экспресс дороже, «схо
   assert.ok(s.heroine.away);
   assert.ok(s.heroine.awayLeft > 20);
   run(s, CAMPAIGN.money.modes.self.away + 15);
-  assert.ok(s.delivery.bag);
+  assert.ok(s.delivery.dropped);
+  assert.equal(s.inventory.count('caviar'), 1);
 });
 
 test('доска: после сельди другой продукт не режется, пока доску не помыть', () => {

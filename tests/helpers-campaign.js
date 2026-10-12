@@ -124,7 +124,7 @@ export function seasonMixTaste(s, dishId, opts = {}) {
   tasteDone(s, dishId, opts);
 }
 
-// Достать продукт для шага (key 'блюдо:шаг') из холодильника или кладовой в руки.
+// Достать продукт для шага (key 'блюдо:шаг') из холодильника в руки.
 export function take(s, key) {
   const [dishId, stepId] = key.split(':');
   arrive(s, 'fridge');

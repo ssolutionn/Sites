@@ -188,7 +188,7 @@ export class PhoneUI {
       feedSig += `|${s.feedUnread()}|${[...s.typingFrom()].join()}|${this.sub ? s.commentTyping(this.sub) ?? '' : ''}`;
     }
     const o = s.delivery.order;
-    const sig = [this.app, this.sub, this.tab, clockText(new Date()), s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, !!s.delivery.bag, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' ? Math.floor(s.t) : '', s.kitchenTimers.length, s.alerts.filter(a => a.urgent).slice(0, 1).map(a => a.text).join(), feedSig, this.app === 'home' ? [s.phone.unread, s.burners.map(b => b.state).join(), s.kitchenTimers.map(x => +(s.t >= x.end)).join()].join(':') : ''].join('§');
+    const sig = [this.app, this.sub, this.tab, clockText(new Date()), s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' ? Math.floor(s.t) : '', s.kitchenTimers.length, s.alerts.filter(a => a.urgent).slice(0, 1).map(a => a.text).join(), feedSig, this.app === 'home' ? [s.phone.unread, s.burners.map(b => b.state).join(), s.kitchenTimers.map(x => +(s.t >= x.end)).join()].join(':') : ''].join('§');
     if (sig === this.sig) return;
     this.sig = sig;
     // Прокрутка того же экрана сохраняется при перерисовке (новый пост, рост лайков).
@@ -277,18 +277,18 @@ export class PhoneUI {
   _shop(s) {
     const o = s.delivery.order;
     const head = this._head(esc(SHOP), 'привезём к празднику');
-    if (o || s.delivery.bag) {
-      const st = o ? { accepted: 'Заказ принят', assembling: 'Собираем', onTheWay: 'Курьер в пути', arrived: 'Курьер у двери', collecting: 'Забираем' }[o.status] : 'Получен — разбери пакет';
+    if (o) {
+      const st = { accepted: 'Заказ принят', assembling: 'Собираем', onTheWay: 'Курьер в пути', arrived: 'Курьер у двери', collecting: 'Забираем' }[o.status];
       const steps = ['accepted', 'assembling', 'onTheWay', 'arrived'];
-      const idx = o ? steps.indexOf(o.status === 'collecting' ? 'arrived' : o.status) : 4;
-      const items = Object.entries(o?.items ?? Object.fromEntries((s.delivery.bag?.items ?? []).map((i) => [i.id, i.qty])))
+      const idx = steps.indexOf(o.status === 'collecting' ? 'arrived' : o.status);
+      const items = Object.entries(o.items)
         .map(([id, q]) => `<li>${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)} <b>× ${q}</b></li>`)
         .join('');
-      return `${head}<div class="app-body"><div class="track"><div class="t-big">${o?.status === 'onTheWay' ? '🛵' : o?.status === 'arrived' ? '🚪' : '🛍'}</div><b>${st}</b>
+      return `${head}<div class="app-body"><div class="track"><div class="t-big">${o.status === 'onTheWay' ? '🛵' : o.status === 'arrived' ? '🚪' : '🛍'}</div><b>${st}</b>
         <div class="steps-line">${steps.map((x, i) => `<span class="${i <= idx ? 'on' : ''}"></span>`).join('')}</div></div>
         <ul class="order-items">${items}</ul>
-        ${o && o.status === 'arrived' ? btn('🚪 Забрать заказ', 'collectOrder', [], 'primary wide') : ''}
-        ${o && ['accepted', 'assembling', 'onTheWay'].includes(o.status) ? btn('⏩ Подождать', 'waitDelivery', [], 'wide') : ''}
+        ${o.status === 'arrived' ? btn('🚪 Забрать заказ', 'collectOrder', [], 'primary wide') : ''}
+        ${['accepted', 'assembling', 'onTheWay'].includes(o.status) ? btn('⏩ Подождать', 'waitDelivery', [], 'wide') : ''}
         <p class="fine">Один заказ за раз. Позиции подтверждённого заказа не меняются.</p></div>`;
     }
     const m = s.money();

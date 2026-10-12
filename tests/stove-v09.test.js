@@ -39,11 +39,11 @@ test('руки одни: пока держишь яйца, картофель н
   assert.match(s.hint.text, /Руки заняты/);
 });
 
-test('картофель для оливье: из кладовой → почистить сырым на доске → снова в руках → в кастрюлю', () => {
+test('картофель для оливье: из холодильника → почистить сырым на доске → снова в руках → в кастрюлю', () => {
   const s = day1();
   arrive(s, 'board');
   assert.equal(s.boardSelect('olivier:peelPotato'), false, 'без картофеля в руках чистить нечего');
-  assert.match(s.hint.text, /кладовой/);
+  assert.match(s.hint.text, /холодильника/);
   arrive(s, 'stove');
   take(s, 'olivier:peelPotato');
   assert.equal(s.carry.boilStep, 'boil');

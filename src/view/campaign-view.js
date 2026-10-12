@@ -210,9 +210,8 @@ export class CampaignView {
 
     // пакет доставки
     this.bag = F.paperBag();
-    this.bag.position.set(S.bag.anchor.x, ISLAND_H, S.bag.anchor.z);
+    this.bag.position.set(CLAYOUT.bagSpot.x, ISLAND_H, CLAYOUT.bagSpot.z);
     this.root.add(this.bag);
-    tag(this.bag, 'bag');
 
     // праздничный стол
     const T = CLAYOUT.table;
@@ -1128,7 +1127,6 @@ export class CampaignView {
     if (s.panel === 'sink' && s.pointerDown) return { pose: 'wash' };
     if (s.panel === 'puddle') return { pose: 'wipe' };
     if (s.panel === 'board' && s.boardCur()?.grater) return { pose: 'grate' };
-    if (s.panel === 'bag') return { pose: 'unpack' };
     if (s.panel === 'stove' || s.panel === 'oven') return { pose: 'stove' };
     if (s.panel === 'catbowl') return { pose: 'unpack' };
     if (s.panel === 'bowl' && s.pointerDown) return { pose: 'mix' };
@@ -1200,7 +1198,6 @@ export class CampaignView {
     const urgentStations = new Set(s.alerts.filter((a) => a.urgent && a.station).map((a) => a.station));
     for (const [id, ring] of Object.entries(this.rings)) {
       let show = !closeup && !s.heroine.away && s.phase !== 'finished';
-      if (id === 'bag') show = show && !!s.delivery.bag;
       if (id === 'table') show = show && (s.day.finalServe || s.phase === 'ready');
       ring.visible = show;
       const hover = this.hover === id;
@@ -1395,7 +1392,7 @@ export class CampaignView {
       this.glass.rotation.z = s.cat.state === 'spill' ? Math.sin(t * 20) * 0.06 : 0;
       this.glass.position.set(CLAYOUT.glass.x, CLAYOUT.glass.y, CLAYOUT.glass.z);
     }
-    this.bag.visible = !!s.delivery.bag;
+    this.bag.visible = !!s.delivery.dropped && s.t < s.delivery.dropped.until; // 0.11: пакет — украшение на несколько секунд
     // посуда: грязь
     this.trayDirt.visible = !s.equipment.tray.clean;
     this.bowlDirt.visible = !s.equipment.bowl.clean;

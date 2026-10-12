@@ -93,8 +93,8 @@ test('пробел выбирает ближайшую из соседних с�
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
   place(s, { x: S.stove.stand.x - 0.1, z: S.stove.stand.z });
   assert.equal(s.nearStation(), 'stove'); // духовка рядом, но плита ближе
-  place(s, { x: S.bag.stand.x, z: S.bag.stand.z });
-  assert.notEqual(s.nearStation(), 'bag', 'пакета ещё нет');
+  place(s, { x: S.table.stand.x, z: S.table.stand.z });
+  assert.notEqual(s.nearStation(), 'table', 'праздничный стол в первый день недоступен');
 });
 
 test('у гирлянды пробел — это удержание: держишь — чинится, отпустил — прогресс остался', () => {

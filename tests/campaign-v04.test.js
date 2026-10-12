@@ -421,7 +421,7 @@ test('время: духовка — готовность, окно, перег�
 });
 
 // ---------- 7. Доставка ----------
-test('доставка: один заказ, позиции фиксируются, получение после прибытия, пакет отдельно от запасов, разбор один раз', () => {
+test('доставка: один заказ, позиции фиксируются, получение после прибытия, привезённое сразу в запасе (0.11: пакет не разбирают)', () => {
   const s = new KitchenSession({ dayIndex: 2, seed: 1 });
   arrive(s, 'phone');
   s.draftSet('caviar', 1);
@@ -431,14 +431,13 @@ test('доставка: один заказ, позиции фиксируютс
   assert.equal(s.collectOrder(), false);
   s.waitDelivery();
   assert.equal(s.collectOrder(), true);
-  for (let i = 0; i < 900 && s.panel !== 'bag'; i++) s.update(1 / 30);
-  assert.equal(s.inventory.count('caviar'), 0); // пакет ещё не разобран
-  assert.equal(s.unpack(0, 'pantry'), false); // неверное место
-  assert.ok(s.unpack(0, 'fridge'));
-  waitAction(s);
-  assert.equal(s.inventory.count('caviar'), 1);
-  assert.equal(s.delivery.bag, null);
-  assert.equal(s.unpack(0, 'fridge'), false);
+  assert.equal(s.inventory.count('caviar'), 0); // героиня ещё за дверью
+  for (let i = 0; i < 900 && s.delivery.order; i++) s.update(1 / 30);
+  assert.equal(s.delivery.order, null);
+  assert.equal(s.inventory.count('caviar'), 1); // без единого действия: пакета-станции больше нет
+  assert.ok(s.delivery.dropped, 'пакет остаётся на столешнице только для вида');
+  assert.equal(s.unpack, undefined);
+  assert.equal(s.stationStand('bag'), null);
 });
 
 // ---------- 8. Кампания и сохранение ----------
@@ -496,7 +495,7 @@ test('сброс: новая попытка не содержит старых �
 // ---------- Сквозные дни ----------
 test('день 1: оливье от плиты до перемешивания, затем завершение дня', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 3 });
-  startBoil(s, 'olivier:boil'); // картофель: достать из кладовой, почистить сырым, в кастрюлю — первая конфорка
+  startBoil(s, 'olivier:boil'); // картофель: достать из холодильника, почистить сырым, в кастрюлю — первая конфорка
   startBoil(s, 'olivier:boilEgg'); // яйца — вторая
   assert.equal(s.burners[1].product, 'egg');
   for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:pickle']) {

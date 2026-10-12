@@ -29,13 +29,13 @@ export const CLAYOUT = {
     radio: { label: 'Радио', stand: { x: -1.85, z: -1.6 }, facing: Math.PI, anchor: { x: -1.85, y: 1.06, z: -2.18 } },
     garland: { label: 'Гирлянда', stand: { x: -1.0, z: -1.6 }, facing: Math.PI, anchor: { x: -1.25, y: 1.72, z: -2.55 } },
     fridge: { label: 'Холодильник', stand: { x: 2.7, z: -1.45 }, facing: Math.PI, anchor: { x: 3.05, y: 1.5, z: -1.8 } },
-    bag: { label: 'Пакет', stand: { x: 2.2, z: -1.6 }, facing: Math.PI, anchor: { x: 2.3, y: 0.95, z: -2.2 } },
     tree: { label: 'Ёлка', stand: { x: -2.1, z: -1.5 }, facing: -1.99, anchor: { x: -3.0, y: 1.2, z: -1.9 } },
     table: { label: 'Праздничный стол', stand: { x: -2.75, z: -0.3 }, facing: 0, anchor: { x: -2.75, y: 0.8, z: 0.55 } },
     catbowl: { label: 'Миска кота', stand: { x: 2.3, z: 1.05 }, facing: Math.PI, anchor: { x: 2.3, y: 0.1, z: 0.6 } },
   },
   catBowl: { x: 2.3, z: 0.6 },
   glass: { x: 1.05, y: ISLAND_H, z: 0.82 },
+  bagSpot: { x: 2.3, z: -2.2 }, // 0.11: пакет доставки стоит здесь после получения заказа, только для вида
   spillPuddle: { x: 1.05, z: 1.3, r: 0.32 },
   potPuddle: { x: 1.85, z: -1.05, r: 0.26 },
   catHome: { x: 2.6, z: 1.3 }, // кот сидит у праздничной двери, вне рабочих зон

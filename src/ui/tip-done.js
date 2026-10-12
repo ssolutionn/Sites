@@ -38,7 +38,7 @@ export const TIP_DONE = {
   catHungry: ['catFed'],
   catbowl: ['catFed', 'catPlay'],
   boardDirty: ['washed'],
-  delivery: ['bagArrived'],
+  delivery: ['delivered'],
   money: ['orderPlaced'],
   treeDecor: ['toyHung'],
   giftOpen: ['giftBow', 'giftOpened'],

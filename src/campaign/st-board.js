@@ -90,13 +90,12 @@ export const boardMethods = {
     return true;
   },
 
-  // Сырой продукт для чистки сначала берут в руки из холодильника или кладовой.
+  // Сырой продукт для чистки сначала берут в руки из холодильника.
   _carryBlock(dishId, step) {
     if (!step.raw || this.practice) return null;
     const c = this.carry;
     if (c && c.dishId === dishId && c.stepId === step.id) return null;
-    const where = PRODUCTS[step.product]?.storage === 'fridge' ? 'холодильника' : 'кладовой';
-    return c ? `Руки заняты: ${this.productName(c.product).toLowerCase()}` : `Сначала достань ${this.productName(step.product).toLowerCase()} из ${where}`;
+    return c ? `Руки заняты: ${this.productName(c.product).toLowerCase()}` : `Сначала достань ${this.productName(step.product).toLowerCase()} из холодильника`;
   },
 
   // Доска после сельди или свёклы: другой продукт на ней не режем, пока не помоешь.

@@ -100,7 +100,7 @@ export class KitchenSession {
     this.decor = [...decor]; // купленный декор кухни
     this._initTree(toys, giftsOpened, setsDone); // игрушки на ёлке, подарки дня, собранные наборы (st-tree.js)
     this.kitchenTimers = [];
-    this.delivery = { draft: {}, order: null, bag: null, usePoints: false };
+    this.delivery = { draft: {}, order: null, dropped: null, usePoints: false };
     this.table = { placed: {}, available: new Set(tableDishes) };
 
     this.triggers = practice ? [] : (this.day.events ?? []).map((e, i) => ({ ...e, id: i, fired: false, since: null }));
@@ -454,7 +454,6 @@ export class KitchenSession {
   /** Станция видна и с ней можно работать (метки над кухней и пробел смотрят сюда). */
   stationAvailable(id) {
     if (!this.stationStand(id)) return false;
-    if (id === 'bag') return !!this.delivery.bag;
     if (id === 'puddle') return this.puddles.length > 0;
     if (id === 'table') return !!(this.day.finalServe || this.phase === 'ready');
     // духовка — дверца под конфорками той же плиты: отдельное место, только когда в ней что-то есть

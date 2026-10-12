@@ -41,7 +41,7 @@ export const homeMethods = {
     return this.cfg.boilTimes?.[product] ?? this.cfg.potatoReadyAfter;
   },
 
-  // ---------- холодильник и кладовая: что сегодня варить, сначала берут в руки ----------
+  // ---------- холодильник: что сегодня варить, сначала берут в руки ----------
   /**
    * Что можно достать сейчас: варёные продукты (яйца, свёкла) — сразу к плите; картофель для оливье — сначала
    * на доску почистить сырым (шаг peel с raw), потом к плите. { dishId, stepId, boilStep, product, qty, dest }
@@ -91,9 +91,8 @@ export const homeMethods = {
     return this._startAction('take', this.cfg.durations.take ?? 0.8, () => {
       this.carry = { product: task.product, qty: task.qty, dishId, stepId, boilStep: task.boilStep, peeled: false };
       const name = this.productName(task.product);
-      const where = PRODUCTS[task.product]?.storage === 'fridge' ? 'холодильника' : 'кладовой';
       this._emit('taken', { product: task.product, dest: task.dest });
-      this.setHint(task.dest === 'board' ? `${name} из ${where} — неси к доске и почисти` : `${name} из ${where} — неси к плите и положи в кастрюлю`, 3.5);
+      this.setHint(task.dest === 'board' ? `${name} из холодильника — неси к доске и почисти` : `${name} из холодильника — неси к плите и положи в кастрюлю`, 3.5);
     });
   },
 
@@ -709,32 +708,6 @@ export const homeMethods = {
       this.cat = { state: 'home' };
       this._emit('catGone');
     }
-  },
-
-  // ---------- пакет доставки ----------
-  unpack(index, place) {
-    if (!this._isIdleAt('bag') || this.action) return false;
-    const bag = this.delivery.bag;
-    const item = bag?.items[index];
-    if (!item || item.placed) return false;
-    const right = PRODUCTS[item.id].storage;
-    if (place !== right) {
-      this.setHint(`${this.productName(item.id)} хранится ${right === 'fridge' ? 'в холодильнике' : 'в кладовой'}`, 2.5);
-      this._emit('unpackWrong');
-      return false;
-    }
-    return this._startAction('unpack', this.cfg.durations.unpackItem, () => {
-      if (item.placed) return;
-      item.placed = true;
-      this.inventory.add(item.id, item.qty);
-      this._emit('unpacked', { id: item.id, qty: item.qty, place });
-      if (bag.items.every((i) => i.placed)) {
-        this.delivery.bag = null;
-        this._removeAlert('bag');
-        this._emit('bagDone');
-        this.setHint('Пакет разобран, продукты на местах', 2.5);
-      }
-    });
   },
 
   // ---------- праздничный стол ----------

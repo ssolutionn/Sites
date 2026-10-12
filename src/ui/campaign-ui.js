@@ -31,7 +31,7 @@ function saveNote(save) {
 }
 const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
-const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🍗', sink: '🚰', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', bag: '🛍', table: '🥂', puddle: '🧽' };
+const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🍗', sink: '🚰', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', table: '🥂', puddle: '🧽' };
 const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука', skewer: '🍡 Шпажка' };
 
 // Шкала пробы: где вкус относительно «в самый раз» — понятнее, чем слово «пресно».
@@ -85,7 +85,7 @@ export const TIPS = {
   catWave: 'Кот безобразничает! Выйди в обзор кухни (Esc) и помаши мышью над котом — влево-вправо, — он убежит.',
   star: 'Погасла звезда на ёлке. Подойди к ёлке и удержи «Поправить звезду» — к концу дня она должна гореть.',
   stove: 'Плита: четыре конфорки и четыре крутилки. Подойди с продуктом в руках и нажми «Положить сюда» у нужной конфорки, огонь — только крутилкой (зажми и веди по кругу). На 6 закипает за ~25 с. 7–9 быстрее, но на кипении убежит пена и зальёт плиту — убавь до 4–5. Над кастрюлей кольцо: синее — греется, оранжевое — варится, зелёное ✓ — готово, сними с огня, иначе переварится.',
-  fridge: 'Для варки продукт сначала берут в руки: яйца — из холодильника, картофель — из кладовой. Руки одни: отнеси, что держишь, к доске (почистить) или к плите (в кастрюлю).',
+  fridge: 'Для варки продукт сначала берут в руки: и яйца, и картофель — из холодильника. Руки одни: отнеси, что держишь, к доске (почистить) или к плите (в кастрюлю).',
   stoveWipe: 'Конфорку залило убежавшей пеной. Сними кастрюлю, потом зажми кнопку на пятне и три туда-обратно — как тряпкой.',
   hot: 'Сваренное горячее: резать сразу нельзя. Подожди полминуты или остуди под холодной водой у раковины — это быстрее.',
   season: 'Вкус как в жизни: сначала посоли и поперчи (встряхивай солонку над миской), потом перемешай ложкой — и только потом пробуй. Пока не перемешано, соль лежит сверху и проба обманет. Досолила после — ещё оборот ложкой.',
@@ -869,8 +869,8 @@ export class CampaignUI {
       case 'collectWarn':
         this.confirmCollect();
         break;
-      case 'bagArrived':
-        this.toast('Пакет на столешнице — разбери покупки', '', 3);
+      case 'delivered':
+        this.toast(`🛍 Привезли: ${e.items.map((it) => `${(PRODUCTS[it.id].name).toLowerCase()} ×${it.qty}`).join(', ')}`, 'good', 4);
         break;
       case 'ovenEarly':
         this.toast('Курица ещё сырая — верни её в духовку', 'bad', 3);
@@ -965,9 +965,8 @@ export class CampaignUI {
     const c = s.carry;
     const mine = c && c.dishId === dishId && (c.stepId === step.id || c.boilStep === step.id);
     const name = PRODUCTS[step.product]?.name?.toLowerCase() ?? '';
-    const where = PRODUCTS[step.product]?.storage === 'fridge' ? 'холодильника' : 'кладовой';
-    if (step.type === 'peel' && step.raw && !mine) return `Достать ${name} из ${where} и почистить`;
-    if (step.type === 'boil' && !mine) return `Достать ${name} из ${where} → в кастрюлю`;
+    if (step.type === 'peel' && step.raw && !mine) return `Достать ${name} из холодильника и почистить`;
+    if (step.type === 'boil' && !mine) return `Достать ${name} из холодильника → в кастрюлю`;
     if (step.type === 'boil' && mine) return `Положить ${name} в кастрюлю на плите`;
     if (step.type === 'season') {
       const n = s.dishes[dishId].season.target, g = s.recipes[dishId]?.grams;
@@ -1038,7 +1037,7 @@ export class CampaignUI {
       el.style.display = p.visible ? '' : 'none';
       el.style.left = `${p.x}%`;
       el.style.top = `${p.y}%`;
-      const urgent = s.alerts.some((a) => a.station === id && (a.urgent || a.key === 'bag' || a.key === 'potReady' || a.key === 'puddle'));
+      const urgent = s.alerts.some((a) => a.station === id && (a.urgent || a.key === 'potReady' || a.key === 'puddle'));
       el.classList.toggle('urgent', urgent);
       el.classList.toggle('here', s.heroine.station === id && !s.heroine.target);
       el.classList.toggle('hover', this.view.hover === id);
@@ -1055,7 +1054,7 @@ export class CampaignUI {
       if (!el) {
         el = document.createElement('div');
         el.className = `alert ${a.urgent ? 'urgent' : ''}`;
-        const icon = { cat: '🐱', spillWarn: '🐱', catBored: '🧶', toys: '🧸', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', star: '⭐', radio: '📻', phone: '📱', delivery: '🛵', bag: '🛍', puddle: '💧' }[a.key] ?? '❗';
+        const icon = { cat: '🐱', spillWarn: '🐱', catBored: '🧶', toys: '🧸', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', star: '⭐', radio: '📻', phone: '📱', delivery: '🛵', puddle: '💧' }[a.key] ?? '❗';
         let acts = '';
         // 0.11: пилюля — короткий текст, подробности по наведению, кнопка-стрелка вместо слов «Подойти»/«Открыть»
         const go = (label) => `<button class="go" data-a="${a.action === 'collect' ? 'collect' : 'go'}" data-s="${a.station ?? ''}" title="${label}" aria-label="${label}">→</button>`;
@@ -1258,8 +1257,6 @@ export class CampaignUI {
         return `${base}|${s.garland.broken}`;
       case 'tree':
         return `${base}|${s.star.broken}|${s.giftsLeft().map((i) => `${i}:${Math.round(s.giftProgress(i) * 3)}`).join()}|${s.toys.map((x) => `${x.uid}:${x.slot}:${+x.fallen}`).join()}|${s.treeHand}|${s.gift ? `${s.gift.index}:${s.gift.stage}` : ''}|${s.giftShow ? 'show' : ''}`;
-      case 'bag':
-        return `${base}|${s.delivery.bag?.items.map((i) => +i.placed).join('')}`;
       case 'fridge':
         return `${base}|${JSON.stringify(s.inventory.stock)}`;
       case 'table':
@@ -1480,7 +1477,7 @@ export class CampaignUI {
             return `<div class="burner ${b.state} ${b.dirty ? 'dirty' : ''}">${knob}<div class="bcol"><b>${name}</b><span class="bstat" data-burner="${b.i}">${burnerStatus(s, b)}</span>${act}</div></div>`;
           })
           .join('');
-        const need = !canPlace && tasks.length ? `<p class="note live">Чтобы варить, сначала достань продукт: 🧊 холодильник (яйца) или 🗄 кладовая (картофель).</p>` : '';
+        const need = !canPlace && tasks.length ? `<p class="note live">Чтобы варить, сначала достань продукт: 🧊 холодильник (яйца, картофель).</p>` : '';
         return `<h2>♨️ Плита<span class="sub">${c ? `в руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name.toLowerCase())}` : 'четыре конфорки'}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="burners4">${burners}</div></div><div class="row">${bar}</div>${need}${tasks.length || c || s.burners.some((b) => b.state !== 'empty' || b.dirty) ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
       }
       case 'catbowl': {
@@ -1546,22 +1543,14 @@ export class CampaignUI {
       case 'fridge': {
         const rows = Object.entries(s.inventory.stock)
           .filter(([, q]) => q > 0 || s.practice)
-          .map(([id, q]) => `<span class="chip">${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)}: ${q}${s.inventory.reservedOf(id) ? ` (в работе ${s.inventory.reservedOf(id)})` : ''} · ${PRODUCTS[id].storage === 'fridge' ? '🧊' : '🗄'}</span>`)
+          .map(([id, q]) => `<span class="chip">${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)}: ${q}${s.inventory.reservedOf(id) ? ` (в работе ${s.inventory.reservedOf(id)})` : ''}</span>`)
           .join(' ');
         const c = s.carry;
         const takes = s.fridgeTasks()
-          .map((t) => this._btn(`${PICON[t.product] ?? ''} Достать: ${esc(PRODUCTS[t.product].name.toLowerCase())} ×${t.qty}${t.dest === 'board' ? ' · почистить' : ' · варить'}`, 'fridgeTake', [t.dishId, t.stepId], c ? 'ghost soft-disabled' : 'primary', busy, c ? 'Руки заняты' : PRODUCTS[t.product].storage === 'fridge' ? 'Из холодильника' : 'Из кладовой'))
+          .map((t) => this._btn(`${PICON[t.product] ?? ''} Достать: ${esc(PRODUCTS[t.product].name.toLowerCase())} ×${t.qty}${t.dest === 'board' ? ' · почистить' : ' · варить'}`, 'fridgeTake', [t.dishId, t.stepId], c ? 'ghost soft-disabled' : 'primary', busy, c ? 'Руки заняты' : 'Из холодильника'))
           .join('');
         const hands = c ? `<div class="row"><span class="chip">✋ В руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name)} ×${c.qty}${c.peeled ? ' (почищено)' : ''}</span>${c.peeled ? '' : this._btn('↩ Положить обратно', 'fridgeReturn', [], 'ghost', busy)}</div>` : '';
-        return `<h2>🧊 Холодильник и кладовая</h2>${takes ? `<div class="row">${takes}</div>` : ''}${hands}<div class="stock">${rows || 'Пусто'}</div><div class="row">${back}</div><p class="note">Для варки продукт сначала берут в руки: 🧊 — холодильник, 🗄 — кладовая. Не хватает — закажи в телефоне.</p>`;
-      }
-      case 'bag': {
-        const bag = s.delivery.bag;
-        if (!bag) return `<h2>🛍 Пакет</h2><div class="row">${back}</div><p class="note">Пакета нет.</p>`;
-        const rows = bag.items
-          .map((it, i) => `<div class="bag-row ${it.placed ? 'done' : ''}">${PICON[it.id] ?? ''} ${esc(PRODUCTS[it.id].name)} × ${it.qty} ${it.placed ? '✓' : this._btn('🧊 В холодильник', 'unpack', [i, 'fridge'], 'ghost', busy) + this._btn('🗄 В кладовую', 'unpack', [i, 'pantry'], 'ghost', busy)}</div>`)
-          .join('');
-        return `<h2>🛍 Разобрать пакет</h2>${rows}<div class="row">${bar}${back}</div><p class="note">Продукты появятся в запасах только после раскладки по местам.</p>`;
+        return `<h2>🧊 Холодильник</h2>${takes ? `<div class="row">${takes}</div>` : ''}${hands}<div class="stock">${rows || 'Пусто'}</div><div class="row">${back}</div><p class="note">Для варки продукт сначала берут в руки. Не хватает — закажи в телефоне: привезённое сразу ложится сюда.</p>`;
       }
       case 'table': {
         if (!s.day.finalServe) return `<h2>🎄 Праздничный стол</h2><div class="row">${back}</div><p class="note">Готовые блюда появляются здесь сами. Финальная сервировка — в седьмой день.</p>`;
