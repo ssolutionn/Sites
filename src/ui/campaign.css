@@ -95,7 +95,10 @@ table.shop td.qty span { display: inline-block; min-width: 18px; text-align: cen
 #tip .tip-text { flex: 1; font-size: 14px; line-height: 1.4; }
 #tip.side { left: 16px; top: 214px; transform: none; width: min(300px, calc(100vw - 32px)); flex-direction: column; align-items: stretch; }
 #tip.side .tip-text { font-size: 13px; }
-.dish-toast { max-width: 460px; text-align: center; }
+.toast.dish-toast { max-width: 460px; text-align: center; border-radius: var(--r-m); }
+.dish-toast b, .dish-toast .small, .dish-toast .ready { display: block; }
+.dish-toast .small { font-weight: 700; opacity: 0.9; margin-top: 2px; }
+.dish-toast .ready { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,.28); font-weight: 800; }
 
 /* итоги */
 .dish-res { display: flex; gap: 12px; align-items: flex-start; border-top: 1px solid var(--line); padding: 8px 0; }

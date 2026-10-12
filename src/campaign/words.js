@@ -22,3 +22,28 @@ export function kitchenMin(gameSeconds, scale) {
   const m = Math.round((gameSeconds * scale) / 60);
   return m < 1 ? 'меньше минуты' : m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч${m % 60 ? ` ${m % 60} мин` : ''}`;
 }
+
+const EIGHTHS = ['', '⅛', '¼', '⅜', '½', '⅝', '¾', '⅞'];
+
+/**
+ * Чайные ложки для соли и перца (0.11: «в ложках чайных на количество салата»).
+ * pinches — щепотки, одна щепотка = pinchTsp ч. л. (CAMPAIGN.season.pinchTsp, 1/8): 3 → «⅜», 4 → «½», 8 → «1», 9 → «1⅛».
+ */
+export function tspText(pinches, pinchTsp = 1 / 8) {
+  const e = Math.round(pinches * pinchTsp * 8);
+  if (e <= 0) return '0';
+  const whole = Math.floor(e / 8);
+  return `${whole || ''}${EIGHTHS[e % 8]}`;
+}
+
+/** «½ ч. л.» — мера целиком. */
+export function tsp(pinches, pinchTsp = 1 / 8) {
+  return `${tspText(pinches, pinchTsp)} ч. л.`;
+}
+
+/** Вес готового блюда: 600 → «600 г», 1500 → «1,5 кг», 2000 → «2 кг». */
+export function gramsText(g) {
+  if (g < 1000) return `${Math.round(g)} г`;
+  const kg = Math.round(g / 100) / 10;
+  return `${String(kg).replace('.', ',')} кг`;
+}

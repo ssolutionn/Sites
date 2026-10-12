@@ -10,7 +10,7 @@ import { LOGO_URL, NEUTRAL } from '../view/textures.js';
 import { formatFreq } from '../campaign/st-radio.js';
 import { PICON } from './icons.js';
 import { tipClosedBy } from './tip-done.js';
-import { pts } from '../campaign/words.js';
+import { pts, tsp, tspText, gramsText } from '../campaign/words.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -63,7 +63,7 @@ export const TIPS = {
   round: 'Кружочки: проведи ножом сверху вниз через продукт — отрежешь кружок. Толщина — расстояние до прошлого разреза, сравни с образцом. Вдоль кружочки не режут.',
   grate: 'Тёрка: зажми левую кнопку и води мышью вверх-вниз. Засчитываются только полные движения.',
   peel: 'Чистка. Картофель — ножом: зажми кнопку и веди по клубню, кожура снимается там, где прошёл нож. Яйцо — пальцами: сначала нажми на каждое пару раз (постучать о доску — скорлупа треснет), потом зажми и снимай скорлупу.',
-  bowl: 'Миска руками: выбери банку или майонез внизу, зажми кнопку и веди над миской — горошек высыпается, майонез ложится там, где ведёшь. Солонку возьми внизу и кликай над миской — каждый клик щепотка. Ложкой мешай по кругу.',
+  bowl: 'Миска руками: выбери банку или майонез внизу, зажми кнопку и веди над миской — горошек высыпается, майонез ложится там, где ведёшь. Солонку возьми внизу и кликай над миской — каждый клик ⅛ ч. л. соли. Ложкой мешай по кругу.',
   sink: 'Раковина: горячее — «Под кран», потом зажми кнопку над раковиной: льётся холодная вода, держи, пока не уйдёт пар. Грязную посуду — выбери и три губкой.',
   puddle: 'Уборка: зажми кнопку и води тряпкой по луже.',
   'tray:sandwiches': 'Бутерброды: лопаткой (зажми кнопку) намажь каждый ломтик — масло видно там, где прошла лопатка. Потом ложкой кликай по ломтикам: норма — 2 ложки икры.',
@@ -140,11 +140,24 @@ export class CampaignUI {
     this.noteT = 0;
     this.noteIdle = 0;
     this.factIdx = 0;
+    // 0.11 A3: после готового блюда 2,5 с видна одна карточка, остальное молчит или ждёт
+    this.quiet = 0;
+    this.noteLater = null;
+    this.dishCard = null;
+  }
+
+  /** Блюдо закончено: на sec секунд гасим всплывашки вкуса и заметки книги (заметка покажется позже). */
+  quietFor(sec) {
+    this.quiet = Math.max(this.quiet, sec);
   }
 
   // Показать заметку книги: kind — подпись («Как на самом деле»), text — одна-две фразы.
   _note(kind, text) {
     if (!text) return;
+    if (this.quiet > 0) {
+      this.noteLater = { kind, text };
+      return;
+    }
     this.el.note.innerHTML = `<div class="ln-k">📖 ${esc(kind)}</div><div class="ln-t">${esc(text)}</div>`;
     this.el.note.classList.remove('hidden');
     this.el.note.classList.remove('pop');
@@ -562,10 +575,14 @@ export class CampaignUI {
 
   // Всплывающая надпись по центру (как в аркадных кухнях): «Идеально!», «Пересолено» и т. п.
   popup(text, kind = '') {
+    if (this.quiet > 0) return;
+    // одна всплывашка за раз: новая заменяет старую
+    this._popupEl?.remove();
     const d = document.createElement('div');
     d.className = `popup ${kind}`;
     d.innerHTML = text;
     document.body.appendChild(d);
+    this._popupEl = d;
     setTimeout(() => d.remove(), 1500);
   }
 
@@ -591,8 +608,10 @@ export class CampaignUI {
     d.className = `toast ${kind}`;
     d.innerHTML = text;
     this.el.toasts.appendChild(d);
-    this.toasts.push({ el: d, t: seconds });
+    const rec = { el: d, t: seconds };
+    this.toasts.push(rec);
     while (this.toasts.length > 3) this.toasts.shift().el.remove();
+    return rec;
   }
 
   tip(topic, force = false) {
@@ -676,14 +695,22 @@ export class CampaignUI {
         if (this.pendingTips.length) this.tip(this.pendingTips.shift());
         break;
       case 'dishDone': {
+        // 0.11 A3: одна карточка — значок и название, оценка, слово-вердикт, до трёх замечаний
         const d = s.dishes[e.dishId];
-        this.popup(`${ICON[e.dishId]} ${e.Q >= 90 ? 'Шедевр!' : e.Q >= 75 ? 'Отлично!' : e.Q >= 55 ? 'Готово' : 'Ну… съедобно'}`, e.Q >= 75 ? 'good' : '');
-        this.toast(`<b>${ICON[e.dishId]} ${esc(d.recipe.name)} готово — ${e.Q}</b><br/><span class="small">${e.notes.map(esc).join(' · ')}</span>`, 'good dish-toast', 6);
+        const verdict = e.Q >= 90 ? 'Шедевр!' : e.Q >= 75 ? 'Отлично!' : e.Q >= 55 ? 'Готово' : 'Ну… съедобно';
+        this.quietFor(CAMPAIGN.ui.dishQuiet);
+        this.dishCard = this.toast(`<b>${ICON[e.dishId]} ${esc(d.recipe.name)} — ${e.Q}. ${verdict}</b><span class="small">${e.notes.map(esc).join(' · ')}</span>`, `${e.Q >= 75 ? 'good' : ''} dish-toast`, 6);
         break;
       }
-      case 'dayReady':
-        this.toast('<b>Все блюда дня готовы!</b> Нажми «Завершить день».', 'good', 5);
+      case 'dayReady': {
+        const line = 'Все блюда готовы — «Завершить день»';
+        // если карточка блюда ещё на экране, строка уходит в неё, а не отдельным сообщением
+        if (this.dishCard?.el.isConnected) {
+          this.dishCard.el.insertAdjacentHTML('beforeend', `<span class="ready">${line}</span>`);
+          this.dishCard.t = Math.max(this.dishCard.t, 6);
+        } else this.toast(`<b>${line}</b>`, 'good', 5);
         break;
+      }
       case 'catStart':
         this.tip(e.kind === 'spill' ? 'catSpill' : e.kind === 'theft' ? 'catTheft' : 'catWave');
         break;
@@ -878,6 +905,14 @@ export class CampaignUI {
       this.tipT -= dt;
       if (this.tipT <= 0) this.el.tip.classList.add('hidden');
     }
+    if (this.quiet > 0) {
+      this.quiet -= dt;
+      if (this.quiet <= 0 && this.noteLater) {
+        const n = this.noteLater;
+        this.noteLater = null;
+        this._note(n.kind, n.text);
+      }
+    }
     if (!s || (mode !== 'kitchen' && mode !== 'paused')) return;
     if (mode === 'kitchen' && !s.panel && !['theft','spill','mischief'].includes(s.cat.state) && this.el.tip.classList.contains('hidden') && this.pendingTips.length) this.tip(this.pendingTips.shift());
     // Keep the cat and the sweep of the hand visible beside the distant tree.
@@ -935,8 +970,8 @@ export class CampaignUI {
     if (step.type === 'boil' && !mine) return `Достать ${name} из ${where} → в кастрюлю`;
     if (step.type === 'boil' && mine) return `Положить ${name} в кастрюлю на плите`;
     if (step.type === 'season') {
-      const n = s.dishes[dishId].season.target;
-      return `Посолить (${n.salt}) и поперчить (${n.pepper}) — щепотки`;
+      const n = s.dishes[dishId].season.target, g = s.recipes[dishId]?.grams;
+      return `Посолить (${tsp(n.salt)}) и поперчить (${tsp(n.pepper)})${g ? ` — на ${gramsText(g)}` : ''}`;
     }
     return step.label;
   }
@@ -1286,14 +1321,15 @@ export class CampaignUI {
         if (s.bowl.shaker) {
           const se = s.dishes[s.bowl.shaker.dishId].season;
           const k = s.bowl.shaker.kind;
-          return `<span class="q">${k === 'salt' ? '🧂 Солонка' : '🌶 Перечница'} в руке · ${se[k]} из ${se.target[k]} ${plural(se.target[k], 'щепотки', 'щепоток', 'щепоток')}</span><span>кликни над миской — щепотка; или зажми и тряхни вниз-вверх</span>${se.last ? tasteScale(se.last) : ''}`;
+          const gr = s.recipes[s.bowl.shaker.dishId]?.grams;
+          return `<span class="q">${k === 'salt' ? '🧂 Соль' : '🌶 Перец'}: ${tspText(se[k])} из ${tsp(se.target[k])}${gr ? ` · на ${gramsText(gr)}` : ''}</span><span>клик над миской или взмах вниз-вверх — ⅛ ч. л. за раз</span>${se.last ? tasteScale(se.last) : ''}`;
         }
         const mt = s.mixTarget();
         const ph = s.bowl.owner && s.seasonState(s.bowl.owner);
         if (ph?.phase === 'spice') {
           const n = ph.target, r = s.recipes[s.bowl.owner]?.season;
           const wish = r && (n.salt !== r.salt || n.pepper !== r.pepper) ? ' · гости попросили' : '';
-          return `<span class="q">1. Посоли и поперчи: 🧂 ${n.salt} ${plural(n.salt, 'щепотка', 'щепотки', 'щепоток')} · 🌶 ${n.pepper ? n.pepper + ' ' + plural(n.pepper, 'щепотка', 'щепотки', 'щепоток') : 'без перца'}${wish}</span><span>клик над миской — щепотка → 2. перемешай → 3. попробуй</span>`;
+          return `<span class="q">1. Посоли и поперчи: 🧂 ${tsp(n.salt)} · 🌶 ${n.pepper ? tsp(n.pepper) : 'без перца'}${s.recipes[s.bowl.owner]?.grams ? ` на ${gramsText(s.recipes[s.bowl.owner].grams)}` : ''}${wish}</span><span>клик над миской — ⅛ ч. л. → 2. перемешай → 3. попробуй</span>`;
         }
         if (mt?.ok) {
           const m = Math.min(1, s.mixTurns() / CAMPAIGN.mix.turnsRequired);
@@ -1304,7 +1340,7 @@ export class CampaignUI {
           return `<span class="qbar"><i style="width:${t * 100}%"></i></span><span class="q">Досолила — перемешай ещё оборот</span><span>потом попробуй</span>`;
         }
         const se = s.bowl.owner && s.dishes[s.bowl.owner]?.season;
-        if (ph?.phase === 'taste') return se?.last ? `<span class="q">Проба: ${esc(se.last.verdict)}</span>${tasteScale(se.last)}${se.last.ok ? '<span>— можно подавать: «✓ Вкус готов»</span>' : se.last.ds > 0 || se.last.dp > 0 ? '<span>— спаси: «🥔 Досыпать картошки»</span>' : '<span>— добавь щепотку и перемешай</span>'}` : '<span class="q">3. Попробуй ложкой</span><span>соль разошлась — проба честная</span>';
+        if (ph?.phase === 'taste') return se?.last ? `<span class="q">Проба: ${esc(se.last.verdict)}</span>${tasteScale(se.last)}${se.last.ok ? '<span>— можно подавать: «✓ Вкус готов»</span>' : se.last.ds > 0 || se.last.dp > 0 ? '<span>— спаси: «🥔 Досыпать картошки»</span>' : '<span>— добавь ⅛ ч. л. и перемешай</span>'}` : '<span class="q">3. Попробуй ложкой</span><span>соль разошлась — проба честная</span>';
         return mt?.block ? `<span>${esc(mt.block)}</span>` : '';
       }
       case 'tray': {
@@ -1407,7 +1443,7 @@ export class CampaignUI {
           const dis = busy || !!ss.block;
           const canTaste = ss.phase === 'taste' && !ss.unmixed;
           const tasteWhy = ss.phase !== 'taste' ? 'Сначала перемешай — соль лежит сверху' : ss.unmixed ? 'Досолила — ещё оборот ложкой' : '';
-          season = chip('🧂', hand === 'salt' ? `Соль в руке · ${ss.salt}` : `Соль · ${ss.salt}`, 'seasonPick', [id, 'salt'], hand === 'salt' ? 'active' : '', dis, ss.block ?? 'Взять солонку: потом кликай над миской') + chip('🌶', hand === 'pepper' ? `Перец в руке · ${ss.pepper}` : `Перец · ${ss.pepper}`, 'seasonPick', [id, 'pepper'], hand === 'pepper' ? 'active' : '', dis, ss.block ?? 'Взять перечницу: потом кликай над миской');
+          season = chip('🧂', hand === 'salt' ? `Соль в руке · ${tspText(ss.salt)}` : `Соль · ${tspText(ss.salt)}`, 'seasonPick', [id, 'salt'], hand === 'salt' ? 'active' : '', dis, ss.block ?? 'Взять солонку: потом кликай над миской') + chip('🌶', hand === 'pepper' ? `Перец в руке · ${tspText(ss.pepper)}` : `Перец · ${tspText(ss.pepper)}`, 'seasonPick', [id, 'pepper'], hand === 'pepper' ? 'active' : '', dis, ss.block ?? 'Взять перечницу: потом кликай над миской');
           // пересол спасают отварной картошкой — воду в салат не льют
           const salty = ss.last && (ss.last.ds > 0 || ss.last.dp > 0);
           if (ss.phase === 'taste') season += chip('👅', 'Попробовать', 'seasonTaste', [id], canTaste ? '' : 'locked', dis, tasteWhy) + (salty ? chip('🥔', 'Досыпать картошки', 'seasonDilute', [id], canTaste ? '' : 'locked', dis, tasteWhy || 'Пересолила — досыпь отварной картошки, соли станет меньше') : '');

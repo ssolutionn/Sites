@@ -8,7 +8,7 @@ export const WISHES = {
   noOnion: { recipes: ['tomatoes', 'shuba'], label: 'без лука', text: (r) => `Можно ${quote(r)} без лука? Остальное как обычно.` },
   lightMayo: { recipes: ['olivier', 'crab', 'eggs', 'tartlets', 'tomatoes'], label: 'поменьше майонеза', text: (r) => `В ${quote(r)} поменьше майонеза, пожалуйста — мы на диете 🙈` },
   moreSalt: { recipes: SEASONED, label: 'посолонее', text: (r) => `Мы любим посолонее! ${cap(quote(r))} — чуть солёнее обычного, ладно?`, shift: { salt: 1 } },
-  lessSalt: { recipes: SEASONED, label: 'не пересолить', text: (r) => `У Миши давление — ${quote(r)} посоли поменьше, на щепотку.`, shift: { salt: -1 } },
+  lessSalt: { recipes: SEASONED, label: 'не пересолить', text: (r) => `У Миши давление — ${quote(r)} посоли поменьше, на ⅛ ч. л.`, shift: { salt: -1 } },
   noPepper: { recipes: SEASONED, label: 'без перца', text: (r) => `Катя не ест острое — ${quote(r)} без перца, пожалуйста!`, set: { pepper: 0 } },
   extraCaviar: { recipes: ['sandwiches'], label: 'по 3 ложки икры', text: () => 'Икры не жалей! По три ложки на каждый бутерброд 🤩' },
 };

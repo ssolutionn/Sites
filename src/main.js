@@ -673,7 +673,10 @@ async function boot() {
         session.boardSpin(turnHeld.dir, Math.min(real, CAMPAIGN.maxFrameDt));
       }
       session.update(real);
-      for (const e of session.drain()) dispatch(e);
+      const batch = session.drain();
+      // блюдо закончено в этот кадр: поздравления и заметки книги уступают одной карточке блюда (0.11 A3)
+      if (batch.some((e) => e.type === 'dishDone')) ui.quietFor(CAMPAIGN.ui.dishQuiet);
+      for (const e of batch) dispatch(e);
       if (stream && !session.practice) stream.update(Math.min(real, CAMPAIGN.maxFrameDt));
     }
     ui.renderVotes(stream && mode === 'kitchen' && session && !session.practice ? stream.view() : null);
