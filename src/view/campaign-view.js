@@ -1562,6 +1562,7 @@ export class CampaignView {
             const hm = o.halves[i][j];
             hm.visible = e.split;
             hm.userData.yolk.visible = h.yolk;
+            hm.userData.yolk.material.color.setHex(dish.penalty?.overcook === 'egg' ? 0xa9a25a : 0xffc83a); // 0.11: переваренный желток серо-зелёный
             hm.userData.fill.visible = h.fill > 0.02;
             hm.userData.fill.scale.set(0.017, Math.max(0.002, h.fill * 0.012), 0.024);
           });

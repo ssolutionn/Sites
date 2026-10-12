@@ -72,6 +72,7 @@ function shapeOf(product) {
 // ---------- шейдер мякоти и кожуры ----------
 const NOISE = /* glsl */ `
 uniform float uKind;
+uniform float uOver; // 0.11: 1 — продукт переварен (яйцо: серо-зелёный ободок у желтка, белок плотнее)
 uniform vec4 uDim;
 uniform vec3 uBase;
 varying vec3 vPP;
@@ -117,6 +118,10 @@ vec3 productColor(vec3 p, float skin) {
     float e = length(vec3(p.x / max(W, .01), (p.y - H * .45) / (H * .5), p.z / max(D, .01)));
     vec3 white = vec3(.98, .97, .93);
     vec3 yolk = mix(vec3(1., .8, .22), vec3(.97, .68, .12), smoothstep(.1, .5, e));
+    // переварено: желток бледнеет, по краю серо-зелёный ободок, белок слегка желтеет и становится «резиновым»
+    yolk = mix(yolk, vec3(.88, .78, .36), uOver * .55);
+    yolk = mix(yolk, vec3(.45, .52, .33), uOver * smoothstep(.3, .46, e));
+    white = mix(white, vec3(.95, .94, .84), uOver * .6);
     vec3 fl = mix(yolk, white, smoothstep(.5, .57, e));
     c = mix(fl, white * (.97 + .03 * n), skin);
   } else if (uKind < 4.5) { // докторская: розовая, с крапинками
@@ -182,6 +187,7 @@ export function productMaterial(product, peel = null) {
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: sh.look.rough ?? 0.6, metalness: 0 });
   const uniforms = {
     uKind: { value: sh.look.kind },
+    uOver: { value: 0 },
     uDim: { value: new THREE.Vector4(sh.W, sh.D, sh.look.h, sh.look.base ?? 0) },
     uBase: { value: new THREE.Color().setHex(PRODUCTS[product]?.color ?? 0xdddddd, THREE.LinearSRGBColorSpace) },
   };
@@ -805,6 +811,7 @@ export class CutBoardView {
     const merged = geos.length ? mergeGeometries(geos) : new THREE.BufferGeometry();
     for (const g of geos) g.dispose();
     const mat = it.peel ? productMaterial(it.product, this._peelState(it.peel)) : productMaterial(it.product);
+    mat.userData.uniforms.uOver.value = it.overcooked ? 1 : 0; // 0.11: переваренное яйцо видно на срезе
     if (!this.bodyMesh) {
       this.bodyMesh = new THREE.Mesh(merged, mat);
       this.bodyMesh.castShadow = true;

@@ -59,7 +59,7 @@ export const boardMethods = {
     const prod = PRODUCTS[step.product];
     const qty = step.qty ?? 1; // один заход — вся порция рецепта: копии лежат рядом
     // size — сторона кубика по рецепту, см (оливье 1, канапе 2,5)
-    const it = { key, dishId, stepId, product: step.product, qty, type: step.type, shape: step.shape, size: step.size ?? 1, cuts: 0, missing: [], freshIds: new Set() };
+    const it = { key, dishId, stepId, product: step.product, qty, type: step.type, shape: step.shape, size: step.size ?? 1, cuts: 0, missing: [], freshIds: new Set(), overcooked: this.dishes[dishId]?.penalty?.overcook === step.product };
     if (step.type === 'grate') {
       it.grater = new Grater(this.cfg.grate, this.cfg.grate.cyclesPerPortion * qty);
     } else if (step.shape === 'round' && step.type !== 'peel') {
@@ -193,7 +193,9 @@ export const boardMethods = {
 
   _afterKnife(it, px, pz, bx, bz) {
     const before = it.pieces.length;
-    const crumbs = it.body.sweep(this.cfg.crumbs.area, this.cfg.crumbs.thick);
+    // 0.11: переваренный картофель крошится — порог крошки выше, мелких кусков уходит больше
+    const crumbK = it.overcooked && it.product === 'potato' ? this.cfg.stove.potatoCrumbK : 1;
+    const crumbs = it.body.sweep(this.cfg.crumbs.area * crumbK, this.cfg.crumbs.thick);
     it.pieces = it.body.pieces();
     if (crumbs.length) this._emit('crumbs', { key: it.key, list: crumbs });
     if (it.pieces.length > before) {

@@ -112,3 +112,26 @@ test('яйца: передержала — серо-зелёный ободок 
   assert.equal(s.dishes.olivier.penalty.overcook, 'egg');
   assert.equal(s.dishes.olivier.penalty.prep, CAMPAIGN.stove.overcookPenaltyBy.egg);
 });
+
+test('переваренные яйца помечены на доске — на срезе будет серо-зелёный ободок', () => {
+  const s = potOn(6, 'olivier:boilEgg');
+  run(s, kitchenSec(8) + kitchenSec(10) + kitchenSec(4) + 2);
+  assert.equal(s.burners[0].overcooked, true);
+  arrive(s, 'stove');
+  assert.ok(s.takePot(0));
+  waitAction(s);
+  run(s, CAMPAIGN.cool.time + 1);
+  arrive(s, 'board');
+  assert.ok(s.boardSelect('olivier:peelEgg'));
+  assert.equal(s.boardCur().overcooked, true);
+  // свежесваренные яйца — без ободка
+  const t = potOn(6, 'olivier:boilEgg');
+  run(t, kitchenSec(8) + kitchenSec(10) + 2);
+  arrive(t, 'stove');
+  assert.ok(t.takePot(0));
+  waitAction(t);
+  run(t, CAMPAIGN.cool.time + 1);
+  arrive(t, 'board');
+  assert.ok(t.boardSelect('olivier:peelEgg'));
+  assert.equal(t.boardCur().overcooked, false);
+});
