@@ -120,7 +120,7 @@ async function boot() {
 
   const SOUND_OF = {
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
-    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'jingle', toyTaken: 'select', toysPicked: 'added', toyReturned: 'rotate', setComplete: 'success', giftStart: 'select', giftTick: 'rustle', giftBow: 'added', giftPaper: 'bag',
+    phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'jingle', toyTaken: 'select', toyPicked: 'added', toyReturned: 'rotate', toyBroken: 'jingle', treeFell: 'treeFall', treeUp: 'fixed', treeLiftTick: 'rustle', tinselBought: 'cash', tinselDraw: 'rustle', tinselHung: 'jingle', tinselTaken: 'rotate', tinselEmpty: 'deny', setComplete: 'success', giftStart: 'select', giftTick: 'rustle', giftBow: 'added', giftPaper: 'bag',
     radioBroken: 'radioBroken', radioFixed: 'fixed', potatoReady: 'ready', added: 'added', potPlaced: 'added', potatoTaken: 'added',
     replacement: 'added', dishDone: 'success', dayReady: 'ready', ovenReady: 'ready', ovenOver: 'boil', washed: 'fixed', puddleClean: 'fixed',
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
@@ -137,7 +137,7 @@ async function boot() {
     // декор кухни сохраняется сразу — это покупка, а не результат дня; баллы дня сюда не попадают (persist.js)
     if (e.type === 'decorBought' && applyDecorPurchase(save.data, { id: e.id, practice: !!session.practice, challenge: session.challenge })) persist();
     // ёлка: подарки, игрушки и их места сохраняются сразу (persist.js)
-    if (applyTreeEvent(save.data, e, { toys: session.toysForSave?.(), practice: !!session.practice, challenge: session.challenge })) persist();
+    if (applyTreeEvent(save.data, e, { toys: session.toysForSave?.(), tinsel: session.tinselForSave?.(), practice: !!session.practice, challenge: session.challenge })) persist();
     // любимая волна радио переходит из дня в день
     if (e.type === 'radioTuned' && !session.practice) {
       save.data.settings.radioFreq = e.freq;
@@ -162,7 +162,7 @@ async function boot() {
     challenge = ch;
     const seed = ch ? ch.seed : fixedSeed ?? (Math.random() * 1e9) >>> 0;
     const mods = Object.fromEntries((ch?.mods ?? []).map((m) => [m, true]));
-    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [], setsDone: save.data.sets ?? [] });
+    session = new KitchenSession({ dayIndex: i, seed, challenge: !!ch, tableDishes: completedDishes(i), mods, bonus: ch ? 0 : save.data.bonus ?? 0, decor: save.data.decor ?? [], toys: save.data.toys ?? [], tinsel: { threads: save.data.tinsel ?? [], rolls: save.data.tinselRolls ?? {} }, giftsOpened: save.data.gifts?.[DAYS[i].id] ?? [], setsDone: save.data.sets ?? [] });
     if (Number.isFinite(save.data.settings.radioFreq)) session.radio.freq = clampFreq(save.data.settings.radioFreq);
     view.reset();
     view.setActive(true);
@@ -230,6 +230,9 @@ async function boot() {
     save.data.bonus = session.bonus.points;
     save.data.decor = [...session.decor];
     save.data.toys = session.toysForSave();
+    const ts = session.tinselForSave();
+    save.data.tinsel = ts.threads;
+    save.data.tinselRolls = ts.rolls;
     delete save.data.settings.inProgress;
     persist(true);
     sound.play('success');
@@ -324,18 +327,22 @@ async function boot() {
       sv.setCameraMode('menu');
       ui.showMenu(save);
     },
-    // 0.10: ёлка — игрушку отпустили после перетаскивания: над свободной веткой — повесить, мимо — назад
+    // 0.10: ёлка — игрушку отпустили после перетаскивания: над свободной точкой — повесить, мимо — назад.
+    // 0.11: точка — любая на поверхности ёлки (луч мыши → tree-geo), а не заготовленная ветка
     toyHover(e) {
-      if (session?.panel === 'tree') view.treeHover = view.treeSlotAt(ndcOf(e));
+      if (session?.panel !== 'tree') return;
+      const r = canvas.getBoundingClientRect();
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      view.tree.pointer = inside && !e.target?.closest?.('#panel') ? ndcOf(e) : null;
     },
     dropToy(e, back = null) {
       if (!session || mode !== 'kitchen' || session.panel !== 'tree') return;
       const r = canvas.getBoundingClientRect();
       const overPanel = e.target?.closest?.('#panel');
       const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-      const slot = inside && !overPanel ? view.treeSlotAt(ndcOf(e)) : null;
-      const hung = act('dropToy', slot, back);
-      if (!hung && slot != null) sound.play('deny');
+      const hit = inside && !overPanel ? view.tree.hit(ndcOf(e)) : null;
+      const hung = act('dropToy', hit?.p ?? null, ...(back ? [back] : []));
+      if (!hung && hit) sound.play('deny');
     },
     dropDish(id, e) {
       if (!session || mode !== 'kitchen') return;
@@ -493,15 +500,18 @@ async function boot() {
         return;
       }
     }
-    if (session?.panel === 'tree' && !session.gift) {
-      view.treeHover = view.treeSlotAt(lastNdc);
-      canvas.style.cursor = view.treeHover != null ? 'pointer' : '';
+    if (session && mode === 'kitchen' && session.panel === 'tree' && !session.gift) {
+      // 0.11: ёлка — мишуру ведут по поверхности, упавшую ёлку тянут вверх; hover и призрак игрушки — в view.tree
+      view.tree.pointer = lastNdc;
+      if (session.tinsel.draw) act('tinselMove', view.tree.hit(lastNdc)?.p ?? null);
+      else if (session.treeFall.grab) act('treeLiftMove', view.tree.liftAngle(lastNdc));
       return;
     }
     if (canvas.style.cursor) canvas.style.cursor = '';
   });
   canvas.addEventListener('pointerleave', () => {
     lastNdc = null;
+    view.tree.pointer = null;
   });
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
@@ -530,11 +540,36 @@ async function boot() {
         act('startGift', gift);
         return;
       }
-      const slot = view.treeSlotAt(ndc);
-      if (slot == null) return;
+      const T = view.tree;
+      // игрушка на полу: клик подбирает, перетаскивание в коробку — тоже (0.11)
+      const onFloor = T.floorToyAt(ndc);
+      if (onFloor != null) {
+        ui.startFloorDrag(onFloor, e);
+        return;
+      }
+      // кот уронил ёлку: зажать ствол или верхушку и тянуть вверх (угол мыши вокруг основания — view.tree.liftAngle)
+      if (session.treeFall.down) {
+        const g = T.liftGrab(ndc);
+        if (g && act('treeLiftStart', g.zone, g.angle)) canvas.setPointerCapture?.(e.pointerId);
+        return;
+      }
+      const tool = session.tinsel.tool;
+      if (tool === 'cut') {
+        const id = T.threadAt(ndc);
+        if (id != null) act('tinselRemove', id);
+        return;
+      }
+      const hit = T.hit(ndc);
+      if (tool) {
+        // моток в руке: зажать на ёлке и вести — точки берёт tree-geo на каждом движении
+        if (hit && act('tinselStart', hit.p)) canvas.setPointerCapture?.(e.pointerId);
+        else sound.play('deny');
+        return;
+      }
       const empty = session.treeHand == null;
-      act('treeClick', slot);
-      if (empty && session.treeHand != null) ui.startToyDrag(session.treeHand, e, slot);
+      const ok = act('treeClick', hit?.p ?? null, empty ? T.toyAt(ndc) : null);
+      if (!ok && !empty) sound.play('deny');
+      if (empty && session.treeHand != null) ui.startToyDrag(session.treeHand, e);
       return;
     }
     const hit = view.pick(ndc);
@@ -688,7 +723,7 @@ async function boot() {
         view.hover = hit?.station ?? null;
       } else view.hover = null;
       if (!closeupActive()) view.pointerLocal = null;
-      canvas.style.cursor = closeupActive() ? (session.panel === 'board' ? 'crosshair' : 'grab') : view.hover ? 'pointer' : 'default';
+      canvas.style.cursor = closeupActive() ? (session.panel === 'board' ? 'crosshair' : 'grab') : view.tree.cursor(session) ?? (view.hover ? 'pointer' : 'default');
       view.update(session, animDt, mode);
     } else {
       canvas.style.cursor = 'default';

@@ -41,6 +41,8 @@ export const TIP_DONE = {
   delivery: ['bagArrived'],
   money: ['orderPlaced'],
   treeDecor: ['toyHung'],
+  tinsel: ['tinselHung'],
+  treeDown: ['treeUp'],
   giftOpen: ['giftBow', 'giftOpened'],
 };
 

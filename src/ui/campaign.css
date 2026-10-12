@@ -179,3 +179,9 @@ body.campaign .st-label.here { border-color: var(--green); }
 .menu .title-card { padding: 16px 22px 18px; }
 .menu .title-card h1 { font-size: clamp(28px, 3.6vw, 42px); }
 @media (max-height: 780px) { .menu .title-card h1 { font-size: 30px; } .menu .title-card .by { margin-top: 8px; } .menu .actions .big { padding-top: 9px; padding-bottom: 9px; } }
+/* 0.11: ёлка — подъём упавшей ёлки и мишура в доке */
+#panel.station-panel .lift { flex: 1; min-width: 260px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+#panel.station-panel .lift-bar { height: 12px; border-radius: 6px; overflow: hidden; }
+#panel.station-panel .lift-bar i { display: block; height: 100%; transition: width 0.12s; }
+#panel.station-panel .floor-note { align-self: center; font-weight: 700; font-size: 13px; white-space: nowrap; }
+#panel.station-panel .tinsel-chip .pn { font-size: 12.5px; }

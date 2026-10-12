@@ -1,8 +1,8 @@
 // Интерфейс кампании (DOM). Читает состояние и отправляет команды через act().
-import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS } from '../campaign/data.js';
+import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS, TINSEL } from '../campaign/data.js';
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
-import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS, STOVE, TREE_SLOTS } from '../campaign/layout.js';
+import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
@@ -29,6 +29,7 @@ function saveNote(save) {
   if (save.status === 'reset') return 'Старое сохранение не удалось прочитать — начата новая кампания. Копия старого лежит в браузере, её можно вернуть.';
   return '';
 }
+const metres = (m) => `${(Math.round(m * 10) / 10).toFixed(1).replace('.', ',')} м`;
 const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
 const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🍗', sink: '🚰', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', bag: '🛍', table: '🥂', puddle: '🧽' };
@@ -94,7 +95,9 @@ export const TIPS = {
   money: 'У дня есть бюджет. Экспресс быстрее, но дороже. «Сходить самой» бесплатно, но героиня уходит на 35 секунд — плита и кот без присмотра.',
   boardDirty: 'После сельди или свёклы доска грязная: тот же продукт резать можно, другой — только после мытья у раковины. Режь пахучее последним!',
   giftOpen: 'Подарок открывают руками: зажми бант и потяни, потом рви бумагу — води по коробке туда-сюда, потом зажми крышку и сдвинь. Отпустишь или отложишь (Esc) — начатое не пропадёт.',
-  treeDecor: 'Наряжаем ёлку: зажми игрушку в коробке внизу и перетащи на ветку — свободные ветки светятся. Висящую игрушку можно перетащить на другую ветку. Весь набор на ёлке — бонусные очки домохозяйки.',
+  treeDecor: 'Наряжаем ёлку: зажми игрушку в коробке внизу и перетащи на любое место ёлки — куда нравится, только не вплотную к другой игрушке. Висящую можно перетащить в другое место. Весь набор на ёлке — очки домохозяйки.',
+  tinsel: 'Мишура: возьми моток внизу, зажми кнопку на ёлке и води по веткам — нитка ложится, где ведёшь, а длина уходит из мотка. Отпустила — нитка закончилась. «Снять» — ножницы: клик по нитке возвращает длину в моток.',
+  treeDown: 'Кот уронил ёлку! Подойди к ней, зажми ствол или верхушку и потяни вверх. Пока она лежит, вешать нельзя. Часть стеклянных игрушек могла разбиться, остальные на полу: кликни по игрушке или перетащи её в коробку.',
   wish: 'Гости прислали пожелание. Оно видно в рецепте (Q) и влияет на оценку блюда.',
   'tray:chicken': 'Маринад: кисточкой (зажми кнопку) проведи по курице. Видимые части — грудка, ножки, крылья. Спинку покрывать не нужно.',
 };
@@ -658,7 +661,9 @@ export class CampaignUI {
         if (['bowl', 'sink', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
         if (e.station === 'phone') this.tip('money');
         if (e.station === 'fridge') this.tip('fridge');
-        if (e.station === 'tree' && s.toysInBox?.().length) this.tip('treeDecor');
+        if (e.station === 'tree' && s.treeFall?.down) this.tip('treeDown');
+        else if (e.station === 'tree' && s.tinselColors?.().length) this.tip('tinsel');
+        else if (e.station === 'tree' && s.toysInBox?.().length) this.tip('treeDecor');
         if (e.station === 'radio') {
           this.pendingTips = this.pendingTips.filter((t) => t !== 'radio');
           this.tip('radioTune');
@@ -770,7 +775,7 @@ export class CampaignUI {
         this.tipWhenFree('catBored');
         break;
       case 'catMischief':
-        this.toast({ garland: 'Кот сорвал гирлянду — поправь контакт', star: 'Кот залез на ёлку и погасил звезду', toys: 'Кот сбил игрушки с ёлки' }[e.kind] ?? 'Кот набезобразничал', 'bad', 3.5);
+        this.toast({ garland: 'Кот сорвал гирлянду — поправь контакт', star: 'Кот залез на ёлку и погасил звезду', toys: 'Кот сбил игрушки с ёлки', tree: 'Кот уронил ёлку — подними её' }[e.kind] ?? 'Кот набезобразничал', 'bad', 3.5);
         this.popup('🐈 Мяу!', 'bad');
         break;
       case 'spill':
@@ -793,6 +798,18 @@ export class CampaignUI {
         break;
       case 'toyHung':
         this.toast(`${TOYS[e.id].icon} Повесили: ${esc(TOYS[e.id].name.toLowerCase())}`, 'good', 1.6);
+        break;
+      case 'treeFell':
+        this.popup('🎄 Бах!', 'bad');
+        this.tip('treeDown');
+        if (e.broken?.length) this.toast(`Разбилось: ${e.broken.map((b) => esc(TOYS[b.id]?.name.toLowerCase())).join(', ')}`, 'bad', 4);
+        break;
+      case 'treeUp':
+        this.toast('Ёлка снова стоит 🎄', 'good');
+        break;
+      case 'tinselBought':
+        this.toast(`${TINSEL[e.color].icon} ${esc(TINSEL[e.color].name)}: моток ${String(e.roll).replace('.', ',')} м у ёлки`, 'good', 3);
+        this.tipWhenFree('tinsel');
         break;
       case 'setComplete':
         this.popup(`${TOY_SETS[e.id].icon} Набор «${esc(TOY_SETS[e.id].name)}» собран!`, 'good');
@@ -1020,7 +1037,7 @@ export class CampaignUI {
       if (!el) {
         el = document.createElement('div');
         el.className = `alert ${a.urgent ? 'urgent' : ''}`;
-        const icon = { cat: '🐱', spillWarn: '🐱', catBored: '🧶', toys: '🧸', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', star: '⭐', radio: '📻', phone: '📱', delivery: '🛵', bag: '🛍', puddle: '💧' }[a.key] ?? '❗';
+        const icon = { cat: '🐱', spillWarn: '🐱', catBored: '🧶', toys: '🧸', tree: '🎄', pot: '♨️', oven: '🍗', potReady: '🥔', garland: '💡', star: '⭐', radio: '📻', phone: '📱', delivery: '🛵', bag: '🛍', puddle: '💧' }[a.key] ?? '❗';
         let acts = '';
         // 0.11: пилюля — короткий текст, подробности по наведению, кнопка-стрелка вместо слов «Подойти»/«Открыть»
         const go = (label) => `<button class="go" data-a="${a.action === 'collect' ? 'collect' : 'go'}" data-s="${a.station ?? ''}" title="${label}" aria-label="${label}">→</button>`;
@@ -1106,14 +1123,20 @@ export class CampaignUI {
       }
       if (d.moved) {
         this._moveGhost(e);
-        this.app.toyHover(e);
+        if (!d.floor) this.app.toyHover(e);
       }
     });
     window.addEventListener('pointerup', (e) => {
       const d = this.toyDrag;
       if (!d) return;
       this.toyDrag = null;
-      if (!d.moved) return; // просто клик — игрушка осталась в руке, вешаем следующим кликом по ветке
+      if (d.floor) {
+        // игрушка с пола (0.11): клик по ней или перетаскивание в коробку (на док) — подобрана; отпустила мимо — осталась лежать
+        this.el.ghost.classList.add('hidden');
+        if (!d.moved || e.target?.closest?.('#panel')) this.act('pickUpToy', d.uid);
+        return;
+      }
+      if (!d.moved) return; // просто клик — игрушка осталась в руке, вешаем следующим кликом по ёлке
       this.el.ghost.classList.add('hidden');
       this.app.dropToy(e, d.back);
     });
@@ -1163,10 +1186,16 @@ export class CampaignUI {
     });
   }
 
-  /** Начать перетаскивание игрушки uid (из коробки back = null, с ветки — её номер). */
-  startToyDrag(uid, e, back) {
+  /** Начать перетаскивание игрушки uid из руки (откуда её сняли, помнит сессия: session.treeFrom). */
+  startToyDrag(uid, e, back = null) {
     const t = this.app.session?.toys.find((x) => x.uid === uid);
     this.toyDrag = { uid, id: t?.id, back, x0: e.clientX, y0: e.clientY, moved: false };
+  }
+
+  /** 0.11: нажали на игрушку, лежащую на полу: отпустила на месте (клик) или над доком (в коробку) — подобрана. */
+  startFloorDrag(uid, e) {
+    const t = this.app.session?.toys.find((x) => x.uid === uid);
+    this.toyDrag = { uid, id: t?.id, floor: true, x0: e.clientX, y0: e.clientY, moved: false };
   }
 
   _moveGhost(e) {
@@ -1222,7 +1251,7 @@ export class CampaignUI {
       case 'garland':
         return `${base}|${s.garland.broken}`;
       case 'tree':
-        return `${base}|${s.star.broken}|${s.giftsLeft().map((i) => `${i}:${Math.round(s.giftProgress(i) * 3)}`).join()}|${s.toys.map((x) => `${x.uid}:${x.slot}:${+x.fallen}`).join()}|${s.treeHand}|${s.gift ? `${s.gift.index}:${s.gift.stage}` : ''}|${s.giftShow ? 'show' : ''}`;
+        return `${base}|${s.star.broken}|${s.giftsLeft().map((i) => `${i}:${Math.round(s.giftProgress(i) * 3)}`).join()}|${s.toys.map((x) => `${x.uid}:${x.at ? 1 : 0}:${+x.fallen}`).join()}|${s.treeHand}|${s.gift ? `${s.gift.index}:${s.gift.stage}` : ''}|${s.giftShow ? 'show' : ''}|${s.treeFall.down ? 'down' : ''}|${s.tinsel.tool}|${s.tinselColors().map((c) => `${c}${Math.round(s.tinselLeft(c) * 10)}`).join()}|${s.tinsel.threads.length}`;
       case 'bag':
         return `${base}|${s.delivery.bag?.items.map((i) => +i.placed).join('')}`;
       case 'fridge':
@@ -1252,6 +1281,8 @@ export class CampaignUI {
     if (sig === 'none' || sig === 'phone') return;
     const bar = p.querySelector('.act-progress i');
     if (bar) bar.style.width = s.action && s.action.type !== 'cut' ? `${(s.action.elapsed / s.action.duration) * 100}%` : '0%';
+    const lift = p.querySelector('.lift-bar i');
+    if (lift) lift.style.width = `${Math.round(s.treeLiftProgress() * 100)}%`;
     const live = p.querySelector('[data-live]');
     if (live) live.innerHTML = this._live(s);
     for (const el of p.querySelectorAll('[data-burner]')) {
@@ -1347,6 +1378,9 @@ export class CampaignUI {
         return s.garland.broken ? `Контакт: ${Math.round((s.garland.progress / CAMPAIGN.durations.garlandHold) * 100)} %` : '';
       case 'tree':
         if (s.gift) return `Подарок открыт на ${Math.round(s.giftProgress(s.gift.index) * 100)} %`;
+        if (s.treeFall.down) return `Ёлка поднята на ${Math.round(s.treeLiftProgress() * 100)} %`;
+        if (s.tinsel.tool && s.tinsel.tool !== 'cut') return `${TINSEL[s.tinsel.tool].name}: в мотке ${metres(s.tinselLeft(s.tinsel.tool))}`;
+        if (s.tinsel.tool === 'cut') return 'Клик по нитке — снять её и вернуть длину в моток';
         return s.star.broken ? `Контакт: ${Math.round((s.star.progress / CAMPAIGN.durations.starHold) * 100)} %` : '';
       case 'stove':
         return '<span>Сильный огонь — быстрее закипит, но может убежать. Закипело — убавь до 4–5.</span>';
@@ -1495,17 +1529,32 @@ export class CampaignUI {
           const p = s.giftProgress(i);
           return this._btn(`🎁 Подарок ${i + 1}${p > 0 ? ` · ${Math.round(p * 100)} %` : ''}`, 'startGift', [i], 'primary gift-btn', busy, p > 0 ? 'Продолжить открывать' : 'Взять в руки и открыть');
         }).join('');
-        const fallen = s.toys.filter((x) => x.fallen).length;
-        const pick = fallen ? this._btn(`🧸 Поднять игрушки (${fallen})`, 'pickUpToys', [], 'danger', busy) : '';
-        // 0.10: фишку зажимают и тянут на ветку (data-drag-toy); клик — взять в руку, клик по ветке — повесить
-        const box = s.toysInBox().map((x) => `<button class="prod-chip toy-chip ${s.treeHand === x.uid ? 'active' : ''}" data-drag-toy="${x.uid}" title="Зажми и перетащи на ветку" ${busy ? 'disabled' : ''}><span class="pi">${TOYS[x.id].icon}</span><span class="pn">${esc(TOYS[x.id].name)}</span></button>`).join('');
-        const hung = s.toys.filter((x) => x.slot != null).length;
+        // 0.11: игрушки на полу подбирают кликом по каждой или перетаскивая в коробку (кнопки «Поднять игрушки» больше нет)
+        const floor = s.toysOnFloor().length;
+        const floorNote = floor ? `<span class="small floor-note">🧸 На полу: ${floor} — кликни по игрушке или перетащи её сюда</span>` : '';
+        if (s.treeFall.down) {
+          // кот уронил ёлку: подними жестом (зажми ствол или верхушку и тяни вверх); пока лежит — вешать нельзя
+          return `<h2>🎄 Ёлка упала<span class="sub">зажми ствол или верхушку и потяни вверх</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${gifts}<div class="lift"><div class="progress lift-bar"><i></i></div>${floorNote}</div></div><div class="dock-main">${star}</div></div>${live}`;
+        }
+        // 0.10: фишку зажимают и тянут на ёлку (data-drag-toy); клик — взять в руку, клик по ёлке — повесить. Одинаковые игрушки — одной фишкой «×N»
+        const groups = new Map();
+        for (const x of s.toysInBox()) groups.set(x.id, [...(groups.get(x.id) ?? []), x.uid]);
+        const box = [...groups].map(([id, uids]) => {
+          const uid = uids.includes(s.treeHand) ? s.treeHand : uids[0];
+          return `<button class="prod-chip toy-chip ${s.treeHand === uid ? 'active' : ''}" data-drag-toy="${uid}" title="Зажми и перетащи на любое место ёлки" ${busy ? 'disabled' : ''}><span class="pi">${TOYS[id].icon}</span><span class="pn">${esc(TOYS[id].name)}${uids.length > 1 ? ` ×${uids.length}` : ''}</span></button>`;
+        }).join('');
+        // мишура: моток берут в руку, зажимают на ёлке и ведут; «Снять» — ножницы, клик по нитке
+        const tn = s.tinsel;
+        const rolls = s.tinselColors().map((c) => `<button class="prod-chip tinsel-chip ${tn.tool === c ? 'active' : ''}" data-act="tinselPick" data-args='${esc(JSON.stringify([c]))}' title="${esc(TINSEL[c].name)}: зажми на ёлке и веди" ${busy ? 'disabled' : ''}><span class="pi">${TINSEL[c].icon}</span><span class="pn">${metres(s.tinselLeft(c))}</span></button>`).join('');
+        const scissors = tn.threads.length ? `<button class="prod-chip tinsel-chip ${tn.tool === 'cut' ? 'active' : ''}" data-act="tinselPick" data-args='["cut"]' title="Клик по нитке — снять и вернуть длину в моток" ${busy ? 'disabled' : ''}><span class="pi">✂</span><span class="pn">Снять</span></button>` : '';
+        const hung = s.toys.filter((x) => x.at).length;
+        const wire = tn.threads.reduce((a, t) => a + s.tinselLength(t.id), 0);
         const sets = Object.entries(TOY_SETS).map(([id, set]) => {
           const pr = s.setProgress(id);
           return `<span class="set-chip ${pr.done ? 'done' : ''}" title="Набор «${esc(set.name)}»${pr.done ? ' собран' : `: весь на ёлке — +${pts(set.reward)}`}">${set.icon} ${pr.hung}/${pr.need}${pr.done ? ' ✓' : ''}</span>`;
         }).join('');
-        const note = s.treeHand != null ? 'Кликни по свободной ветке — повесим. Клик по фишке — положить обратно.' : box ? 'Тяни игрушку из коробки на ветку — свободные ветки светятся.' : hung ? 'Висящую игрушку можно перетащить на другую ветку. Новые — в «Ёлочном базаре» или в подарках.' : 'Игрушки — в «Ёлочном базаре» в телефоне или в подарках.';
-        return `<h2>🎄 Ёлка<span class="sub">на ёлке ${hung} из ${TREE_SLOTS.length}</span><span class="sets-row">${sets}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${gifts}${box || (gifts ? '' : '<span class="small">В коробке пусто.</span>')}</div><div class="dock-main">${star}${pick}</div></div>${live}<p class="note">${note}</p>`;
+        const note = s.treeHand != null ? 'Кликни по ёлке — повесим. Клик по фишке — положить обратно.' : tn.tool ? 'Зажми кнопку на ёлке и води по веткам.' : box || rolls ? 'Тяни игрушку из коробки на любое место ёлки.' : hung ? 'Висящую игрушку можно перетащить в другое место. Новые — в «Ёлочном базаре» или в подарках.' : 'Игрушки и мишура — в «Ёлочном базаре» в телефоне или в подарках.';
+        return `<h2>🎄 Ёлка<span class="sub">на ёлке ${hung}${wire > 0 ? ` · мишуры ${metres(wire)}` : ''}</span><span class="sets-row">${sets}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${gifts}${box}${rolls}${scissors}${floorNote}${box || rolls || gifts || floorNote ? '' : '<span class="small">В коробке пусто.</span>'}</div><div class="dock-main">${star}</div></div>${live}<p class="note">${note}</p>`;
       }
       case 'fridge': {
         const rows = Object.entries(s.inventory.stock)
