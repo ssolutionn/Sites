@@ -13,7 +13,8 @@ import { pieceAt } from '../game/cutting.js';
 const ease = (k) => k * k * (3 - 2 * k);
 
 export class SceneView {
-  constructor(canvas) {
+  /** @param opts.bakedOrnaments — шары, «запечённые» в ёлку: только для классической страницы (в кампании ёлка голая). */
+  constructor(canvas, { bakedOrnaments = false } = {}) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -61,7 +62,7 @@ export class SceneView {
     rim.position.set(0.5, 3, -4);
     this.scene.add(rim);
 
-    this.k = buildKitchen(this.scene);
+    this.k = buildKitchen(this.scene, { bakedOrnaments });
     this.heroine = buildHeroine();
     this.scene.add(this.heroine);
     this.cat = buildCat();

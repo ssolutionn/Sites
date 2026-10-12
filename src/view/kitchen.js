@@ -21,7 +21,11 @@ function tag(obj, station) {
   return obj;
 }
 
-export function buildKitchen(scene) {
+/**
+ * Кухня. bakedOrnaments — «запечённые» шары на ёлке: нужны только классической странице (scene.js), в кампании (0.11)
+ * ёлка на старте голая, игрушки вешает игрок (campaign-view.js).
+ */
+export function buildKitchen(scene, { bakedOrnaments = false } = {}) {
   const k = { stations: {}, rings: {}, clickables: [] };
   const woodMat = toon(0xffffff, { map: tex.wood });
   const topMat = toon(0xffffff, { map: tex.counter, roughness: 0.42 });
@@ -249,15 +253,17 @@ export function buildKitchen(scene) {
     cone.castShadow = true;
     treeG.add(cone);
   }
-  const ornColors = [0xe53935, 0xfdd835, 0x1e88e5, 0xffffff, 0xff7043];
-  const ornamentMats = ornColors.map((c) => toon(c, { emissive: c, emissiveIntensity: .25 }));
-  for (let i = 0; i < 18; i++) {
-    const lvl = i % 4;
-    const a = i * 2.4;
-    const r = 0.45 - lvl * 0.1;
-    const o = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), ornamentMats[i % ornColors.length]);
-    o.position.set(Math.cos(a) * r, 0.45 + lvl * 0.32, Math.sin(a) * r);
-    treeG.add(o);
+  if (bakedOrnaments) {
+    const ornColors = [0xe53935, 0xfdd835, 0x1e88e5, 0xffffff, 0xff7043];
+    const ornamentMats = ornColors.map((c) => toon(c, { emissive: c, emissiveIntensity: .25 }));
+    for (let i = 0; i < 18; i++) {
+      const lvl = i % 4;
+      const a = i * 2.4;
+      const r = 0.45 - lvl * 0.1;
+      const o = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), ornamentMats[i % ornColors.length]);
+      o.position.set(Math.cos(a) * r, 0.45 + lvl * 0.32, Math.sin(a) * r);
+      treeG.add(o);
+    }
   }
   // большая пятиконечная звезда на макушке (0.9: владелец попросил; она тоже иногда гаснет — campaign-view.js)
   const starShape = new THREE.Shape();

@@ -45,7 +45,7 @@ function boot() {
   const canvas = document.getElementById('scene');
   let scene;
   try {
-    scene = new SceneView(canvas);
+    scene = new SceneView(canvas, { bakedOrnaments: true });
   } catch (err) {
     fatal('Не удалось запустить 3D-сцену', String(err?.message || err));
     return;
