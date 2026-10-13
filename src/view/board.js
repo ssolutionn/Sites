@@ -16,14 +16,6 @@ const COLORS = {
   potato: 0xf0d28a,
 };
 
-const baseMats = {};
-function matFor(ing) {
-  if (!baseMats[ing]) {
-    baseMats[ing] = ing === 'sausage' ? toon(0xffffff, { map: tex.sausage }) : toon(COLORS[ing] ?? 0xffffff);
-  }
-  return baseMats[ing];
-}
-
 export class BoardView {
   constructor(scene, kitchen) {
     this.scene = scene;
@@ -167,7 +159,7 @@ export class BoardView {
   _disposeMesh(m) {
     m.parent?.remove(m);
     m.geometry.dispose();
-    if (m.material && !Object.values(baseMats).includes(m.material)) m.material.dispose();
+    m.material?.dispose();
   }
 
   // Точка мира -> координаты продукта

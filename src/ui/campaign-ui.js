@@ -2,7 +2,7 @@
 import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS, TINSEL, cartItem } from '../campaign/data.js';
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
-import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
+import { CLAYOUT, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
@@ -59,13 +59,6 @@ function burnerStatus(s, b) {
   if (b.water === 'boil') return `кипит · ещё ≈ ${kmin(b.readyAt - s.t)}${b.heat >= CAMPAIGN.stove.foamHeat ? ' · убавь, убежит!' : ''}`;
   const left = b.readyAt - s.t;
   return left > 5000 ? `вода ${Math.round(b.temp)}° · так не закипит` : `вода ${Math.round(b.temp)}° · греется`;
-}
-
-function plural(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
 }
 
 export const TIPS = {
@@ -856,9 +849,12 @@ export class CampaignUI {
       case 'catSleep':
         this.toast('Сытый кот спит и к еде не лезет 😴', 'good', 3);
         break;
-      case 'potPlaced':
+      case 'potPlaced': {
         this.tip('stove');
+        const st = s.dishes[e.dishId]?.recipe.steps.find((x) => x.type === 'boil' && x.product === e.product);
+        if (st) this._note('Как на самом деле', this._lessonStep(e.dishId, st.id)?.how);
         break;
+      }
       case 'taken':
         this.tip('fridge');
         break;
@@ -888,9 +884,11 @@ export class CampaignUI {
         break;
       case 'seasoned':
         if (e.q >= 0.999) this.popup('😋 Идеальный вкус!', 'good');
+        this._lessonWhy(s, e);
         break;
       case 'stepDone':
         if (e.q >= 0.95 && ['cut', 'grate'].includes(s.stepDef(e.dishId, e.stepId)?.type)) this.popup('🔪 Чётко!', 'good');
+        this._lessonWhy(s, e);
         break;
       case 'paid':
         this.toast(`💳 −${e.total} ₽`, '', 2);
@@ -980,21 +978,9 @@ export class CampaignUI {
           this._note('Как на самом деле', this._lessonStep(dishId, stepId)?.how);
         }
         break;
-      case 'potPlaced': {
-        const d = s.dishes[e.dishId];
-        const st = d?.recipe.steps.find((x) => x.type === 'boil' && x.product === e.product);
-        if (st) this._note('Как на самом деле', this._lessonStep(e.dishId, st.id)?.how);
-        break;
-      }
       case 'added':
-      case 'seasoned':
-      case 'stepDone': {
-        if (e.type === 'stepDone' && !['add', 'season', 'mix'].includes(s.stepDef(e.dishId, e.stepId)?.type)) break;
-        const stepId = e.stepId ?? s.dishes[e.dishId]?.recipe.steps.find((x) => x.product === e.product)?.id;
-        const l = stepId && this._lessonStep(e.dishId, stepId);
-        if (l) this._note('Зачем так', l.why);
+        this._lessonWhy(s, e);
         break;
-      }
       case 'practiceResult':
         this.toast(`<b>Результат: ${Math.round(e.q * 100)} %</b>`, 'good', 4);
         break;
@@ -1013,6 +999,14 @@ export class CampaignUI {
         break;
       default:
     }
+  }
+
+  /** «Зачем так» из урока: после добавления, посолки и шагов-смесей (резка и варка объясняются при выборе шага). */
+  _lessonWhy(s, e) {
+    if (e.type === 'stepDone' && !['add', 'season', 'mix'].includes(s.stepDef(e.dishId, e.stepId)?.type)) return;
+    const stepId = e.stepId ?? s.dishes[e.dishId]?.recipe.steps.find((x) => x.product === e.product)?.id;
+    const l = stepId && this._lessonStep(e.dishId, stepId);
+    if (l) this._note('Зачем так', l.why);
   }
 
   confirmCollect() {

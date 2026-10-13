@@ -2,7 +2,7 @@
 import { CoverageMask } from './coverage.js';
 import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS, STOVE, CLOSEUP_STATIONS } from './layout.js';
 import { Scrubber, Waver } from './mechanics.js';
-import { PRODUCTS, DISH_ORDER } from './data.js';
+import { DISH_ORDER } from './data.js';
 import { TEMPTING, BOILED } from './st-extra.js';
 import { kitchenMin, kitchenIn } from './words.js';
 

@@ -14,7 +14,7 @@ import { Sound } from './audio/sound.js';
 import { RadioMusic } from './audio/radio-music.js';
 import { RADIO } from './campaign/radio-data.js';
 import { clampFreq } from './campaign/st-radio.js';
-import { StreamVotes, STREAM_KEYS, dailyChallenge } from './stream.js';
+import { StreamVotes, dailyChallenge } from './stream.js';
 import { streamSettings, resolvePower } from './campaign/stream-rules.js';
 import { cleanChannel } from './stream-parse.js';
 import { overlayState } from './stream-overlay-state.js';
@@ -92,7 +92,6 @@ async function boot() {
   let overlayInfo = null; // состояние локального сервера оверлея (только в версии для компьютера)
   let overlaySent = '';
   let viewerFlushT = 0;
-  let speedStart = null;
 
   function applyQuality() {
     const low = save.data.settings.quality === 'low';

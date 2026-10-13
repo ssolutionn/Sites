@@ -32,7 +32,7 @@ export const CAMPAIGN = {
   crumbs: { area: 0.12, thick: 0.15 }, // кусок меньше 12 мм² или тоньше 1,5 мм — крошка, осыпается с доски
   cutRules: { angleTolerance: 28, cover: 0.6, maxWobble: 3.8, minLength: 1.2 }, // кружочки: допуски росчерка (gestures.js), см
   assist: { k: 1.5 }, // 0.11, «Мягкие жесты» в настройках: допуски жестов шире в k раз (1–2), список — campaign/assist.js
-  kitchenScale: KITCHEN_SCALE,
+  kitchenScale: KITCHEN_SCALE, // 0.11: игровая секунда = 15 секунд на часах кухни (kitchenMin в words.js): 10 кухонных минут = 40 с игры
   potatoReadyAfter: kitchenSec(25),
   boilTimes: { potato: kitchenSec(25), egg: kitchenSec(10), beet: kitchenSec(45) }, // сколько варится после закипания: картофель 25 мин, яйца вкрутую 10, свёкла 45 (кухонных)
   // Крутилка огня 0–9: вода греется на heatRate·огонь °C/с и остывает на loss·(T−20); на 2 и ниже не закипает.
@@ -61,7 +61,6 @@ export const CAMPAIGN = {
   roundTarget: { thickness: 1, min: 0.64, max: 1.44, minCut: 0.36 }, // кружочки, см
   cutReady: 0.8, // доля продукта в кусках нужного размера, с которой доска говорит «нарезано — можно в миску» (0.9, пункт 8)
 
-  kitchenScale: 15, // 0.11: игровая секунда = 15 секунд на часах кухни (kitchenMin в words.js): 10 кухонных минут = 40 с игры
   durations: {
     take: 0.8, // достать продукт из холодильника в руки
     placePot: 1,

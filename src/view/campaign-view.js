@@ -9,8 +9,8 @@ import { TreeView } from './tree-view.js';
 
 const GIFT_TOP = 0.2; // 0.10: верх подарка, который открывают руками (крышка под бумагой)
 const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
-import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, DISHWASHER } from '../campaign/layout.js';
-import { CAMPAIGN, PRODUCTS, DISH_ORDER, TOYS } from '../campaign/data.js';
+import { CLAYOUT, ISLAND_H, TRAY, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, DISHWASHER } from '../campaign/layout.js';
+import { CAMPAIGN, PRODUCTS, DISH_ORDER } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
 import { animateHeroine, setExpression } from './heroine.js';
@@ -820,7 +820,6 @@ export class CampaignView {
       case 'catShooed':
       case 'catGone':
       case 'catStole':
-      case 'catSpill':
       case 'catMischief':
         this._catFlee(e.type === 'catStole');
         break;
