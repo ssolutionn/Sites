@@ -161,6 +161,7 @@ async function boot() {
   }
 
   const SOUND_OF = {
+    ovenDoor: 'dwDoor', ovenDeny: 'deny', // 0.11: дверца духовки (st-oven.js)
     dwDoor: 'dwDoor', dwLoad: 'dwClink', dwTake: 'dwClink', dwPick: 'select', dwStart: 'dwStart', dwHum: 'dwHum', dwDone: 'dwDone', dwDeny: 'deny', // 0.11: посудомойка (st-dishwasher.js)
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
     phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'jingle', toyTaken: 'select', toyPicked: 'added', toyReturned: 'rotate', toyBroken: 'jingle', treeFell: 'treeFall', treeUp: 'fixed', treeLiftTick: 'rustle', tinselBought: 'cash', tinselDraw: 'rustle', tinselHung: 'jingle', tinselTaken: 'rotate', tinselEmpty: 'deny', setComplete: 'success', giftStart: 'select', giftTick: 'rustle', giftBow: 'added', giftPaper: 'bag',
@@ -657,7 +658,7 @@ async function boot() {
     const r = canvas.getBoundingClientRect();
     return { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
   }
-  const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'dishwasher', 'puddle', 'radio', 'stove']);
+  const CLOSE = new Set(['board', 'tray', 'bowl', 'sink', 'dishwasher', 'puddle', 'radio', 'stove', 'oven']);
   // рабочий крупный план: станции с жестами и подарок в руках у ёлки (0.10)
   const handsOn = () => session && (CLOSE.has(session.panel) || (session.panel === 'tree' && !!session.gift));
   function closeupActive() {

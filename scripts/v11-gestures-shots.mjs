@@ -84,6 +84,61 @@ if (want('stove')) {
   await wait(500);
   check('жестом: кастрюля снята с конфорки', await S(() => window.__sueta.session.burners[2].state === 'empty'));
 }
+if (want('oven')) {
+  await openDay(7);
+  // курица замаринована и на подносе — остальное жестом
+  await S(() => { const s = window.__sueta.session; const d = s.dishes.chicken; d.steps.marinade = { done: true, q: 1, info: null }; d.work = d.work ?? { inOven: false, baked: 0 }; s.tray.owner = 'chicken'; s.equipment.tray.owner = 'chicken'; });
+  await S(() => window.__sueta.session.goTo('oven'));
+  await S(() => window.__sueta.session.fastForward(30, () => window.__sueta.session.panel === 'oven'));
+  await waitFor(() => window.__sueta.session.panel === 'oven' && window.__sueta.sv.camMode === 'c-oven' && window.__sueta.sv.camT >= 1, 120000); await wait(900);
+  console.log('  состояние', await S(() => { const s = window.__sueta.session; return JSON.stringify({ panel: s.panel, cam: window.__sueta.sv.camMode, camT: window.__sueta.sv.camT, target: s.heroine.target, hint: s.hint?.text }); }));
+  check('в доке духовки нет кнопок «Поставить форму» / «Достать»', await S(() => ![...document.querySelectorAll('#panel button')].some((b) => /Поставить форму|Достать/.test(b.textContent))));
+  await shot('oven_closed');
+  const pt = (x, z) => S(([x, z]) => { const v = window.__sueta.view; const p = v.localToScreen('oven', x, z); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [x, z]);
+  // ручку вниз
+  let a = await pt(0, -0.2), b = await pt(0, 0.2);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 5 });
+  await page.mouse.move(b.x, b.y, { steps: 5 });
+  await wait(500);
+  check('потянула ручку вниз — дверца открыта', await S(() => window.__sueta.session.ovenDoor.door === 'open'));
+  await page.mouse.up(); await wait(1500);
+  await shot('oven_open');
+  // форма из дока в проём
+  await page.waitForSelector('[data-drag-oven]:not([disabled])', { timeout: 30000 });
+  const cb = await page.locator('[data-drag-oven]').boundingBox();
+  const c = await pt(0, 0);
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2); await page.mouse.down();
+  await page.mouse.move(c.x - 30, c.y - 30, { steps: 8 });
+  await page.mouse.move(c.x, c.y, { steps: 6 });
+  await shot('oven_drag_form');
+  await page.mouse.up();
+  await S(() => window.__sueta.session.fastForward(3, () => !window.__sueta.session.action));
+  await wait(500);
+  check('форма в проёме — курица запекается', await S(() => window.__sueta.session.oven.state === 'baking'));
+  await shot('oven_baking');
+  // ручку вверх — закрыть
+  a = await pt(0, 0.4); b = await pt(0, 0.0);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 8 }); await page.mouse.up(); await wait(800);
+  check('подняла дверцу — закрыта', await S(() => window.__sueta.session.ovenDoor.door === 'closed'));
+  await S(() => { const s = window.__sueta.session; s.fastForward(s.cfg.oven.bake + 5, () => s.oven.state === 'ready'); });
+  await wait(500);
+  check('курица готова', await S(() => window.__sueta.session.oven.state === 'ready'));
+  // открыть, взять форму рукой и вытащить вниз
+  a = await pt(0, -0.2); b = await pt(0, 0.2);
+  await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(b.x, b.y, { steps: 8 }); await page.mouse.up(); await wait(1200);
+  a = await pt(0, 0); b = await pt(0, 0.5);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 6 });
+  await page.mouse.move(b.x, b.y, { steps: 6 }); await wait(400);
+  check('форма идёт за рукой', await S(() => !!window.__sueta.session.ovenDoor.drag));
+  await shot('oven_pull_out');
+  await page.mouse.up();
+  await S(() => window.__sueta.session.fastForward(4, () => !window.__sueta.session.action));
+  await wait(500);
+  check('курицу достала жестом — блюдо готово', await S(() => window.__sueta.session.oven.state === 'empty' && window.__sueta.session.dishes.chicken.steps.bake.done));
+}
 if (want('hold')) {
   await openDay(1);
   const screenOfWorld = (expr) => S((expr) => { const v = window.__sueta.view; const o = new Function('v', `return (${expr});`)(v); const p = o.getWorldPosition(new o.position.constructor()).project(v.sv.camera); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height }; }, expr);

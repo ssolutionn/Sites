@@ -170,6 +170,39 @@ async function dragReplacement() {
   await page.mouse.move(t.x, t.y, { steps: 8 });
   await page.mouse.up(); await wait(200);
 }
+// 0.11 (G1.1): продукт из рук — на конфорку: зажать фишку в доке и перетащить на кольцо
+const STOVE_XZ = [[-0.15, -0.14], [-0.15, 0.14], [0.15, -0.14], [0.15, 0.14]];
+async function placePotByDrag(i) {
+  await dismissTips();
+  const chip = page.locator('[data-drag-stove]').first();
+  await chip.waitFor({ state: 'visible', timeout: 8000 });
+  const cb = await chip.boundingBox(), t = await local(...STOVE_XZ[i]);
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2); await page.mouse.down();
+  await page.mouse.move(t.x - 30, t.y - 30, { steps: 6 });
+  await page.mouse.move(t.x, t.y, { steps: 4 });
+  await page.mouse.up(); await wait(200);
+}
+// 0.11 (G1.2): кастрюлю берут за корпус и уносят за край конфорки
+async function takePotByDrag(i) {
+  await dismissTips();
+  const [x, z] = STOVE_XZ[i];
+  const a = await S(([x, z]) => { const v = window.__sueta.view; const p = v.localToScreen('stove', x, z, 0.1); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [x, z]);
+  const b = await S(([x, z]) => { const v = window.__sueta.view; const p = v.localToScreen('stove', x + 0.45, z + 0.2, 0.1); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [x, z]);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 5 });
+  await page.mouse.move(b.x, b.y, { steps: 5 });
+  await page.mouse.up(); await wait(200);
+}
+// 0.11 (G2.1): погасшую лампочку / звезду чинят, зажав её прямо в сцене
+async function holdOnScene(label, station, expr) {
+  await goStation(label, station);
+  await waitFor((st) => window.__sueta.sv.camMode === (st === 'garland' ? 'c-overview' : 'c-' + st) && window.__sueta.sv.camT >= 1, 60000, station); await wait(700);
+  const kind = station === 'garland' ? 'garland' : 'star';
+  const at = await S((expr) => { const v = window.__sueta.view; const o = new Function('v', `return (${expr});`)(v); const p = o.getWorldPosition(new o.position.constructor()).project(v.sv.camera); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height }; }, expr);
+  await page.mouse.move(at.x, at.y); await page.mouse.down();
+  await waitFor((k) => !window.__sueta.session[k].broken, 60000, kind);
+  await page.mouse.up();
+}
 async function guardCat() {
   await dismissTips();
   if (await sess("s.cat.state === 'theft'")) { await shot('d1_cat'); await shooCat(); }
@@ -374,12 +407,12 @@ try {
   check('очищенный картофель в руках', await sess("s.carry?.product === 'potato' && s.carry.peeled"));
   check('плита', await goStation('Плита', 'stove'));
   await turnKnob(0, 6);
-  await actBtn('placePot', '[0,'); await noAction(); await wait(300);
+  await placePotByDrag(0); await noAction(); await wait(300);
   check('после установки картофеля огонь сохранён', (await sess('s.burners[0].heat')) === 6);
   await goStation('Холодильник', 'fridge');
   await actBtn('fridgeTake', 'boilEgg'); await noAction();
   await goStation('Плита', 'stove');
-  await actBtn('placePot', '[1,'); await noAction(); await wait(300);
+  await placePotByDrag(1); await noAction(); await wait(300);
   await turnKnob(1, 6);
   check('вторая крутилка мышью — огонь 6', (await sess('s.burners[1].heat')) === 6);
   check('четыре крутилки, без кнопок огня', await S(() => document.querySelectorAll('[data-knob]').length === 4 && !document.querySelector('[data-act="setHeat"]')));
@@ -436,7 +469,7 @@ try {
   check('плита (яйца готовы)', await goStation('Плита', 'stove'));
   for (const i of await sess('s.burners.filter(b => b.overflow).map(b => b.i)')) await turnKnob(i, 4);
   // достаём именно яйца (картошка за это время тоже могла свариться)
-  await actBtn('takePot', '[1]'); await noAction();
+  await takePotByDrag(1); await noAction();
   check('сняты яйца, огонь под ними выключен', (await sess('s.burners[1].state')) === 'empty' && (await sess('s.burners[1].heat')) === 0);
   await goStation('Доска', 'board');
   await actBtn('boardSelect', '"olivier:peelEgg"'); await wait(300);
@@ -453,7 +486,7 @@ try {
   await S(() => { const s = window.__sueta.session; s.fastForward(200, () => s.burners[0].state === 'ready'); });
   check('плита (картофель готов)', await goStation('Плита', 'stove'));
   for (const i of await sess('s.burners.filter(b => b.overflow).map(b => b.i)')) await turnKnob(i, 4);
-  await actBtn('takePot', '[0]'); await noAction();
+  await takePotByDrag(0); await noAction();
   await goStation('Раковина', 'sink'); await coolUnderTap('potato');
   check('доска (картофель)', await goStation('Доска', 'board'));
   await boardProduct('potato', 'Картофель × 2');
@@ -537,7 +570,8 @@ try {
   async function finishDayUI(n) {
     for (let i = 0; i < 4 && (await sess('s.puddles.length')); i++) { await goStation('Лужа', 'puddle'); await zig(0, 0, 0.5, 0.36, 9); await wait(300); }
     if (await sess('s.radio.broken')) { await goStation('Радио', 'radio'); const b = await page.locator('[data-hold=radio]').boundingBox(); await page.mouse.move(b.x + 20, b.y + 10); await page.mouse.down(); await waitFor(() => !window.__sueta.session.radio.broken, 30000); await page.mouse.up(); }
-    if (await sess('s.garland.broken')) { await goStation('Гирлянда', 'garland'); const b = await page.locator('[data-hold=garland]').boundingBox(); await page.mouse.move(b.x + 20, b.y + 10); await page.mouse.down(); await waitFor(() => !window.__sueta.session.garland.broken, 30000); await page.mouse.up(); }
+    if (await sess('s.garland.broken')) await holdOnScene('Гирлянда', 'garland', 'v.k.garland.bulbs[2]');
+    if (await sess('s.star.broken')) await holdOnScene('Ёлка', 'tree', 'v.k.tree.star');
     if (await sess('s.panel')) await goStation('Холодильник', 'fridge');
     await closePanel();
     await finishBtn();
@@ -578,6 +612,7 @@ try {
     await shot(`phone_order_${product}`);
     await page.locator('#phone button.mode', { hasText: 'Обычная' }).click(); await wait(300);
   }
+  // 0.11: заказ забирают у двери, пакета и кладовой нет — привезённое сразу в запасе
   async function collectAndUnpack() {
     await goStation('Телефон', 'phone'); await page.locator('#phone .apps [data-nav=shop]').click().catch(() => {}); await wait(300);
     const w = page.locator('#phone button', { hasText: 'Подождать' });
@@ -586,16 +621,8 @@ try {
     await page.locator('#phone button', { hasText: 'Забрать заказ' }).click();
     check('героиня ушла за кадр', await waitFor(() => window.__sueta.session.heroine.away, 20000));
     await shot('delivery_away');
-    await waitFor(() => window.__sueta.session.panel === 'bag' && window.__sueta.sv.camT >= 1, 30000);
-    await shot('bag');
-    const items = await sess('s.delivery.bag.items.map(i => i.id)');
-    for (const id of items) {
-      const right = await S((id) => window.__sueta.session.productName(id), id);
-      // сначала пробуем неверное место, затем верное
-      await page.locator('#panel .bag-row', { hasText: right }).locator('button', { hasText: 'В кладовую' }).click(); await noAction(); await wait(150);
-      if (await sess(`s.delivery.bag && !s.delivery.bag.items.find(i => i.id === '${id}').placed`)) { await page.locator('#panel .bag-row', { hasText: right }).locator('button', { hasText: 'В холодильник' }).click(); await noAction(); }
-    }
-    check('пакет разобран, продукты в запасах', (await sess('s.delivery.bag')) === null);
+    check('привезли — заказ в запасе без разбора пакета', await waitFor(() => !window.__sueta.session.delivery.order && !window.__sueta.session.heroine.away, 150000));
+    check('панели «Пакет» больше нет', !(await sess("s.panel === 'bag'")));
   }
   async function trayItem(dish) { await goStation('Поднос', 'tray'); await btn(await S((d) => window.__sueta.session.recipes[d].short, dish)); await wait(300); }
   async function tool(name) { await btn(name); await wait(100); }

@@ -9,7 +9,7 @@ import { TreeView } from './tree-view.js';
 
 const GIFT_TOP = 0.2; // 0.10: верх подарка, который открывают руками (крышка под бумагой)
 const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
-import { CLAYOUT, ISLAND_H, TRAY, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, DISHWASHER } from '../campaign/layout.js';
+import { CLAYOUT, ISLAND_H, TRAY, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, DISHWASHER, OVEN } from '../campaign/layout.js';
 import { CAMPAIGN, PRODUCTS, DISH_ORDER } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
@@ -485,6 +485,13 @@ export class CampaignView {
         pos.set(dw.x, 1.35 * (back > 1 ? 1.08 : 1), dw.zFront + 1.8 * back);
         return true;
       }
+      case 'c-oven': {
+        // дверца духовки крупно: открытая дверца лежит перед плитой, проём и форма выше дока
+        const sp = this.k.stoveGroup.position;
+        look.set(sp.x, 0.4, sp.z + 0.12);
+        pos.set(sp.x, 1.22 * (back > 1 ? 1.08 : 1), sp.z + 1.75 * back);
+        return true;
+      }
       case 'c-radio': {
         // лицевая панель радио выше дока и левее колонки уведомлений: смотрим чуть ниже и правее центра корпуса
         const a = S.radio.anchor;
@@ -552,7 +559,7 @@ export class CampaignView {
     if (p === 'tree' && (session.gift || session.giftShow)) return 'c-gift' + (session.gift ?? session.giftShow).index;
     if (p === 'tree' && session.treeFall?.down) return 'c-treedown'; // 0.11: кот уронил ёлку — смотрим на неё лёжа
     if (p === 'dishwasher') return 'c-dishwasher';
-    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove' || p === 'radio' || p === 'tree') return 'c-' + p;
+    if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove' || p === 'oven' || p === 'radio' || p === 'tree') return 'c-' + p;
     return 'c-overview';
   }
 
@@ -616,6 +623,11 @@ export class CampaignView {
       case 'dishwasher': {
         // передняя плоскость шкафа, как у радио: x — вправо от середины дверцы, z — вниз (открытая дверца лежит под проёмом)
         return { c: new THREE.Vector3(DISHWASHER.x, DISHWASHER.y, DISHWASHER.zFront), y: DISHWASHER.y, vertical: true };
+      }
+      case 'oven': {
+        // 0.11: дверца духовки — вертикальная плоскость перед фасадом плиты, как у радио и посудомойки (x вправо, z вниз)
+        const sp = this.k.stoveGroup.position;
+        return { c: new THREE.Vector3(sp.x, OVEN.y, sp.z + 0.035), y: OVEN.y, vertical: true };
       }
       case 'radio': {
         // вертикальная лицевая панель: x — вправо, z — вниз по панели (как на экране)
@@ -1363,6 +1375,22 @@ export class CampaignView {
     this.ovenGlow.material.color.setHex(o.state === 'burnt' ? 0x552200 : o.state === 'over' ? 0xff5a1a : 0xff8a2a);
     this.ovenChicken.visible = on;
     if (on) F.chickenColor(this.ovenChicken, o.state, o.doneness);
+    this._updateOvenDoor(s, dt);
+  }
+
+  // Дверца духовки (0.11): открывается жестом; угол догоняет состояние и руку. Форма идёт за рукой, пока её вытаскивают.
+  _updateOvenDoor(s, dt) {
+    const od = s.ovenDoor;
+    const target = od.grab ? od.grab.p : od.door === 'open' ? 1 : 0;
+    this.ovenP = this.ovenP ?? 0;
+    this.ovenP += (target - this.ovenP) * (1 - Math.exp(-dt * (od.grab ? 22 : 9)));
+    this.ovenDoor.rotation.x = this.ovenP * 1.5;
+    if (this.ovenP > 0.04) this.ovenGlow.material.opacity = 0; // за стеклом уже не светит
+    const sp = this.k.stoveGroup.position, oc = this.k.stoveModel.oven.chicken;
+    if (od.drag && s.panel === 'oven') {
+      const wp = this.workPlane('oven');
+      this.ovenChicken.position.set(wp.c.x + od.drag.x, wp.c.y - od.drag.z, wp.c.z + 0.12);
+    } else this.ovenChicken.position.set(sp.x + oc.x, oc.y, sp.z + oc.z);
   }
 
   // Кольцо над кастрюлей: синее — вода греется, оранжевое — варится (сколько из скольких), зелёное ✓ — готово, красное — переваривается.

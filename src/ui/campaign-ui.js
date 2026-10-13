@@ -1360,6 +1360,37 @@ export class CampaignUI {
       if (loc) this.act('stoveDrop', loc.x, loc.z);
       else this.act('stoveDrop', 99, 99);
     });
+    // 0.11 (G1.3): духовка — зажать фишку формы и опустить в проём открытой дверцы
+    p.addEventListener('pointerdown', (e) => {
+      const chip = e.target.closest('[data-drag-oven]');
+      if (!chip || chip.disabled) return;
+      e.preventDefault();
+      this.sound.unlock();
+      this.ovenDrag = { x0: e.clientX, y0: e.clientY, moved: false };
+    });
+    window.addEventListener('pointermove', (e) => {
+      const d = this.ovenDrag;
+      if (!d) return;
+      if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 8) {
+        d.moved = true;
+        this.el.ghost.innerHTML = '<span class="toy-ghost">🍗</span>';
+        this.el.ghost.classList.remove('hidden');
+      }
+      if (d.moved) this._moveGhost(e);
+    });
+    window.addEventListener('pointerup', (e) => {
+      const d = this.ovenDrag;
+      if (!d) return;
+      this.ovenDrag = null;
+      this.el.ghost.classList.add('hidden');
+      if (!d.moved) {
+        this.app.session?.setHint('Зажми форму и перетащи в проём открытой духовки', 2);
+        return;
+      }
+      const loc = this._planeLocal(e, 'oven');
+      if (loc) this.act('ovenDrop', loc.x, loc.z);
+      else this.act('ovenDrop', 99, 99);
+    });
     // 0.11 (G2.6): замену украденного берут жестом — зажать фишку и перетащить на доску (из запаса, он «как из холодильника»)
     p.addEventListener('pointerdown', (e) => {
       const chip = e.target.closest('[data-drag-repl]');
@@ -1505,7 +1536,7 @@ export class CampaignUI {
       case 'catbowl':
         return `${base}|${s.cat.state}|${s.catCalm()}|${s.catTool}`;
       case 'oven':
-        return `${base}|${s.oven.state}|${s.dishes.chicken?.steps.marinade.done}|${s.dishes.chicken?.done}`;
+        return `${base}|${s.oven.state}|${s.ovenDoor.door}|${s.dishes.chicken?.steps.marinade.done}|${s.dishes.chicken?.done}`;
       case 'sink':
         return `${base}|${s.dirtyItems().map((x) => x.id).join(',')}|${s.sinkJob?.item}|${s.hotList().map((x) => x.product).join()}|${s.sinkCool?.product}`;
       case 'dishwasher': {
@@ -1767,13 +1798,15 @@ export class CampaignUI {
         return `<h2>🐾 Миска кота<span class="sub">голод ${h} %</span></h2><div class="row">${this._btn(`🥣 Корм${k ? ' — в руке' : ''}`, 'catPick', ['kibble'], k ? 'primary' : 'ghost', false, 'Взять пачку корма: потом тряси её над миской')}${this._btn(`🎣 Удочка${w ? ' — в руке' : ''}`, 'catPick', ['wand'], w ? 'primary' : 'ghost', false, 'Взять «удочку с бантиком»: потом води по полу')}${back}</div>${live}<p class="note">Сытый кот спит и не лезет к еде. Игра занимает его на ${CAMPAIGN.cat.playTime} с, но голод растёт.</p>`;
       }
       case 'oven': {
+        // 0.11 (G1.3): духовка жестом — потянуть ручку дверцы вниз, опустить форму в проём, вытащить готовую вниз; кнопок нет
         const ch = s.dishes.chicken;
-        const rows = [];
-        if (s.oven.state === 'empty' && ch && !ch.done) rows.push(this._btn('🍗 Поставить форму в духовку', 'ovenLoad', [], ch.steps.marinade.done ? 'primary big' : 'soft-disabled', busy));
-        if (s.oven.state !== 'empty') rows.push(this._btn(s.oven.state === 'baking' ? 'Достать (ещё рано)' : '🧤 Достать курицу', 'ovenTake', [], s.oven.state === 'baking' ? 'ghost' : 'danger big', busy));
-        rows.push(back);
+        const od = s.ovenDoor;
         const stage = { empty: 'Духовка пустая', baking: 'Запекается…', ready: 'Готово — достань!', over: 'Перегревается!', burnt: 'Сгорела' }[s.oven.state];
-        return `<h2>🍗 Духовка<span class="sub">${stage}</span></h2><div class="row">${rows.join('')}</div><div class="row">${bar}</div>${live}<p class="note">${ch ? 'Курица запекается около часа (по часам кухни); после сигнала есть окно, чтобы достать.' : 'Сегодня духовка не нужна.'}</p>`;
+        const canLoad = s.oven.state === 'empty' && ch && !ch.done;
+        const marinated = !!ch?.steps.marinade.done;
+        const chip = canLoad ? `<button class="prod-chip ${marinated ? 'active' : 'locked'}" data-drag-oven ${busy || !marinated ? 'disabled' : ''} title="${marinated ? 'Зажми и перетащи в проём открытой духовки' : 'Сначала покрой курицу маринадом на подносе'}"><span class="pi">🍗</span><span class="pn">Форма с курицей ⤵</span></button>` : '';
+        const how = !ch ? 'Сегодня духовка не нужна.' : od.door === 'closed' ? 'Потяни ручку дверцы вниз — духовка откроется.' : canLoad ? 'Зажми форму в доке и опусти в проём.' : s.oven.state === 'empty' ? 'Духовка пустая.' : 'Зажми курицу в проёме и вытащи вниз, на стол. Дверцу подними вверх.';
+        return `<h2>🍗 Духовка<span class="sub">${stage}</span></h2><div class="dock">${back}<div class="dock-items">${chip}</div></div><div class="row">${bar}</div>${live}<p class="note">${how}${ch ? ' Курица запекается около часа (по часам кухни); после сигнала есть окно, чтобы достать.' : ''}</p>`;
       }
       case 'dishwasher': {
         const d = s.dishwasher;

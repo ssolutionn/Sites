@@ -19,6 +19,7 @@ import { treeMethods } from './st-tree.js';
 import { catMethods } from './st-cat.js';
 import { streamMethods } from './st-stream.js';
 import { dishwasherMethods, KNIFE_EVENTS } from './st-dishwasher.js';
+import { ovenMethods } from './st-oven.js';
 import { RADIO } from './radio-data.js';
 import { CHATTER } from './chatter.js';
 
@@ -74,6 +75,7 @@ export class KitchenSession {
       knife: { clean: true, owner: null, label: 'Нож', cleanText: 'Нож чистый' }, // 0.11: пачкается при любом разрезе, ничего не блокирует
     };
     this._initDishwasher(); // посудомойка (st-dishwasher.js)
+    this._initOvenDoor(); // дверца духовки жестом (st-oven.js)
 
     this.recipes = practice ? { practice: this.day.recipe } : Object.fromEntries(this.day.dishes.map((id) => [id, RECIPES[id]]));
     this.dishes = {};
@@ -355,6 +357,7 @@ export class KitchenSession {
     this._updateHolds(h);
     this._updateSinkCool(h);
     this._updateDishwasher(h);
+    this._updateOvenDoor(h);
     this._updateStove(h);
     this._updateOven(h);
     this._updateDelivery(h);
@@ -742,7 +745,7 @@ export class KitchenSession {
     if (this.isOver() || this.heroine.away || this.heroine.target) return 'ignored';
     if (type === 'down') this.pointerDown = true;
     if (type === 'up') {
-      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : this.panel === 'bowl' ? this._bowlPointer('up', x, z) : this.panel === 'stove' ? this._stovePointer('up', x, z) : this.panel === 'catbowl' ? this._catbowlPointer('up', x, z) : 'up';
+      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : this.panel === 'bowl' ? this._bowlPointer('up', x, z) : this.panel === 'stove' ? this._stovePointer('up', x, z) : this.panel === 'oven' ? this._ovenPointer('up', x, z) : this.panel === 'catbowl' ? this._catbowlPointer('up', x, z) : 'up';
       this.pointerUp();
       return r;
     }
@@ -758,6 +761,8 @@ export class KitchenSession {
         return this._sinkPointer(type, x, z);
       case 'dishwasher':
         return this._dwPointer(type, x, z);
+      case 'oven':
+        return this._ovenPointer(type, x, z);
       case 'puddle':
         return this._puddlePointer(type, x, z);
       case 'radio':
@@ -801,6 +806,7 @@ export class KitchenSession {
     this._radioRelease();
     this._treePointerUp?.(); // 0.11: нитка мишуры закончилась, ёлку отпустили
     this._dwRelease();
+    this._ovenRelease();
   }
 
   // ---------- расписание помех и сообщений ----------
@@ -1105,7 +1111,7 @@ export class KitchenSession {
 }
 
 // Методы станций в отдельных модулях — общий источник состояния остаётся один.
-Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods, catMethods, streamMethods, dishwasherMethods);
+Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods, catMethods, streamMethods, dishwasherMethods, ovenMethods);
 
 export function emptyBurner(i) {
   // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне
