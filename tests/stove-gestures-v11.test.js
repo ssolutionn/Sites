@@ -89,6 +89,9 @@ test('не дотащила от конфорки (меньше dragOff·рад�
   s.pointer('move', x + near, z);
   assert.equal(s.pointer('up', x + near, z), 'up');
   assert.equal(s.burners[1].state, 'ready');
+  // отказ объясняется (регрессия ревью 0.11: раньше молчал — ни фразы, ни звука)
+  assert.match(s.hint?.text ?? '', /оттащи/i);
+  assert.ok(s.drain().some((e) => e.type === 'potStay'));
 });
 
 test('граница + 10 %: дальше dragOff·1,1 — снята', () => {

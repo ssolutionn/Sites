@@ -259,7 +259,7 @@ export const treeMethods = {
       return false;
     }
     if (this.bonus.banked < price) {
-      this.setHint('Очки за готовку станут доступны для игрушек после завершения дня. Очки из подарков — сразу!', 4);
+      this.setHint('Очки за готовку станут доступны после дня, очки из подарков — сразу', 4);
       return false;
     }
     this.bonus.points -= price;
@@ -464,7 +464,7 @@ export const treeMethods = {
       return false;
     }
     if (this.bonus.banked < t.price) {
-      this.setHint('Очки за готовку станут доступны для игрушек после завершения дня. Очки из подарков — сразу!', 4);
+      this.setHint('Очки за готовку станут доступны после дня, очки из подарков — сразу', 4);
       return false;
     }
     this.bonus.points -= t.price;

@@ -166,6 +166,17 @@ test('«Новая кампания» не стирает настройки, н
   assert.deepEqual(Object.keys(pickPreferences(store.data.settings)).sort(), ['assist', 'fullscreen', 'ghostHints', 'ghostSeen', 'keys', 'quality', 'reduceMotion', 'textScale', 'volume']);
 });
 
+test('«Новая кампания» не стирает режим стримера: канал, порт оверлея и «включён» остаются (регрессия ревью 0.11)', () => {
+  const mem = new Map();
+  const store = new SaveStore({ getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) });
+  store.data.settings.stream = { on: true, channel: 'kuhnya_tv', power: 'soft', overlayPort: 47123 };
+  store.data.days[0].completed = true;
+  store.write();
+  store.reset();
+  assert.deepEqual(store.data.settings.stream, { on: true, channel: 'kuhnya_tv', power: 'soft', overlayPort: 47123 });
+  assert.equal(JSON.parse(mem.get(SAVE_KEY)).settings.stream.channel, 'kuhnya_tv', 'и на диске тоже');
+});
+
 // ======================= клавиши =======================
 
 test('клавиши по умолчанию: WASD и стрелки, пробел, R, Q, F, Esc, M, F11, P (пауза чата)', () => {

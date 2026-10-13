@@ -84,13 +84,13 @@ export function normalizeSettings(raw) {
   };
 }
 
-/** Поля, которые переживают «Новую кампанию»: настройки — не прогресс. */
-export const PREFERENCE_KEYS = ['quality', 'volume', 'assist', 'textScale', 'reduceMotion', 'fullscreen', 'keys', 'ghostHints', 'ghostSeen'];
+/** Поля, которые переживают «Новую кампанию»: настройки — не прогресс. stream — режим стримера (канал, порт оверлея, сила чата). */
+export const PREFERENCE_KEYS = ['quality', 'volume', 'assist', 'textScale', 'reduceMotion', 'fullscreen', 'keys', 'ghostHints', 'ghostSeen', 'stream'];
 
-/** Предпочтения игрока из настроек (без radioFreq, inProgress и прочего, что относится к кампании). */
+/** Предпочтения игрока из настроек (без radioFreq, inProgress и прочего, что относится к кампании). Незаданное не переносится. */
 export function pickPreferences(settings) {
   const n = normalizeSettings(settings);
-  return Object.fromEntries(PREFERENCE_KEYS.map((k) => [k, n[k]]));
+  return Object.fromEntries(PREFERENCE_KEYS.filter((k) => n[k] !== undefined).map((k) => [k, n[k]]));
 }
 
 /** Эффективное «меньше движения»: выбор игрока или системная настройка. */

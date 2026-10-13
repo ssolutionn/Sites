@@ -430,7 +430,10 @@ export const homeMethods = {
     const p = STOVE.burners[d.i];
     const away = Math.hypot(x - p.x, z - p.z) > STOVE.r * this.cfg.stove.dragOff;
     if (!away) {
-      if (this.burners[d.i].state === 'ready') this._emit('potStay'); // рука-призрак: готовую кастрюлю не оттащили
+      if (this.burners[d.i].state === 'ready') {
+        this.setHint('Оттащи кастрюлю подальше от конфорки — на столешницу сбоку', 2.2);
+        this._emit('potStay'); // звук отказа; рука-призрак: три раза не оттащили — покажет жест
+      }
       return 'up';
     }
     this.takePot(d.i);

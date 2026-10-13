@@ -162,6 +162,7 @@ async function boot() {
 
   const SOUND_OF = {
     ovenDoor: 'dwDoor', ovenDeny: 'deny', // 0.11: дверца духовки (st-oven.js)
+    stoveMiss: 'deny', potStay: 'deny', // 0.11: продукт мимо конфорки, кастрюлю не оттащили — отказ жеста не молчит
     dwDoor: 'dwDoor', dwLoad: 'dwClink', dwTake: 'dwClink', dwPick: 'select', dwStart: 'dwStart', dwHum: 'dwHum', dwDone: 'dwDone', dwDeny: 'deny', // 0.11: посудомойка (st-dishwasher.js)
     cut: 'chop', rotate: 'rotate', transfer: 'transfer', catStart: 'meow', catShooed: 'shoo', catStole: 'hiss', catSpill: 'spill',
     phoneMsg: 'phone', potBoil: 'boil', spill: 'spill', potSaved: 'fixed', garlandOff: 'garlandOff', garlandFixed: 'fixed', starOff: 'garlandOff', starFixed: 'fixed', catBored: 'meow', catMischief: 'hiss', giftOpened: 'success', toyBought: 'cash', toyHung: 'jingle', toyTaken: 'select', toyPicked: 'added', toyReturned: 'rotate', toyBroken: 'jingle', treeFell: 'treeFall', treeUp: 'fixed', treeLiftTick: 'rustle', tinselBought: 'cash', tinselDraw: 'rustle', tinselHung: 'jingle', tinselTaken: 'rotate', tinselEmpty: 'deny', setComplete: 'success', giftStart: 'select', giftTick: 'rustle', giftBow: 'added', giftPaper: 'bag',

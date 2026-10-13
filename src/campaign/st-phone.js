@@ -165,7 +165,7 @@ export const phoneMethods = {
       return false;
     }
     if (this.bonus.banked < d.price) {
-      this.setHint('Очки за готовку станут доступны для украшений после завершения дня. Очки из подарков — сразу!', 4);
+      this.setHint('Очки за готовку станут доступны после дня, очки из подарков — сразу', 4);
       return false;
     }
     this.bonus.points -= d.price;
