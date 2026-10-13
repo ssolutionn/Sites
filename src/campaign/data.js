@@ -44,6 +44,7 @@ export const CAMPAIGN = {
   stove: {
     heatRate: 0.56, loss: 0.02, boilAt: 99.5, simmer: 4, foamHeat: 7, foamAfter: 8, placeHeat: 6, eventHeat: 6, maxHeat: 9,
     evap: 1 / (kitchenSec(40) * 6), levelWarn: 0.35, levelUrgent: 0.15, idleWarn: 20,
+    dragOff: 1.9, // кастрюлю надо утащить от центра конфорки дальше 1,9 радиуса (в 0.11 вместо кнопки «Достать»)
     burnPrepPenalty: 20, potatoCrumbK: 3, // переваренный картофель: порог «крошки» втрое выше
     overcook: { egg: kitchenSec(4), potato: kitchenSec(10), beet: kitchenSec(15), default: kitchenSec(10) }, overcookPenalty: 10, overcookPenaltyBy: { egg: 15 },
     wipe: { need: 0.55, maxStep: 0.12, reverseBonus: 1.6 },

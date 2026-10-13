@@ -1324,6 +1324,41 @@ export class CampaignUI {
       if (p) this.act('dwDrop', d.item, p.x, p.z);
       else this.act('dwDrop', d.item, 99, 99);
     });
+    // 0.11: плита — зажать фишку продукта из рук и перетащить на конфорку (кольцо под курсором светится)
+    p.addEventListener('pointerdown', (e) => {
+      const chip = e.target.closest('[data-drag-stove]');
+      if (!chip || chip.disabled) return;
+      e.preventDefault();
+      this.sound.unlock();
+      this.stoveDrag = { x0: e.clientX, y0: e.clientY, moved: false, icon: PICON[chip.dataset.dragStove] ?? '🍽' };
+    });
+    window.addEventListener('pointermove', (e) => {
+      const d = this.stoveDrag;
+      if (!d) return;
+      if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 8) {
+        d.moved = true;
+        this.el.ghost.innerHTML = `<span class="toy-ghost">${d.icon}</span>`;
+        this.el.ghost.classList.remove('hidden');
+      }
+      if (!d.moved) return;
+      this._moveGhost(e);
+      const loc = this._planeLocal(e, 'stove');
+      this.view.stoveHot = loc ? this.app.session?.burnerIndexAt(loc.x, loc.z) ?? null : null;
+    });
+    window.addEventListener('pointerup', (e) => {
+      const d = this.stoveDrag;
+      if (!d) return;
+      this.stoveDrag = null;
+      this.view.stoveHot = null;
+      this.el.ghost.classList.add('hidden');
+      if (!d.moved) {
+        this.app.session?.setHint('Зажми продукт и перетащи на конфорку', 2);
+        return;
+      }
+      const loc = this._planeLocal(e, 'stove');
+      if (loc) this.act('stoveDrop', loc.x, loc.z);
+      else this.act('stoveDrop', 99, 99);
+    });
     // перетаскивание блюд на стол
     p.addEventListener('pointerdown', (e) => {
       const card = e.target.closest('[data-dish]');
@@ -1389,9 +1424,14 @@ export class CampaignUI {
 
   /** Точка отпущенной фишки на плоскости дверцы посудомойки (локальные метры) или null — курсор вне сцены или над панелью. */
   _dwLocal(e) {
+    return this._planeLocal(e, 'dishwasher');
+  }
+
+  /** Локальные метры рабочей плоскости станции под курсором; null — курсор вне сцены или над панелью. */
+  _planeLocal(e, station) {
     const c = this.view.sv.canvas, r = c.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom || e.target?.closest?.('#panel')) return null;
-    return this.view.pickLocal({ x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 }, 'dishwasher');
+    return this.view.pickLocal({ x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 }, station);
   }
 
   releaseHolds() {
@@ -1678,10 +1718,9 @@ export class CampaignUI {
             if (!usable.has(b.i)) return `<div class="burner off"><b>${name}</b><span class="bstat">не работает (испытание)</span></div>`;
             let act = '';
             if (b.overflow) act = '<span class="small warn">🔥 убегает — поверни крутилку ниже 6!</span>';
-            else if (b.state === 'ready') act = this._btn(`${PICON[b.product]} Достать`, 'takePot', [b.i], 'primary', busy);
+            else if (b.state === 'ready') act = `<span class="small good">${PICON[b.product]} готово — оттащи кастрюлю</span>`;
             else if (b.state === 'boiling') act = `<span class="small">${PICON[b.product]} ${esc(PRODUCTS[b.product].name)}</span>`;
             else if (b.dirty) act = '<span class="small warn">🧽 залита — потри тряпкой</span>';
-            else if (canPlace) act = this._btn(`${PICON[c.product]} Положить сюда`, 'placePot', [b.i, null, null], 'primary', busy, 'В кастрюлю с водой на этой конфорке');
             // крутилка огня: только крутить — зажми и веди по кругу; 0 — выключено, 9 — максимум
             const heat = b.heat ?? 0;
             const knob = `<div class="knob ${heat ? 'on' : ''}" data-knob="${b.i}" style="--a:${-135 + heat * 30}deg" title="Крутилка огня: зажми и поверни по кругу"><i></i><span>${heat}</span></div>`;
@@ -1689,7 +1728,7 @@ export class CampaignUI {
           })
           .join('');
         const need = !canPlace && tasks.length ? `<p class="note live">Чтобы варить, сначала достань продукт: 🧊 холодильник (яйца, картофель).</p>` : '';
-        return `<h2>♨️ Плита<span class="sub">${c ? `в руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name.toLowerCase())}` : 'четыре конфорки'}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="burners4">${burners}</div></div><div class="row">${bar}</div>${need}${tasks.length || c || s.burners.some((b) => b.state !== 'empty' || b.dirty) ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
+        return `<h2>♨️ Плита<span class="sub">${c ? `в руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name.toLowerCase())}` : 'четыре конфорки'}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}${canPlace ? `<div class="dock-items"><button class="prod-chip active" data-drag-stove="${c.product}" ${busy ? 'disabled' : ''} title="Зажми и перетащи на конфорку — кастрюля с водой стоит на плите"><span class="pi">${PICON[c.product] ?? '🍽'}</span><span class="pn">${esc(PRODUCTS[c.product].name)} ⤵</span></button></div>` : ''}<div class="burners4">${burners}</div></div><div class="row">${bar}</div>${need}${tasks.length || c || s.burners.some((b) => b.state !== 'empty' || b.dirty) ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
       }
       case 'catbowl': {
         const h = Math.round(s.catNeeds.hunger);

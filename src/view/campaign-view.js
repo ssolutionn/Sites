@@ -321,6 +321,13 @@ export class CampaignView {
       pot.stain.visible = false;
       tag(pot.stain, 'stove');
       this.scene.add(pot.stain);
+      // 0.11: кольцо-цель на пустой конфорке, пока в руках продукт для кастрюли: под курсором светится зелёным
+      pot.target = new THREE.Mesh(new THREE.RingGeometry(STOVE.r * 0.95, STOVE.r * 1.3, 40), new THREE.MeshBasicMaterial({ color: 0x2fbf5a, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+      pot.target.rotation.x = -Math.PI / 2;
+      pot.target.position.set(pot.on.x, pot.on.y + 0.007, pot.on.z);
+      pot.target.visible = false;
+      tag(pot.target, 'stove');
+      this.scene.add(pot.target);
       // кольцо готовности над кастрюлей: видно, сколько осталось, и что «готово»
       const cv = document.createElement('canvas');
       cv.width = cv.height = 96;
@@ -670,6 +677,7 @@ export class CampaignView {
     this.washKey = null;
     this.dishwasherView.reset();
     this.dwHot = false;
+    this.stoveHot = null; // номер конфорки под перетаскиваемым продуктом (campaign-ui)
     for (const c of this.sinkItem.children.slice()) F.disposeGroup(c);
     this.shreds.clear();
     this.roundGroup.clear();
@@ -1009,6 +1017,19 @@ export class CampaignView {
   }
 
   /** Мышь над котом (ndc): для жеста «помахать» — с запасом вокруг кота, он маленький на экране. */
+  /** Конфорка, на которой стоит кастрюля под курсором (за ручку или бок), или null: 3D-тело выше плоскости плиты, плоскостью его не поймать. */
+  potAt(ndc) {
+    if (!ndc || !this.pots) return null;
+    const rc = this.sv._ray(ndc);
+    let best = null;
+    this.pots.forEach((pot, i) => {
+      if (!pot.group.visible) return;
+      const hit = rc.intersectObject(pot.group, true)[0];
+      if (hit && (!best || hit.distance < best.d)) best = { i, d: hit.distance };
+    });
+    return best ? best.i : null;
+  }
+
   catHit(ndc) {
     if (!ndc) return false;
     const rc = this.sv._ray(ndc);
@@ -1204,8 +1225,24 @@ export class CampaignView {
   }
 
   _updateStove(s, dt, t) {
+    const dragLocal = s.panel === 'stove' && s.potDrag && this.pointerLocal ? this.pointerLocal : null;
+    const placing = s.panel === 'stove' && !!s.carry?.boilStep;
     this.pots.forEach((pot, bi) => {
       const b = s.burners[bi];
+      // кастрюлю взяли за ручку: она идёт за курсором над плитой; отпустили — вернётся на конфорку (или улетит на столешницу)
+      if (dragLocal && s.potDrag.i === bi) {
+        pot.move = null;
+        pot.group.position.set(this.k.stoveCenter.x + dragLocal.x, pot.on.y + 0.1, this.k.stoveCenter.z + dragLocal.z);
+      } else if (!pot.move && b && b.state !== 'empty' && pot.group.position.distanceToSquared(pot.on) > 1e-6) {
+        pot.group.position.lerp(pot.on, 1 - Math.exp(-dt * 14));
+      }
+      const free = placing && b?.state === 'empty' && !b.dirty;
+      pot.target.visible = free;
+      if (free) {
+        const hot = this.stoveHot === bi;
+        pot.target.material.opacity = hot ? 0.9 : 0.3 + Math.sin(t * 5) * 0.1;
+        pot.target.scale.setScalar(hot ? 1.12 : 1);
+      }
       if (pot.move) {
         pot.move.t = Math.min(1, pot.move.t + dt / 0.5);
         pot.group.position.lerpVectors(pot.move.from, pot.move.to, ease(pot.move.t));

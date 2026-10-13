@@ -91,6 +91,7 @@ export class KitchenSession {
     this.burners = Array.from({ length: cfg.burners ?? 1 }, (_, i) => emptyBurner(i));
     this.carry = null; // в руках у героини: { product, qty, dishId, stepId, boilStep, peeled } — из холодильника к доске или к плите
     this.stoveWipe = null; // вытираем залитую конфорку: { i, scrub }
+    this.potDrag = null; // 0.11: тащим кастрюлю с конфорки: { i, x, z } — локальные метры плиты
     this.hot = {}; // продукт → время, до которого он горячий
     this.oven = { state: 'empty', owner: null, t: 0, readyAt: 0, windowEnd: 0, doneness: 0 };
     this.radio = { enabled: true, broken: false, progress: 0, repairs: 0, breaks: 0, freq: RADIO.startFreq }; // freq — МГц, ручка настройки (st-radio.js)
@@ -786,6 +787,7 @@ export class KitchenSession {
     this.tray.lastStroke = null;
     this._sinkLast = null;
     this.stoveWipe?.scrub.release();
+    this.potDrag = null;
     this.sinkJob?.scrub.release();
     this.catFeed?.release();
     this.catPlay?.release();

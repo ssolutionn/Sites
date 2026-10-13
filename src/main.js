@@ -4,7 +4,7 @@ import { CAMPAIGN, DAYS, DISH_ORDER } from './campaign/data.js';
 import { KitchenSession } from './campaign/session.js';
 import { SaveStore, recordDay, currentDayIndex } from './campaign/save.js';
 import { markInProgress, applyDecorPurchase, applyTreeEvent, recordStreamDay, rememberViewers } from './campaign/persist.js';
-import { CLAYOUT, TABLE_SLOTS } from './campaign/layout.js';
+import { CLAYOUT, TABLE_SLOTS, STOVE } from './campaign/layout.js';
 import { SceneView } from './view/scene.js';
 import { CampaignView } from './view/campaign-view.js';
 import { loadLogo, setWindowPhase } from './view/textures.js';
@@ -709,8 +709,13 @@ async function boot() {
       // клик во время перехода камеры не режет в неожиданной точке
       if (!closeupActive()) return;
       canvas.setPointerCapture?.(e.pointerId);
-      const p = view.pickLocal(ndc, session.panel);
+      let p = view.pickLocal(ndc, session.panel);
       if (!p) return;
+      // 0.11: кастрюля стоит выше плоскости плиты — берём её по самому телу, а не по пятну под ним
+      if (session.panel === 'stove') {
+        const bi = view.potAt(ndc);
+        if (bi != null) p = { x: STOVE.burners[bi].x, z: STOVE.burners[bi].z };
+      }
       lastLocal = p;
       view.pointerLocal = p;
       const r = session.pointer('down', p.x, p.z);
