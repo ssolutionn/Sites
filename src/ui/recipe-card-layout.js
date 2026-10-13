@@ -12,7 +12,7 @@ export const CARD_MARGIN = 70;
 /** Тихая зона QR вокруг кода, в модулях (стандарт требует не меньше четырёх). */
 export const QR_QUIET = 4;
 /** Ширина блока QR вместе с тихой зоной не больше этого, px; сам код при этом не меньше QR_MIN_PX. */
-export const QR_BLOCK_MAX = 340;
+export const QR_BLOCK_MAX = 390;
 export const QR_MIN_PX = 240;
 
 export const FONT = "Nunito, ui-rounded, system-ui, 'Segoe UI', Roboto, Arial, sans-serif";

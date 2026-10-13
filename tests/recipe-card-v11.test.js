@@ -47,9 +47,10 @@ test('QR: не меньше 240 px, целые пиксели на модуль,
     assert.ok(q.y + q.block >= CARD_H - 64 - 40, `${id}: прижат книзу`);
   }
   assert.equal(QR_QUIET, 4);
-  assert.equal(qrModulePx(97), 3);
+  assert.equal(qrModulePx(97), 3, 'версия 20: 105 модулей с тихой зоной — по 3 px');
+  assert.equal(qrModulePx(89), 4, 'версия 18 и меньше — по 4 px и крупнее');
   assert.equal(qrModulePx(77), 4);
-  assert.equal(qrModulePx(45), 6);
+  assert.equal(qrModulePx(45), 7);
 });
 
 test('текст не вылезает за поля и не заходит на QR; шаги кончаются левее кода', () => {
