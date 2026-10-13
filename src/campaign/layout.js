@@ -42,6 +42,16 @@ export const CLAYOUT = {
   table: { x: -2.75, z: 0.55, w: 1.1, d: 1.1, h: 0.76 },
 };
 
+// 0.11: куда встаёт героиня, чтобы прогнать кота самой (ключ — состояние кота или вид шалости). Точки на свободном полу у места шалости.
+export const CAT_CHASE = {
+  theft: { x: -0.45, z: 1.55 },
+  spill: { x: 1.35, z: 1.6 },
+  garland: { x: -1.0, z: -1.6 },
+  star: { x: -2.1, z: -1.5 },
+  toys: { x: -2.1, z: -1.5 },
+  tree: { x: -2.1, z: -1.5 },
+};
+
 // Станции, у которых есть крупный план от первого лица.
 export const CLOSEUP_STATIONS = new Set(['board', 'tray', 'bowl', 'sink', 'puddle', 'table', 'stove', 'radio', 'tree']);
 

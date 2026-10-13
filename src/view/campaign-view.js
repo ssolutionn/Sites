@@ -370,6 +370,33 @@ export class CampaignView {
     this.root.add(this.ball);
     tag(this.ball, 'catbowl');
     this.ballHome = this.ball.position.clone();
+    // 0.11: пачка корма — её трясут над миской (появляется в руке, пока зажата мышь)
+    this.kibblePack = new THREE.Group();
+    const packBody = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.13, 0.045), F.m(0xd9822b, 0.6));
+    const packLabel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.047), F.m(0xfff2dc, 0.7));
+    packLabel.position.y = -0.005;
+    this.kibblePack.add(packBody, packLabel);
+    this.kibblePack.visible = false;
+    this.root.add(this.kibblePack);
+    // 0.11: «удочка с бантиком» — палка в руке, нить и розовый бантик у мыши на полу
+    this.wand = new THREE.Group();
+    const wandStick = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.014, 0.7, 8), F.m(0xb98550, 0.6));
+    wandStick.position.set(0.22, 0.34, 0.1);
+    wandStick.rotation.z = 0.62;
+    wandStick.rotation.x = -0.3;
+    const bowTie = new THREE.Group();
+    bowTie.name = 'bow';
+    for (const sx of [-1, 1]) {
+      const wing = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), F.m(0xff5ca8, 0.5));
+      wing.scale.set(1.2, 0.7, 0.8);
+      wing.position.x = sx * 0.024;
+      bowTie.add(wing);
+    }
+    bowTie.add(new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), F.m(0xd62c78, 0.5)));
+    bowTie.scale.setScalar(1.7);
+    this.wand.add(wandStick, bowTie);
+    this.wand.visible = false;
+    this.root.add(this.wand);
 
     this.particles = new Particles(this.root);
   }
@@ -546,6 +573,11 @@ export class CampaignView {
         const c = this.k.stoveCenter;
         return { c: c.clone(), y: c.y };
       }
+      case 'catbowl': {
+        // 0.11: пол вокруг миски кота — по нему водят пачку корма и «удочку»
+        const cb = CLAYOUT.catBowl;
+        return { c: new THREE.Vector3(cb.x, 0.06, cb.z), y: 0.06 };
+      }
       case 'tree': {
         // 0.10: подарок в руках — плоскость его крышки, центр — середина банта
         if (!this.session?.gift) return null;
@@ -717,6 +749,9 @@ export class CampaignView {
       case 'catFed':
         this.kibble.visible = true;
         this._catTo(new THREE.Vector3(CLAYOUT.catBowl.x + 0.17, 0, CLAYOUT.catBowl.z - 0.02), 'eat', -Math.PI / 2);
+        break;
+      case 'kibble':
+        this.particles.emit(new THREE.Vector3(CLAYOUT.catBowl.x, 0.12, CLAYOUT.catBowl.z), 0x9a5b2a, 8, { spread: 0.05, up: -0.1, life: 0.6, size: 0.012, gravity: 1.6 });
         break;
       case 'catPlay':
         this._catTo(new THREE.Vector3(CLAYOUT.catBowl.x + 0.1, 0, CLAYOUT.catBowl.z - 0.25), 'play', 0.6);
@@ -1097,6 +1132,33 @@ export class CampaignView {
   _updateCat(dt, time) {
     const cat = this.sv.cat;
     cat.visible = true;
+    // 0.11: кот бежит за бантиком «удочки», пока её водят; отпустили — возвращается на своё место
+    const s0 = this.session;
+    const wandAt = s0 && s0.cat.state === 'home' && s0.catTool === 'wand' && s0.catWand ? s0.catWand : null;
+    const home = CLAYOUT.catHome;
+    if (wandAt || this.catChased) {
+      const cb = CLAYOUT.catBowl;
+      const tx = wandAt ? cb.x + wandAt.x : home.x, tz = wandAt ? cb.z + wandAt.z : home.z;
+      const d = Math.hypot(tx - cat.position.x, tz - cat.position.z);
+      if (wandAt) this.catChased = true;
+      if (d > 0.06) {
+        const step = Math.min(d, dt * (wandAt ? 2.8 : 2.2));
+        cat.position.x += ((tx - cat.position.x) / d) * step;
+        cat.position.z += ((tz - cat.position.z) / d) * step;
+        cat.position.y = wandAt ? Math.abs(Math.sin(time * 9)) * 0.06 : 0;
+        cat.rotation.y = Math.atan2(tx - cat.position.x, tz - cat.position.z);
+        animateCat(cat, 'walk', time, 1);
+        return;
+      }
+      if (!wandAt) {
+        this.catChased = false;
+        cat.position.y = 0;
+        this.catVis = { segs: [{ from: new THREE.Vector3(home.x, 0, home.z), to: new THREE.Vector3(home.x, 0, home.z), dur: 999, mode: 'sit', face: -0.6 }], seg: 0, t: 0, mode: 'sit' };
+      } else {
+        animateCat(cat, 'play', time, 0);
+        return;
+      }
+    }
     const cv = this.catVis;
     if (!cv.segs.length) {
       cat.position.set(CLAYOUT.catHome.x, 0, CLAYOUT.catHome.z);
@@ -1287,8 +1349,26 @@ export class CampaignView {
     if (this.boardDirt.visible) this.boardDirt.material.color.setHex(bd.by === 'beet' ? 0x7a1d3c : 0x8a7a66);
     // миска кота: сыт — в миске остаётся корм (меньше, чем голоднее), проголодался — миска пустая, пора кормить
     const full = Math.max(0, Math.min(1, (45 - s.catNeeds.hunger) / 45));
-    this.kibble.visible = s.cat.state === 'eat' || full > 0.05;
-    this.kibble.scale.set(1, 0.35 + 0.65 * (s.cat.state === 'eat' ? 1 : full), 1);
+    const feeding = s.catTool === 'kibble' && s.catFeed;
+    this.kibble.visible = s.cat.state === 'eat' || full > 0.05 || (feeding && s.catFeed.amount > 0);
+    this.kibble.scale.set(1, feeding ? 0.2 + 0.8 * s.catFeed.amount : 0.35 + 0.65 * (s.cat.state === 'eat' ? 1 : full), 1);
+    // пачка корма над миской: трясётся вместе с рукой
+    const cbx = CLAYOUT.catBowl;
+    const hand = s.catWand;
+    this.kibblePack.visible = !!feeding && s.pointerDown && !!hand;
+    if (this.kibblePack.visible) {
+      this.kibblePack.position.set(cbx.x + hand.x, 0.34, cbx.z + hand.z);
+      this.kibblePack.rotation.z = -0.7 + Math.sin(t * 28) * 0.12;
+    }
+    // «удочка»: палка у руки, бантик на полу под мышью
+    const wandOn = s.catTool === 'wand' && !!s.catWand;
+    this.wand.visible = wandOn;
+    if (wandOn) {
+      this.wand.position.set(cbx.x + s.catWand.x, 0.04, cbx.z + s.catWand.z);
+      const bow = this.wand.getObjectByName('bow');
+      bow.position.y = 0.05 + Math.abs(Math.sin(t * 8)) * 0.03;
+      bow.rotation.y = t * 3;
+    }
     if (s.cat.state === 'play') {
       this.playT = (this.playT ?? 0) + dt;
       const cb = CLAYOUT.catBowl;

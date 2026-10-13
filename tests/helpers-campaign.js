@@ -3,6 +3,33 @@ import { KitchenSession } from '../src/campaign/session.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
 import { bounds } from '../src/game/cutting.js';
 
+// Покормить кота руками: взять пачку и потрясти над миской до полной миски (0.11: кнопки «Покормить» больше нет).
+export function feedCatByShaking(s) {
+  arrive(s, 'catbowl');
+  if (!s.catPick('kibble')) return false;
+  const a = s.cfg.cat.feed.amplitude * 1.6;
+  s.pointer('down', 0, 0);
+  for (let k = 0; k < s.cfg.cat.feed.shakes * 2 + 2 && s.catTool; k++) {
+    run(s, 0.12);
+    s.pointer('move', 0, k % 2 ? a : -a);
+  }
+  s.pointer('up', 0, 0);
+  return !s.catTool;
+}
+
+// Поиграть с котом: «удочка с бантиком» — водить мышью по полу рядом с миской, пока кот не набегается.
+export function playCatByWand(s) {
+  arrive(s, 'catbowl');
+  if (!s.catPick('wand')) return false;
+  s.pointer('down', 0.2, 0);
+  for (let k = 0; k < 200 && s.catTool; k++) {
+    run(s, 0.05);
+    s.pointer('move', 0.2 + Math.cos(k * 0.5) * 0.45, Math.sin(k * 0.5) * 0.45);
+  }
+  s.pointer('up', 0, 0);
+  return !s.catTool;
+}
+
 export function run(s, seconds, fps = 30) {
   const n = Math.round(seconds * fps);
   for (let i = 0; i < n; i++) s.update(1 / fps);

@@ -301,17 +301,37 @@ function placeAll() {
     ui(() => s.placePot(i, null, null));
   }
 }
+// 0.11: корм — потрясти пачку над миской, игра — водить «удочку с бантиком»; игрок делает это за ~3 и ~5 секунд
+function shakeKibble() {
+  const f = s.cfg.cat.feed;
+  s.pointer('down', 0, 0);
+  for (let k = 0; k < f.shakes * 2 + 2 && s.catTool; k++) {
+    tick(0.3);
+    s.pointer('move', 0, k % 2 ? f.amplitude * 1.6 : -f.amplitude * 1.6);
+  }
+  s.pointer('up', 0, 0);
+}
+function playWand() {
+  s.pointer('down', 0.2, 0);
+  for (let k = 0; k < 200 && s.catTool; k++) {
+    tick(0.05);
+    s.pointer('move', 0.2 + Math.cos(k * 0.5) * 0.45, Math.sin(k * 0.5) * 0.45);
+  }
+  s.pointer('up', 0, 0);
+}
 function catCheck() {
   if (s.catNeeds.hunger >= 50 && s.cat.state === 'home') {
     go('catbowl');
     tip('catHungry');
-    ui(() => s.feedCat());
+    ui(() => s.catPick('kibble'));
+    shakeKibble();
   }
   // 0.9: заскучал — поиграть мячиком, пока не полез на ёлку
   if (s.catNeeds.boredom >= 50 && s.cat.state === 'home') {
     go('catbowl');
     tip('catBored');
-    ui(() => s.playCat());
+    ui(() => s.catPick('wand'));
+    playWand();
   }
 }
 // 0.11: кто следит за плитой. Между делами (при каждой смене станции) игрок смотрит на кастрюли: убегающую убавляет,

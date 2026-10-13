@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CAMPAIGN, kitchenSec } from '../src/campaign/data.js';
 import { emptySave, recordDay, parseSave } from '../src/campaign/save.js';
-import { KitchenSession, run, arrive, waitAction, cutCubes, seasonTo, tasteDone, stir, peel, startBoil, take } from './helpers-campaign.js';
+import { KitchenSession, run, arrive, waitAction, cutCubes, seasonTo, tasteDone, stir, peel, startBoil, take, feedCatByShaking } from './helpers-campaign.js';
 
 test('плита: две кастрюли варятся параллельно, у каждой свой срок; одна конфорка в испытании', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 2 });
@@ -92,9 +92,7 @@ test('кот: голод растёт, голодный кот сам идёт �
   assert.match(s.alerts.find((a) => a.key === 'cat').text, /колбас/);
   const f = new KitchenSession({ dayIndex: 5, seed: 1 });
   f.triggers = f.triggers.filter((e) => e.type === 'cat');
-  arrive(f, 'catbowl');
-  assert.ok(f.feedCat());
-  waitAction(f);
+  assert.ok(feedCatByShaking(f));
   assert.equal(f.catNeeds.hunger, 0);
   arrive(f, 'board');
   f.boardSelect('canape:sausage');
@@ -190,9 +188,7 @@ test('стрим: команды чата вызывают события в п�
 
 test('день 1 целиком через API даёт звёзды и медаль вкуса', () => {
   const s = new KitchenSession({ dayIndex: 0, seed: 5 });
-  arrive(s, 'catbowl');
-  s.feedCat();
-  waitAction(s);
+  feedCatByShaking(s);
   startBoil(s, 'olivier:boil');
   startBoil(s, 'olivier:boilEgg');
   for (const key of ['olivier:carrot', 'olivier:sausage', 'olivier:pickle']) {

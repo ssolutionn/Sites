@@ -2,7 +2,7 @@
 // кот чаще хочет играть, а если не поиграть — бесчинствует (лезет на ёлку, срывает гирлянду); уведомления приходят чаще.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KitchenSession, arrive, run } from './helpers-campaign.js';
+import { KitchenSession, arrive, run, playCatByWand } from './helpers-campaign.js';
 import { CAMPAIGN } from '../src/campaign/data.js';
 import { Waver } from '../src/campaign/mechanics.js';
 
@@ -42,9 +42,7 @@ test('поиграла — скука сбрасывается, напомина
   const s = day();
   s.catNeeds.boredom = C.wantPlayAt + 5;
   run(s, 0.2);
-  arrive(s, 'catbowl');
-  assert.ok(s.playCat());
-  run(s, CAMPAIGN.durations.playCat + 0.1);
+  assert.ok(playCatByWand(s));
   assert.equal(s.catNeeds.boredom, 0);
   assert.equal(s.alerts.some((a) => a.key === 'catBored'), false);
 });

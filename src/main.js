@@ -107,7 +107,7 @@ async function boot() {
     return ok;
   }
 
-  const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'feedCat', 'playCat', 'reduceHeat']);
+  const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'reduceHeat']);
   function act(name, ...args) {
     if (!session || mode !== 'kitchen') return false;
     if (name === 'finishDay') return finishDay();
@@ -126,7 +126,7 @@ async function boot() {
     grate: 'grate', dose: 'drop', fill: 'drop', scoop: 'select', yolk: 'drop', eggSplit: 'chop', tomatoCap: 'chop', dropOk: 'drop', dropReject: 'deny', pierced: 'chop', pierceStart: 'select',
     pinch: 'salt', taste: 'taste', dilute: 'pour', seasoned: 'ready', catFed: 'feed', catPlay: 'ball', catHungry: 'meow', catSleep: 'purr', cooled: 'fizz', heat: 'select', potBoils: 'boil', coolStart: 'select',
     paid: 'cash', noMoney: 'deny', peeled: 'added', mixed: 'ready', bonus: 'cash', decorBought: 'success', posted: 'phone', timerDone: 'ready', timerSet: 'select', pick: 'select', stream: 'phone', speedDone: 'success', speedRetry: 'deny',
-    delivered: 'bag', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select',
+    delivered: 'bag', catPick: 'select', kibble: 'pour', wand: 'ball', chase: 'meow', orderPlaced: 'phone', layerDone: 'added', layerUndo: 'rotate', served: 'drop', mandarinSplit: 'chop', garnish: 'select',
     stir: 'stir', peel: 'peelSkin', cutDenied: 'scuff', // перемешивание, чистка и отказ ножа раньше молчали
     cutReady: 'ready', taken: 'select', returned: 'select', eggCrack: 'crack', overcooked: 'deny', potLow: 'boil', potDry: 'hiss', potBurnt: 'fail', burnerIdle: 'select', stoveClean: 'fixed', wipe: 'scrub', wash: 'scrub', // 0.9: руки, яйцо, плита, мытьё
     feedLike: 'select', // лайк в ленте «Андрея»; новые посты приходят без звука — только значок
@@ -146,7 +146,8 @@ async function boot() {
     view.onEvent(e);
     ui.onEvent(e, session);
     if (e.type === 'speedDone') speedFinished(e.time);
-    if (e.type === 'actionStart' && !['cut', 'shoo', 'cutEgg', 'cap', 'peel', 'split', 'pinch', 'taste', 'dilute', 'feedCat', 'playCat', 'gift'].includes(e.action)) sound.play('work');
+    if (e.type === 'shout') sound.play(e.ok ? 'shoo' : 'deny'); // 0.11: крик не всегда помогает
+    if (e.type === 'actionStart' && !['cut', 'shoo', 'cutEgg', 'cap', 'peel', 'split', 'pinch', 'taste', 'dilute', 'gift'].includes(e.action)) sound.play('work');
     else if (SOUND_OF[e.type]) sound.play(SOUND_OF[e.type], e);
   }
 
@@ -484,6 +485,12 @@ async function boot() {
       view.pointerLocal = lastLocal;
       if (lastLocal && mode === 'kitchen') session.pointer('move', lastLocal.x, lastLocal.z);
     }
+    // 0.11: пачка корма или «удочка» у миски кота — мышь ведёт их по полу вокруг миски
+    if (session?.panel === 'catbowl' && session.catTool && session.pointerDown && mode === 'kitchen') {
+      lastLocal = view.pickLocal(lastNdc, 'catbowl');
+      view.pointerLocal = lastLocal;
+      if (lastLocal) session.pointer('move', lastLocal.x, lastLocal.z);
+    }
     // кот безобразничает: помахать мышью над ним в обзоре — прогнать (0.9; в крупном плане — подсказка выйти)
     if (session && mode === 'kitchen' && ['theft', 'spill', 'mischief'].includes(session.cat.state)) {
       if (closeupActive()) session.catWave(0);
@@ -519,6 +526,22 @@ async function boot() {
       view.pointerLocal = p;
       const r = session.pointer('down', p.x, p.z);
       if (r === 'too-close' || r === 'limit' || GIFT_DENY.has(r)) sound.play('deny');
+      return;
+    }
+    // 0.11: корм/«удочка» в руках у миски кота — жест над полом вокруг миски; мимо — обычный клик
+    if (session.panel === 'catbowl' && session.catTool && !session.heroine.target) {
+      const p = view.pickLocal(ndc, 'catbowl');
+      if (p && Math.hypot(p.x, p.z) <= session.cfg.cat.play.radius * 1.2) {
+        canvas.setPointerCapture?.(e.pointerId);
+        lastLocal = p;
+        view.pointerLocal = p;
+        session.pointer('down', p.x, p.z);
+        return;
+      }
+    }
+    // 0.11: клик по безобразничающему коту — героиня сама подбегает и прогоняет его (наверняка, но уходит от дел)
+    if (session.catActive?.() && view.catHit(ndc)) {
+      act('chaseCat');
       return;
     }
     if (session.panel === 'table' || session.panel === 'phone') return;
@@ -614,6 +637,7 @@ async function boot() {
       moveHeld.add(e.code);
     } else if (e.code === 'KeyM') app.toggleMute();
     else if (e.code === 'KeyQ' && mode === 'kitchen') ui.toggleRecipe();
+    else if (e.code === 'KeyF' && mode === 'kitchen') act('shout'); // 0.11: крикнуть на кота
   });
   window.addEventListener('keyup', (e) => {
     moveHeld.delete(e.code);

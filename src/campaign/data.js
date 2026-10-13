@@ -72,8 +72,6 @@ export const CAMPAIGN = {
     pinch: 0.35, // щепотка соли или перца
     taste: 1.2, // попробовать ложкой
     dilute: 3.5, // разбавить пересоленное
-    feedCat: 1.5,
-    playCat: 1,
     pickToys: 1.2, // поднять сбитые котом игрушки
   },
 
@@ -109,6 +107,11 @@ export const CAMPAIGN = {
     boredStart: 15, boredRate: 0.45, boredRateFirstDay: 0.3, wantPlayAt: 50, mischiefAt: 85, mischiefWindow: [12, 16], afterMischief: 25, afterShooMischief: -30,
     // прогнать — помахать мышью над котом в обзоре: reversals разворотов за window секунд, каждый не короче minAmp (доля высоты экрана)
     wave: { reversals: 3, minAmp: 0.035, window: 2.5, hitRadius: 0.08 },
+    // 0.11: крикнуть (F) — с шансом shoutChance, потом shoutCooldown с голос «садится»; отогнать самой — всегда, но надо дойти
+    shoutChance: 0.5, shoutCooldown: 4,
+    // корм: shakes встряхиваний пачки над миской (радиус radius, размах amplitude — метры); игра: путь бантика path м внутри radius
+    feed: { shakes: 5, radius: 0.4, amplitude: 0.07, minInterval: 0.2 },
+    play: { path: 3, radius: 1.1, maxJump: 0.5 },
   },
   phone: { typingAhead: 3, replyDelay: 4, maxChatLength: 120, maxCommentLength: 140, commentPreview: 6, doubleTapMs: 350, commentReply: [5, 9] }, // commentReply: через сколько секунд друг отвечает на комментарий (0.10)
   // сообщения «просто так» (chatter.js): первое через start с, дальше раз в every с; в первый день реже

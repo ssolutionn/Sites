@@ -16,6 +16,7 @@ import { phoneMethods } from './st-phone.js';
 import { extraMethods, BOILED } from './st-extra.js';
 import { radioMethods } from './st-radio.js';
 import { treeMethods } from './st-tree.js';
+import { catMethods } from './st-cat.js';
 import { RADIO } from './radio-data.js';
 import { CHATTER } from './chatter.js';
 
@@ -55,6 +56,11 @@ export class KitchenSession {
     this.action = null;
     this.panel = null;
     this.holds = { radio: false, garland: false, star: false };
+    this.catTool = null; // 0.11: что в руках у миски кота — 'kibble' (корм) или 'wand' (удочка с бантиком)
+    this.catFeed = null;
+    this.catPlay = null;
+    this.catWand = null; // бантик под мышью: { x, z } от центра миски
+    this.shoutReadyAt = 0;
     this.moveInput = null; // 0.10: направление с клавиатуры (WASD), метры кухни; null — стоять
     this.pointerDown = false;
 
@@ -497,6 +503,14 @@ export class KitchenSession {
     if (kind) return this.setHold(kind, true);
     if (this.panel) return false;
     const id = this.nearStation();
+    // 0.11: кот безобразничает и он ближе любой станции — пробел отгоняет его самой
+    const spot = this.chaseSpot();
+    if (spot) {
+      const catD = Math.hypot(spot.x - this.heroine.x, spot.z - this.heroine.z);
+      const st = id ? this.stationStand(id) : null;
+      const stD = st ? Math.hypot(st.x - this.heroine.x, st.z - this.heroine.z) : Infinity;
+      if (catD <= this.cfg.keys.reach * 2 && catD < stD) return this.chaseCat();
+    }
     if (!id) {
       this.setHint('Рядом ничего нет — подойди ближе к нужному месту');
       return false;
@@ -537,6 +551,10 @@ export class KitchenSession {
   }
 
   _leaveStation() {
+    this.catTool = null;
+    this.catFeed = null;
+    this.catPlay = null;
+    this.catWand = null;
     if (this.gift) this.leaveGift();
     this.giftShow = null;
     this._cancelAction();
@@ -592,6 +610,8 @@ export class KitchenSession {
         hr.facing = this.stationFacing(tgt.station);
         this._openPanel(tgt.station);
         tgt.onArrive?.();
+      } else if (tgt.chase) {
+        this._chased(); // 0.11: дошла до кота и прогнала его сама
       } else if (tgt.exit) {
         hr.away = true;
         hr.awayLeft = this.delivery.order?.self ? this.cfg.money.modes.self.away : this.cfg.durations.awayForDelivery;
@@ -712,7 +732,7 @@ export class KitchenSession {
     if (this.isOver() || this.heroine.away || this.heroine.target) return 'ignored';
     if (type === 'down') this.pointerDown = true;
     if (type === 'up') {
-      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : this.panel === 'bowl' ? this._bowlPointer('up', x, z) : this.panel === 'stove' ? this._stovePointer('up', x, z) : 'up';
+      const r = this.panel === 'tray' ? this._trayPointer('up', x, z) : this.panel === 'board' ? this._boardPointer('up', x, z) : this.panel === 'bowl' ? this._bowlPointer('up', x, z) : this.panel === 'stove' ? this._stovePointer('up', x, z) : this.panel === 'catbowl' ? this._catbowlPointer('up', x, z) : 'up';
       this.pointerUp();
       return r;
     }
@@ -732,6 +752,8 @@ export class KitchenSession {
         return this._radioPointer(type, x, z);
       case 'stove':
         return this._stovePointer(type, x, z);
+      case 'catbowl':
+        return this._catbowlPointer(type, x, z);
       case 'tree':
         return this.gift ? this._giftPointer(type, x, z) : 'ignored';
       default:
@@ -756,6 +778,9 @@ export class KitchenSession {
     this._sinkLast = null;
     this.stoveWipe?.scrub.release();
     this.sinkJob?.scrub.release();
+    this.catFeed?.release();
+    this.catPlay?.release();
+    this.catWand = null;
     if (this.sinkCool) this.sinkCool.pressed = false;
     this._wipeLast = null;
     if (this.tray.drag) this._dropDrag(null);
@@ -1059,7 +1084,7 @@ export class KitchenSession {
 }
 
 // Методы станций в отдельных модулях — общий источник состояния остаётся один.
-Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods);
+Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods, catMethods);
 
 export function emptyBurner(i) {
   // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне

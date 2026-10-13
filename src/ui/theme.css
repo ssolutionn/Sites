@@ -210,6 +210,7 @@ body.low-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; backg
 #panel.station-panel .tabs button { background: rgba(255, 255, 255, 0.07); border: 0; font-size: 13.5px; padding: 7px 12px; }
 #panel.station-panel .tabs button.active { box-shadow: inset 0 0 0 2px var(--gold); background: rgba(242, 181, 68, 0.18); }
 #panel.station-panel .note { display: none; }
+#panel.station-panel .note.live > span + span { margin-left: 10px; }
 #panel.station-panel .note.live, #panel.station-panel .note.warn { display: block; color: var(--on-glass-2); font-size: 13px; font-weight: 700; margin-top: 8px; }
 #panel.station-panel .note.warn { color: #ffd6cf; }
 #panel.station-panel .small { color: var(--on-glass-2); }

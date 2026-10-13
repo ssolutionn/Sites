@@ -249,39 +249,6 @@ export const extraMethods = {
     if (this.cat.state === 'home' && n.boredom >= c.mischiefAt && this._canStartUrgent()) this._startMischief();
   },
 
-  feedCat() {
-    if (!this._isIdleAt('catbowl') || this.action) return false;
-    if (this.cat.state === 'theft' || this.cat.state === 'spill') {
-      this.setHint('Сначала прогони кота от еды', 2);
-      return false;
-    }
-    return this._startAction('feedCat', this.cfg.durations.feedCat, () => {
-      this.catNeeds.hunger = 0;
-      this.catNeeds.warned = false;
-      this.stats.catFed = (this.stats.catFed ?? 0) + 1;
-      this._removeAlert('catHungry');
-      this.cat = { state: 'eat', until: this.t + 10, startedAt: this.t };
-      this._emit('catFed');
-      this.setHint('Кот хрустит кормом. Сытый кот спит и к еде не лезет', 3);
-    });
-  },
-
-  playCat() {
-    if (!this._isIdleAt('catbowl') || this.action) return false;
-    if (this.cat.state === 'theft' || this.cat.state === 'spill') {
-      this.setHint('Сначала прогони кота', 2);
-      return false;
-    }
-    return this._startAction('playCat', this.cfg.durations.playCat, () => {
-      this.catNeeds.boredom = 0;
-      this.catNeeds.boredWarned = false;
-      this._removeAlert('catBored');
-      this.cat = { state: 'play', until: this.t + this.cfg.cat.playTime, startedAt: this.t };
-      this._emit('catPlay');
-      this.setHint(`Кот гоняет мячик ${this.cfg.cat.playTime} с и больше не скучает — но голод это не отменяет`, 3);
-    });
-  },
-
   // ---------- пожелания гостей ----------
   _initRequests() {
     this.requests = [];
