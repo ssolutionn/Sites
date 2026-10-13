@@ -503,6 +503,37 @@ test('мягкий режим: каждое правило меняет числ
   assert.equal(soft.cat.hungerStart, CAMPAIGN.cat.hungerStart);
 });
 
+test('мягкий режим касается и жестов 0.11 G: кот, дверцы, кастрюля, удержание (регрессия ревью 0.11)', async () => {
+  const { doorVerdict } = await import('../src/campaign/st-dishwasher.js');
+  const { STOVE } = await import('../src/campaign/layout.js');
+  const { startBoil, run } = await import('./helpers-campaign.js');
+  const { kitchenSec } = await import('../src/campaign/data.js');
+  for (const p of ['cat.feed.amplitude', 'cat.play.radius', 'dishwasher.door.open', 'dishwasher.drop', 'oven.door.open', 'oven.drop', 'stove.dragOff', 'keys.holdHitRadius'])
+    assert.ok(ASSIST_RULES.some(([x]) => x === p), `${p} смягчается`);
+  // дверца: на половине хода ручки обычно не открывается, мягко — открывается; закрыть всё равно можно
+  assert.equal(doorVerdict('closed', 0.5, CAMPAIGN.dishwasher.door).door, 'closed');
+  assert.equal(doorVerdict('closed', 0.5, SOFT.dishwasher.door).door, 'open');
+  assert.ok(SOFT.dishwasher.door.open > SOFT.dishwasher.door.closed && SOFT.oven.door.open > SOFT.oven.door.closed, 'открыть и закрыть не перекрываются');
+  // кастрюля: оттащила на 1,4 радиуса — обычно вернулась, мягко — снята
+  const pot = (cfg) => {
+    const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+    s.triggers = [];
+    s.cfg = cfg;
+    startBoil(s, 'olivier:boilEgg', { burner: 1, heat: 6 });
+    run(s, kitchenSec(8) + kitchenSec(10) + 1);
+    arrive(s, 'stove');
+    const { x, z } = STOVE.burners[1], d = STOVE.r * 1.4;
+    s.pointer('down', x, z);
+    s.pointer('move', x + d, z);
+    return s.pointer('up', x + d, z);
+  };
+  assert.equal(pot(CAMPAIGN), 'up');
+  assert.equal(pot(SOFT), 'potTake');
+  assert.ok(SOFT.stove.dragOff > 1, 'щелчок по кастрюле её не снимает');
+  // допуск поверхности ёлки не меняется: по нему сохранение проверяет висящие игрушки
+  assert.equal(SOFT.tree.tol, CAMPAIGN.tree.tol);
+});
+
 test('мягкий режим: угол ножа не доходит до 45°, иначе «вдоль» и «поперёк» перекроются', () => {
   const wide = assistConfig(CAMPAIGN, 2);
   assert.ok(wide.cutRules.angleTolerance < 45);

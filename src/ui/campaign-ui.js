@@ -1327,7 +1327,7 @@ export class CampaignUI {
       if (!d.moved) return;
       this._moveGhost(e);
       const p = this._dwLocal(e);
-      this.view.dwHot = !!p && this.app.session?.dishwasher.door === 'open' && inCavity(p.x, p.z, CAMPAIGN.dishwasher.drop);
+      this.view.dwHot = !!p && this.app.session?.dishwasher.door === 'open' && inCavity(p.x, p.z, (this.app.session?.cfg ?? CAMPAIGN).dishwasher.drop); // подсветка проёма — по тем же допускам, что у сессии («мягкие жесты»)
     });
     window.addEventListener('pointerup', (e) => {
       const d = this.dwDrag;

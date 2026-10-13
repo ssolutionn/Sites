@@ -47,6 +47,24 @@ export const ASSIST_RULES = [
   // губка и тряпка (Scrubber): рывок за шаг
   ['wash.maxStep', 'mul'],
   ['stove.wipe.maxStep', 'mul'],
+  // жесты 0.11 G: кот — пачка корма (размах тряски, зона над миской) и «удочка» (зона, рывок)
+  ['cat.feed.amplitude', 'div'],
+  ['cat.feed.radius', 'mul'],
+  ['cat.play.radius', 'mul'],
+  ['cat.play.maxJump', 'mul'],
+  // дверцы посудомойки и духовки: открыть — меньше хода ручки, закрыть — не до упора; посуду и форму ловит шире вокруг проёма
+  ['dishwasher.door.open', 'div'],
+  ['dishwasher.door.closed', 'mul'],
+  ['dishwasher.drop', 'mul'],
+  ['oven.door.open', 'div'],
+  ['oven.door.closed', 'mul'],
+  ['oven.drop', 'mul'],
+  // кастрюлю с конфорки — тащить ближе; удержание лампочки и звезды — попасть легче; мишура — рывок мыши побольше
+  ['stove.dragOff', 'div'],
+  ['keys.holdHitRadius', 'mul'],
+  ['tinsel.maxJump', 'mul'],
+  // ёлка: снять висящую игрушку — радиус захвата (допуск поверхности tree.tol не трогаем: по нему сохранение проверяет игрушки)
+  ['tree.pickR', 'mul'],
 ];
 
 /** Множитель из настроек в допустимых пределах 1–2 (не число → 1, то есть без смягчения). */
