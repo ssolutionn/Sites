@@ -23,7 +23,8 @@
 - **UTF-8 без ECI.** Телефоны (iOS «Камера», Google Lens) читают такие коды как UTF-8; указатель ECI 26 нужен только древним
   читалкам и ломает часть новых.
 - **Уровень M, при переполнении L.** Карточку могут выложить в соцсеть, там картинку пережмут, а запас M это переживает. Текст QR
-  ограничен 600 знаков и 780 байт, поэтому версия не выше 20 (оливье — 20-я, 97×97 модулей, по 3 px: код 291 px).
+  ограничен 600 знаков и 780 байт, поэтому версия не выше 20 (оливье — 20-я, 97×97 модулей, по 3 px: код 291 px; рецепты до 18-й
+  версии рисуются по 4 px на модуль, у шубы и курицы код 324 px, в окошке — 388 px). Блок QR вместе с тихой зоной не шире 390 px.
 - **Штраф маски N3.** Как в стандарте: образец 1:1:3:1:1 с четырьмя светлыми по краям; за краем матрицы считается тихая зона (светлое).
   Выбранная маска сверена с независимой строковой оценкой штрафа (тест «выбрана маска с наименьшим штрафом»). У `qrcode-generator`
   своя оценка, поэтому маска у него местами другая — матрицы совпадают побитно при той же маске.
@@ -56,7 +57,7 @@
 ## Как проверить
 
 ```
-npm test                                             # 637 тестов, из них 42 новых (qr 16, recipe-home 17, recipe-card 9)
+npm test                                             # 638 тестов, из них 43 новых (qr 16, recipe-home 17, recipe-card 10)
 npx vite build
 npx vite preview --port 4188 --strictPort --host 127.0.0.1 &   # потом остановить по PID
 PW=/opt/node-tools/node_modules/playwright/index.mjs OUT=production/qa/evidence node scripts/v11-recipe-shots.mjs http://127.0.0.1:4188/ all
@@ -68,10 +69,14 @@ PW=/opt/node-tools/node_modules/playwright/index.mjs OUT=production/qa/evidence 
 должна быть чисто белой. Если рядом лежит jsQR (`JSQR=/путь/jsQR.js` или пакет `jsqr`), код ещё и декодируется им — в этой
 сессии jsQR 1.4.0 декодировал все десять карточек и окно QR. Полный прогон на десяти рецептах долгий (SwiftShader, 10+ минут);
 для быстрой проверки: `... node scripts/v11-recipe-shots.mjs <url> olivier,shuba,chicken`.
-Нейтральная сборка: `VITE_NEUTRAL=1 npx vite build --outDir /tmp/dist-neutral && node scripts/check-neutral.mjs /tmp/dist-neutral`.
+Нейтральная сборка: `VITE_NEUTRAL=1 npx vite build --outDir /tmp/n && node scripts/embed-models.mjs /tmp/n && node scripts/check-neutral.mjs /tmp/n`
+(`embed-models` читает `/tmp/n/assets/models`; в рабочей копии без `npm run models:sync` их нет — я скопировал папку из основного
+дерева `public/assets/models`). Результат: «Нейтральная сборка чистая». Отдельно: ни в карточке, ни в тексте QR брендовых слов нет в обеих сборках.
 
-Снимки: `v11_recipe_card_olivier|shuba|chicken.png` (сами скачанные карточки), `v11_recipe_book_<id>_buttons.png` (две кнопки в книге),
-`v11_recipe_qr_window_<id>.png` (окно QR), `v11_recipe_save_refused.png` (плашка при отказе).
+Снимки (все просмотрены глазами): `v11_recipe_card_olivier|shuba|chicken.png` (сами скачанные карточки), `v11_recipe_book_olivier_buttons.png`
+(две кнопки в книге), `v11_recipe_qr_window_olivier.png` (окно QR), `v11_recipe_save_refused.png` (плашка при отказе браузера).
+Итог прогонов: все десять рецептов — 144 проверки OK, 0 FAIL, jsQR декодирует каждую картинку и окно; три «эталонных» рецепта и окно —
+60 OK после перехода на 4 px.
 
 ## Что записать в спецификацию (`design/gdd/interaction-spec.md`)
 
@@ -91,6 +96,8 @@ PW=/opt/node-tools/node_modules/playwright/index.mjs OUT=production/qa/evidence 
   (шапка и кнопка), удалён хвост файла (старая `saveRecipeCard`, заменена реэкспортом).
 - `index.html` — одна строка `<link>` после `stream.css` (если другой агент добавит свою рядом, оставить обе).
 - Остальное — только новые файлы.
+- Коммиты этой задачи, сделанные до просьбы «ничего про модель в коммитах», содержат строку `Co-Authored-By`; переписывать историю я не стал
+  (запрещено правилами) — при слиянии её можно убрать squash-ом. Новые коммиты без неё.
 
 ## Не сделано
 
