@@ -148,6 +148,7 @@ export class CampaignUI {
     this._bindRecipe();
     // 0.11: рука-призрак показывает жесты при первой встрече, после неудач и по «?» (src/ghost/, ghost-coach.js)
     this.ghost = new GhostCoach({ view, host: $('#app'), prefs: app.ghost, reduceMotion: () => document.body.classList.contains('reduce-motion') });
+    if (app.ghost) app.ghost.coach = this.ghost; // для проверок в браузере: app.ghost.coach.hand
     // заметка из кулинарной книги: «как на самом деле», «зачем», факт
     this.el.note = document.createElement('div');
     this.el.note.id = 'lesson-note';

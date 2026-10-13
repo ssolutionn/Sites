@@ -56,6 +56,7 @@ export class GhostHand {
     this.root.appendChild(this.label);
     host.appendChild(this.root);
     this.cur = null;
+    this.hold = false;
   }
 
   get active() {
@@ -94,7 +95,7 @@ export class GhostHand {
   frame(dt) {
     const c = this.cur;
     if (!c) return;
-    c.t += dt;
+    if (!this.hold) c.t += dt; // hold — кадр стоит (снимки для проверки глазами)
     if (c.t >= c.show.dur) return this.hide();
     this._draw(c.t);
   }
@@ -167,8 +168,13 @@ export class GhostHand {
     this._labelAt(first);
   }
 
+  // Рука растёт вместе с окном: на 1080p она не меньше, чем на 720p, относительно сцены
+  _scale() {
+    return Math.max(1.15, Math.min(2, innerHeight / 620));
+  }
+
   _place(x, y, tilt, pressed) {
-    this.hand.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(tilt - 8).toFixed(1)})`);
+    this.hand.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(tilt - 8).toFixed(1)}) scale(${this._scale().toFixed(2)})`);
     this.hand.classList.toggle('gh-down', !!pressed);
   }
 
