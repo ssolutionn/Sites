@@ -346,6 +346,8 @@ function tendStove() {
     for (const b of s.burners) {
       if (b.state === 'boiling' && b.water === 'boil' && b.product === 'beet' && b.heat > s.cfg.stove.simmer) { go('stove'); ui(() => s.setHeat(b.i, s.cfg.stove.simmer)); }
     }
+    // «Вода выкипает» — игрок убавляет огонь до слабого кипения (дальше выкипание в 1,5 раза медленнее)
+    for (const b of s.burners) if (b.lowWarned && ['boiling', 'ready'].includes(b.state) && b.heat > s.cfg.stove.simmer) { go('stove'); ui(() => s.setHeat(b.i, s.cfg.stove.simmer)); }
     for (const b of s.burners) if (b.state === 'empty' && b.heat > 0 && s.panel === 'stove') ui(() => s.setHeat(b.i, 0));
   } finally {
     tending = false;
@@ -707,6 +709,13 @@ for (let i = 0; i < 7; i++) {
   for (const k of Object.keys(R)) R[k] = 0;
   tipsSeen.clear();
   s = new KitchenSession({ dayIndex: i, seed: 11 + i, tableDishes: prev.slice() });
+  if (process.env.TRACE_STOVE) {
+    const emit = s._emit.bind(s);
+    s._emit = (type, data) => {
+      if (/^(potLow|potDry|potBurnt|potBoils|burnerIdle|overflow|potReady)/.test(type)) console.log(`  [день ${i + 1} t=${s.t.toFixed(0)}] ${type}`, JSON.stringify(data), s.burners.map((b) => `${b.i}:${b.product ?? '-'}/${b.state}/h${b.heat}/L${(b.level ?? 1).toFixed(2)}`).join(' '));
+      return emit(type, data);
+    };
+  }
   days[i]();
   const r = finish();
   if (process.env.NOTES) console.log('  день', i + 1, JSON.stringify(r.dishes), r.order, r.orderNotes.join('; '), JSON.stringify(r.notes), 'медали', r.medals.join(','), 'темп', r.pace);
