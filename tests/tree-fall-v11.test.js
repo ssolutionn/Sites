@@ -267,3 +267,16 @@ test('кот сбил две игрушки (старая шалость): по�
   s.pickUpToy(b.uid);
   assert.equal(s.alerts.some((x) => x.key === 'toys'), false);
 });
+
+test('ёлка лежит — звезду не поправить (ни пробелом, ни удержанием); подняла — можно', () => {
+  const s = dressed();
+  arrive(s, 'tree');
+  s._dropTree();
+  assert.equal(s.star.broken, true, 'звезда погасла при падении');
+  assert.equal(s.holdKind(), null, 'пробел у лежащей ёлки звезду не чинит');
+  assert.equal(s.setHold('star', true), false);
+  assert.match(s.hint.text, /подними/);
+  s.treeFall = { down: false, tilt: 0, grab: null };
+  assert.equal(s.holdKind(), 'star');
+  assert.ok(s.setHold('star', true));
+});

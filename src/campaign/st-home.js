@@ -797,7 +797,8 @@ export const homeMethods = {
         const name = this.productName(stolen).toLowerCase();
         if (!this.penalties.some((p) => p.kind === 'theft')) this.penalties.push({ kind: 'theft', points: this.cfg.scoring.order.theft, label: `Кот утащил: ${name}` });
         this._emit('catStole', { from: 'board', product: stolen });
-        this.setHint(`Кот унёс кусок (${name}). Возьми замену на доске`, 4);
+        // 0.11: запаса «на всякий случай» нет — чаще всего замену сначала надо заказать
+        this.setHint(this.inventory.available(stolen) >= 1 ? `Кот унёс кусок (${name}). Возьми замену на доске` : `Кот унёс кусок (${name}). Закажи замену в телефоне — в корзине она первая`, 4);
       } else this._emit('catGone');
     } else if (c.state === 'spill' && this.t >= c.deadline) {
       this._removeAlert('spillWarn');

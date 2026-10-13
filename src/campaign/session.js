@@ -502,7 +502,7 @@ export class KitchenSession {
   /** Что держит пробел на открытой станции: гирлянда, звезда на ёлке или радио (когда сломаны). */
   holdKind() {
     if (this.panel === 'garland' && this.garland.broken) return 'garland';
-    if (this.panel === 'tree' && this.star.broken && !this.gift) return 'star';
+    if (this.panel === 'tree' && this.star.broken && !this.gift && !this.treeFall?.down) return 'star';
     if (this.panel === 'radio' && this.radio.broken) return 'radio';
     return null;
   }
@@ -695,6 +695,10 @@ export class KitchenSession {
     if (kind === 'radio' && (!this._isIdleAt('radio') || !this.radio.broken)) return false;
     if (kind === 'garland' && (!this._isIdleAt('garland') || !this.garland.broken)) return false;
     if (kind === 'star' && (!this._isIdleAt('tree') || !this.star.broken || this.gift)) return false;
+    if (kind === 'star' && this.treeFall?.down) {
+      this.setHint('Ёлка лежит — сначала подними её, потом поправь звезду', 2.2);
+      return false;
+    }
     if (!(kind in this.holds)) return false;
     this.holds[kind] = true;
     return true;

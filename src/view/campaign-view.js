@@ -1044,7 +1044,7 @@ export class CampaignView {
         if (screenGestureHit(ndc, c, cam.aspect, r)) return 'garland';
       }
     }
-    if (s.panel === 'tree' && s.star.broken && !s.gift) {
+    if (s.panel === 'tree' && s.star.broken && !s.gift && !s.treeFall?.down) {
       const c = this.k.tree.star.getWorldPosition(new THREE.Vector3()).project(cam);
       if (screenGestureHit(ndc, c, cam.aspect, r * 1.6)) return 'star';
     }

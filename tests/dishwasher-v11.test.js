@@ -539,3 +539,22 @@ test('день 2: грязную миску «со вчера» можно от�
   run(s, CYCLE + 0.2);
   assert.equal(s._bowlBlock('crab'), null);
 });
+
+test('нож в посудомойке: на подносе им тоже не режут (яйца пополам), подсказка про машину', () => {
+  const s = fresh({ dayIndex: 2 });
+  const d = s.dishes.eggs;
+  for (const id of ['boilEgg', 'peelEgg']) d.steps[id] = { done: true, q: 1, info: null };
+  dirty(s, 'knife');
+  atWasher(s);
+  load(s, 'knife');
+  arrive(s, 'tray');
+  assert.ok(s.traySelect('eggs'), s.hint?.text);
+  s.setTool('knife');
+  const egg = d.work.eggs[0];
+  const r = s.pointer('down', egg.x, egg.z);
+  s.pointer('up', egg.x, egg.z);
+  run(s, 1);
+  assert.equal(r, 'blocked');
+  assert.match(s.hint.text, /посудомойк/i);
+  assert.equal(egg.split, false, 'яйцо не разрезано');
+});

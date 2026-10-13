@@ -199,6 +199,11 @@ export const trayMethods = {
     if (this.tool === 'knife') {
       const egg = w.eggs.find((e) => !e.split && inEllipse(x, z, e));
       if (!egg) return 'miss';
+      const knifeOut = this.equipBlock('knife'); // 0.11: нож в посудомойке — резать нечем
+      if (knifeOut) {
+        this.setHint(knifeOut, 2.5);
+        return 'blocked';
+      }
       const eb = this.stepState(id, 'halves') === 'locked' ? this.stepBlock(id, 'halves') : this._hotBlock('egg');
       if (eb) {
         this.setHint(eb, 2.5);
@@ -331,6 +336,11 @@ export const trayMethods = {
       if (type !== 'down') return 'hover';
       const t = w.toms.find((q) => q.cap && inCircle(x, z, q));
       if (!t) return 'miss';
+      const knifeOut = this.equipBlock('knife');
+      if (knifeOut) {
+        this.setHint(knifeOut, 2.5);
+        return 'blocked';
+      }
       if (!this.inventory.isReserved(this._opId(id, 'prep')) && !this.stepDone(id, 'prep') && !this._reserveStep(id, 'prep')) return 'short';
       this._startAction('cap', 0.35, () => {
         t.cap = false;
