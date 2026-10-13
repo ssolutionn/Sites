@@ -2,12 +2,15 @@
 // их вешают на ёлку; кот от скуки сбивает игрушки. Всё это сохраняется между днями.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KitchenSession, arrive, waitAction, run, unwrapGift } from './helpers-campaign.js';
+import { KitchenSession, arrive, run, unwrapGift } from './helpers-campaign.js';
 import { CAMPAIGN, DAYS, GIFTS, TOYS } from '../src/campaign/data.js';
-import { TREE_SLOTS } from '../src/campaign/layout.js';
+import { slotToAt } from '../src/campaign/tree-geo.js';
 import { giftPrize } from '../src/campaign/st-tree.js';
 import { applyTreeEvent } from '../src/campaign/persist.js';
 import { emptySave, parseSave } from '../src/campaign/save.js';
+
+// 0.11: точки на ёлке — бывшие места TREE_SLOTS, перенесённые на поверхность (любая другая точка тоже годится — tree-geo.test)
+const P = (i) => slotToAt(i);
 
 test('приз подарка закреплён за днём и номером; за неделю есть и баллы, и игрушки', () => {
   const all = [];
@@ -48,21 +51,21 @@ test('игрушку покупают за баллы и вешают на ёл�
   const uid = s.toysInBox()[0].uid;
   arrive(s, 'tree');
   assert.ok(s.pickToy(uid));
-  assert.ok(s.treeClick(3));
-  assert.equal(s.toys[0].slot, 3);
+  assert.ok(s.treeClick(P(3)));
+  assert.deepEqual(s.toys[0].at, P(3));
   assert.equal(s.treeHand, null);
   assert.ok(s.buyToy('bell'));
   s.pickToy(s.toysInBox()[0].uid);
-  assert.equal(s.treeClick(3), false, 'место занято');
+  assert.equal(s.treeClick(P(3)), false, 'место занято');
   s.pickToy(s.treeHand); // положить обратно
-  assert.ok(s.treeClick(3), 'пустой рукой — снять');
+  assert.ok(s.treeClick(P(3)), 'пустой рукой — снять');
   assert.equal(s.treeHand, uid);
-  assert.equal(s.toys[0].slot, null);
+  assert.equal(s.toys[0].at, null);
 });
 
-test('кот от скуки сбивает игрушки: на полу, поднять у ёлки, иначе минус к порядку', () => {
-  const s = new KitchenSession({ dayIndex: 1, seed: 1, toys: [{ id: 'ballRed', slot: 0 }, { id: 'bell', slot: 4 }, { id: 'cone', slot: 7 }] });
-  s.garland.broken = s.star.broken = true; // ломать больше нечего — только игрушки
+test('кот от скуки сбивает игрушки: на полу, подобрать у ёлки по одной, иначе минус к порядку', () => {
+  const s = new KitchenSession({ dayIndex: 1, seed: 1, toys: [{ id: 'ballRed', at: P(0) }, { id: 'bell', at: P(4) }, { id: 'cone', at: P(7) }], cfg: { ...CAMPAIGN, cat: { ...CAMPAIGN.cat, mischiefWeights: { garland: 0, star: 0, toys: 1, tree: 0 } } } });
+  s.garland.broken = s.star.broken = true; // ломать больше нечего — только игрушки (ёлку кот в этом тесте не роняет)
   s.catNeeds.hunger = 0;
   s.catNeeds.boredom = CAMPAIGN.cat.mischiefAt;
   run(s, 0.5);
@@ -72,8 +75,7 @@ test('кот от скуки сбивает игрушки: на полу, по�
   assert.equal(fallen, 2);
   assert.ok(s.orderScore().notes.some((n) => /Игрушки/.test(n)));
   arrive(s, 'tree');
-  assert.ok(s.pickUpToys());
-  waitAction(s);
+  for (const t of s.toysOnFloor()) assert.ok(s.pickUpToy(t.uid));
   assert.equal(s.toys.filter((t) => t.fallen).length, 0);
   assert.equal(s.toysInBox().length, 2);
 });
@@ -84,18 +86,14 @@ test('сохранение: подарок открыт сразу (баллы �
   assert.ok(applyTreeEvent(save, { type: 'giftOpened', dayId: 2, index: 1, prize: { kind: 'points', n: 35 } }, { toys: [] }));
   assert.equal(save.bonus, 85);
   assert.equal(applyTreeEvent(save, { type: 'giftOpened', dayId: 2, index: 1, prize: { kind: 'points', n: 35 } }), false, 'второй раз не открыть');
-  assert.ok(applyTreeEvent(save, { type: 'toyBought', id: 'santa' }, { toys: [{ id: 'santa', slot: null }] }));
+  assert.ok(applyTreeEvent(save, { type: 'toyBought', id: 'santa' }, { toys: [{ id: 'santa', at: null }] }));
   assert.equal(save.bonus, 85 - TOYS.santa.price);
-  assert.ok(applyTreeEvent(save, { type: 'toyHung' }, { toys: [{ id: 'santa', slot: 5 }] }));
+  assert.ok(applyTreeEvent(save, { type: 'toyHung' }, { toys: [{ id: 'santa', at: P(5) }] }));
   assert.equal(applyTreeEvent(save, { type: 'toyHung' }, { toys: [], challenge: true }), false, 'испытание не трогает кампанию');
   const back = parseSave(JSON.stringify(save)).save;
-  assert.deepEqual(back.toys, [{ id: 'santa', slot: 5 }]);
+  assert.deepEqual(back.toys, [{ id: 'santa', at: P(5) }]);
   assert.deepEqual(back.gifts, { 2: [1] });
   const old = parseSave(JSON.stringify({ ...emptySave(), toys: undefined, gifts: undefined })).save;
   assert.deepEqual(old.toys, []);
 });
 
-test('мест на ёлке хватает и все они смотрят в камеру', () => {
-  assert.ok(TREE_SLOTS.length >= 16);
-  for (const p of TREE_SLOTS) assert.ok(p.z > -0.05, `место ${p.i} за ёлкой`);
-});

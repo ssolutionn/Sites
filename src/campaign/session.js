@@ -32,7 +32,7 @@ export function buildNav() {
 }
 
 export class KitchenSession {
-  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, challenge = false, tableDishes = [], mods = {}, bonus = 0, decor = [], toys = [], giftsOpened = [], setsDone = [] } = {}) {
+  constructor({ dayIndex = 0, seed = 1, cfg = CAMPAIGN, practice = null, challenge = false, tableDishes = [], mods = {}, bonus = 0, decor = [], toys = [], giftsOpened = [], setsDone = [], tinsel = null } = {}) {
     this.cfg = cfg;
     this.challenge = !!challenge; // испытание: баллы и декор кампании не трогаем (persist.js)
     this.mods = mods;
@@ -105,7 +105,7 @@ export class KitchenSession {
     const initialBonus = Math.max(0, Math.round(bonus) || 0);
     this.bonus = { points: initialBonus, banked: initialBonus, history: [] }; // banked — баллы, уже сохранённые; подарки доступны сразу
     this.decor = [...decor]; // купленный декор кухни
-    this._initTree(toys, giftsOpened, setsDone); // игрушки на ёлке, подарки дня, собранные наборы (st-tree.js)
+    this._initTree(toys, giftsOpened, setsDone, tinsel); // игрушки на ёлке, подарки дня, собранные наборы, мишура (st-tree.js)
     this.kitchenTimers = [];
     this.delivery = { draft: {}, order: null, dropped: null, usePoints: false };
     this.table = { placed: {}, available: new Set(tableDishes) };
@@ -786,6 +786,7 @@ export class KitchenSession {
     this._wipeLast = null;
     if (this.tray.drag) this._dropDrag(null);
     this._radioRelease();
+    this._treePointerUp?.(); // 0.11: нитка мишуры закончилась, ёлку отпустили
   }
 
   // ---------- расписание помех и сообщений ----------
@@ -961,6 +962,10 @@ export class KitchenSession {
     if (this.toys.some((t) => t.fallen)) {
       s -= o.toysLeft;
       notes.push('Игрушки так и лежат на полу');
+    }
+    if (this.treeFall.down) {
+      s -= o.treeLeft;
+      notes.push('Ёлка так и лежит на полу');
     }
     if (this.radio.broken) {
       s -= o.radioLeft;

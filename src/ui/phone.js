@@ -1,7 +1,7 @@
 // Телефон героини: цельный смартфон с новогодним домашним экраном и пятью приложениями.
 // Только отображение и команды через act(...): состояние живёт в KitchenSession.
 import { clockText, wallAgo } from '../campaign/clock.js';
-import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER, TOYS, TOY_SETS, BAZAAR } from '../campaign/data.js';
+import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER, TOYS, TOY_SETS, BAZAAR, TINSEL } from '../campaign/data.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
@@ -393,7 +393,7 @@ export class PhoneUI {
     const own = {}, hung = {};
     for (const t of s.toys ?? []) {
       own[t.id] = (own[t.id] ?? 0) + 1;
-      if (t.slot != null) hung[t.id] = true;
+      if (t.at) hung[t.id] = true;
     }
     const closed = s.challenge || s.practice;
     const deal = s.dealId();
@@ -416,14 +416,24 @@ export class PhoneUI {
         return `<section class="toy-set"><h4>${set.icon} ${esc(set.name)}${status}</h4>${set.toys.map(row).join('')}</section>`;
       })
       .join('');
+    // 0.11: мишура — мотками; вешают жестом на ёлке (зажать и вести), длина списывается с мотка
+    const K = s.cfg.tinsel;
+    const tinselRow = (c) => {
+      const t = TINSEL[c];
+      const left = s.tinselLeft(c);
+      const can = !closed && s.bonus.banked >= t.price;
+      const note = left >= K.step ? `в мотках: ${(Math.round(left * 10) / 10).toFixed(1).replace('.', ',')} м` : `моток ${K.roll} м`;
+      return `<div class="decor toy"><span class="di">${t.icon}</span><span class="dn"><b>${esc(t.name)}</b><small>${note}</small></span>${btn(`⭐ ${t.price}`, 'buyTinsel', [c], can ? 'primary mini' : 'mini soft-disabled', false, can ? 'Купить моток — он появится у ёлки' : `Для украшений нужно ${ptsWord(t.price)}`)}</div>`;
+    };
+    const tinselSection = `<section class="toy-set"><h4>✨ Мишура<small class="set-prog">моток ${K.roll} м · вешай где вздумается</small></h4>${K.colors.map(tinselRow).join('')}</section>`;
     const dealCard = deal
       ? `<div class="deal-card"><span class="di">${TOYS[deal].icon}</span><span class="dn"><small>Товар дня · −${off} %</small><b>${esc(TOYS[deal].name)}</b><small><s>${TOYS[deal].price}</s> → ${ptsWord(s.toyPrice(deal))}</small></span>${buy(deal)}</div>`
       : '';
-    return `${this._head('Ёлочный базар', 'игрушки на ёлку за очки домохозяйки')}<div class="app-body bank bazaar">
+    return `${this._head('Ёлочный базар', 'игрушки и мишура на ёлку за очки домохозяйки')}<div class="app-body bank bazaar">
       <div class="baz-bal">Для украшений: <b>${s.bonus.banked}</b> очк. домохозяйки${s.bonus.points > s.bonus.banked ? `<small>ещё ${s.bonus.points - s.bonus.banked} за готовку — после дня</small>` : ''}</div>
       ${closed ? `<p class="fine">${s.live ? 'В дне с чатом' : 'В испытании и практике'} базар закрыт.</p>` : dealCard}
       <p class="fine">Купленная игрушка ждёт в коробке у ёлки. Повесь весь набор — вернём часть очков.</p>
-      ${sets}</div>`;
+      ${sets}${tinselSection}</div>`;
   }
 
   // ---------- Банк: бонусы ----------

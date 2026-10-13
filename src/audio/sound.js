@@ -269,6 +269,13 @@ export class Sound {
         // 0.10: игрушка на ёлке — короткий стеклянный звон (основной тон и два обертона)
         [[1568, 0], [2093, 0.05], [2637, 0.1]].forEach(([f, at]) => this._tone(f, 0.45, { type: 'triangle', vol: 0.09, at }));
         break;
+      case 'treeFall':
+        // 0.11: кот уронил ёлку — шорох веток, глухой удар об пол и звон стекла
+        this._noise(0.45, { vol: 0.28, freq: 1400, q: 0.4 });
+        this._tone(95, 0.5, { type: 'triangle', vol: 0.35, at: 0.38, slideTo: 38 });
+        this._noise(0.25, { vol: 0.3, freq: 500, q: 0.5, type: 'lowpass', at: 0.38 });
+        [2093, 2637, 3136, 2349].forEach((f, i) => this._tone(f, 0.3, { type: 'triangle', vol: 0.07, at: 0.45 + i * 0.07 }));
+        break;
       case 'bag':
         this._noise(0.35, { vol: 0.25, freq: 1500, q: 0.4 });
         break;

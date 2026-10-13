@@ -4,11 +4,12 @@ import * as THREE from 'three';
 import { instantiateModel } from './assets.js';
 import { batchStaticChildren } from './static-batch.js';
 import { screenGestureHit } from './pointer-target.js';
-import { toyModel, ghostify } from './toys.js';
+import { toyModel } from './toys.js';
+import { TreeView } from './tree-view.js';
 
 const GIFT_TOP = 0.2; // 0.10: верх подарка, который открывают руками (крышка под бумагой)
 const TOY_SCALE = 2.3; // игрушки на ёлке крупнее «натуральных»: в крупном плане ёлка целиком, мелочь теряется
-import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE, TREE_SLOTS } from '../campaign/layout.js';
+import { CLAYOUT, ISLAND_H, TRAY, trayItems, CANAPE_PILES, SKEWER_JAR, FRUIT_PILES, TABLE_SLOTS, SINK, PUDDLE, BOWL, STOVE, TREE } from '../campaign/layout.js';
 import { CAMPAIGN, PRODUCTS, DISH_ORDER, TOYS } from '../campaign/data.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { roundSlices } from '../campaign/mechanics.js';
@@ -399,6 +400,7 @@ export class CampaignView {
     this.root.add(this.wand);
 
     this.particles = new Particles(this.root);
+    this.tree = new TreeView(this); // 0.11: игрушки, мишура, падение ёлки (tree-view.js)
   }
 
   _buildRings() {
@@ -494,6 +496,12 @@ export class CampaignView {
         pos.set(TREE.x + 0.05 + 1.27 * back, 1.4, TREE.z + 3.58 * back);
         return true;
       }
+      case 'c-treedown': {
+        // 0.11: ёлка лежит — сверху-спереди: видно её целиком от основания до верхушки, за что тянуть
+        look.set(TREE.x + 1.15, 0.3, TREE.z + 1.1);
+        pos.set(TREE.x + 2.1, 2.5 * back, TREE.z + 4.0 * back);
+        return true;
+      }
       case 'c-gift0':
       case 'c-gift1':
       case 'c-gift2': {
@@ -523,6 +531,7 @@ export class CampaignView {
     if (p === 'board') return 'board';
     // 0.10: подарок в руках — крупно; номер в режиме, чтобы к следующему подарку камера перелетала плавно
     if (p === 'tree' && (session.gift || session.giftShow)) return 'c-gift' + (session.gift ?? session.giftShow).index;
+    if (p === 'tree' && session.treeFall?.down) return 'c-treedown'; // 0.11: кот уронил ёлку — смотрим на неё лёжа
     if (p === 'tray' || p === 'bowl' || p === 'sink' || p === 'puddle' || p === 'table' || p === 'stove' || p === 'radio' || p === 'tree') return 'c-' + p;
     return 'c-overview';
   }
@@ -666,7 +675,7 @@ export class CampaignView {
     if (this.giftRig) this.giftRig.visible = false;
     this.giftPrize?.removeFromParent();
     this.giftPrize = null;
-    this.toySwing?.clear();
+    this.tree?.reset();
     this.kibble.visible = false;
     this.ball.position.copy(this.ballHome);
     this.facing = Math.PI;
@@ -674,18 +683,8 @@ export class CampaignView {
   }
 
   onEvent(e) {
+    this.tree?.onEvent(e);
     switch (e.type) {
-      case 'toyHung': {
-        // 0.10: повесила — игрушка качается, искры цвета игрушки и золота
-        (this.toySwing ??= new Map()).set(e.uid, null);
-        const sl = TREE_SLOTS[e.slot];
-        if (sl && this.k.tree) {
-          const at = this.k.tree.group.localToWorld(new THREE.Vector3(sl.x, sl.y, sl.z));
-          this.particles.emit(at, TOYS[e.id]?.color ?? 0xffffff, 8, { spread: 0.04, up: 0.35, life: 0.8, size: 0.01, gravity: 0.4 });
-          this.particles.emit(at, 0xffe08a, 8, { spread: 0.05, up: 0.5, life: 1, size: 0.008, gravity: -0.1 });
-        }
-        break;
-      }
       case 'giftOpened': {
         // 0.10: крышка снята — конфетти; баллы — золотые искры, игрушка — подпрыгивает над коробкой
         const c = this._giftPos();
@@ -827,8 +826,8 @@ export class CampaignView {
       floor = new THREE.Vector3(-1.0, 0, -1.5);
       top = new THREE.Vector3(-1.2, ISLAND_H, -2.12);
       face = Math.PI;
-    } else if (kind === 'mischief:star' || kind === 'mischief:toys') {
-      // к ёлке: на звезду — лезет в ветки, за игрушками — встаёт на задние лапы у ёлки
+    } else if (kind === 'mischief:star' || kind === 'mischief:toys' || kind === 'mischief:tree') {
+      // к ёлке: на звезду — лезет в ветки, за игрушками и за самой ёлкой — встаёт на задние лапы у ёлки
       floor = new THREE.Vector3(-2.25, 0, -1.25);
       top = kind === 'mischief:star' ? new THREE.Vector3(-2.58, 0.6, -1.5) : new THREE.Vector3(-2.45, 0, -1.4); // снаружи веток — кота видно
       face = -2.2;
@@ -849,23 +848,7 @@ export class CampaignView {
     };
   }
 
-  // ---------- ёлка: игрушки и подарки ----------
-  /** Ближайшее к мыши место на ёлке (ndc) или null — для «повесить/снять» в крупном плане. */
-  treeSlotAt(ndc) {
-    const tr = this.k.tree;
-    if (!ndc || !tr) return null;
-    const aspect = this.sv.camera.aspect || 16 / 9;
-    const v = new THREE.Vector3();
-    let best = null, bd = 0.075;
-    for (const sl of TREE_SLOTS) {
-      v.set(sl.x, sl.y - 0.05, sl.z);
-      tr.group.localToWorld(v).project(this.sv.camera);
-      const d = Math.hypot((v.x - ndc.x) * aspect, v.y - ndc.y);
-      if (d < bd) [best, bd] = [sl.i, d];
-    }
-    return best;
-  }
-
+  // ---------- ёлка: подарки (игрушки, мишура и падение — tree-view.js) ----------
   /** Подарок под ёлкой под мышью (номер) или null — клик по нему берёт подарок в руки (0.10). */
   giftAt(ndc) {
     if (!ndc || !this.k.gifts?.length) return null;
@@ -877,15 +860,6 @@ export class CampaignView {
       if (h && h.distance < bd) [best, bd] = [i, h.distance];
     });
     return best;
-  }
-
-  /** Место на ёлке на экране (пиксели) — для проверок мышью. */
-  treeSlotScreen(i) {
-    const sl = TREE_SLOTS[i];
-    const v = new THREE.Vector3(sl.x, sl.y - 0.05, sl.z);
-    this.k.tree.group.localToWorld(v).project(this.sv.camera);
-    const r = this.sv.renderer.domElement.getBoundingClientRect();
-    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
   }
 
   // ---------- подарок руками (0.10) ----------
@@ -995,83 +969,9 @@ export class CampaignView {
     }
   }
 
-  _syncTree(s, t) {
-    const tr = this.k.tree;
-    if (!tr) return;
-    this.toyMeshes ??= new Map();
-    const live = new Set();
-    for (const toy of s.toys ?? []) {
-      let m = this.toyMeshes.get(toy.uid);
-      if (!m || m.userData.id !== toy.id) {
-        if (m) m.removeFromParent();
-        m = toyModel(toy.id);
-        m.userData.id = toy.id;
-        this.toyMeshes.set(toy.uid, m);
-      }
-      live.add(toy.uid);
-      if (toy.slot != null) {
-        const sl = TREE_SLOTS[toy.slot];
-        if (m.parent !== tr.group) tr.group.add(m);
-        m.position.set(sl.x, sl.y, sl.z);
-        // только что повешенная качается и успокаивается (затухающий маятник ~2 с)
-        let swing = 0;
-        if (this.toySwing?.has(toy.uid)) {
-          if (this.toySwing.get(toy.uid) == null) this.toySwing.set(toy.uid, t);
-          const dt = t - this.toySwing.get(toy.uid);
-          swing = 0.5 * Math.exp(-2.4 * dt) * Math.sin(dt * 11);
-          if (dt > 2.5) this.toySwing.delete(toy.uid);
-        }
-        m.rotation.set(0, Math.atan2(sl.x, sl.z), Math.sin(t * 1.3 + toy.uid) * 0.08 + swing);
-        const hot = s.panel === 'tree' && this.treeHover === toy.slot && s.treeHand == null;
-        m.scale.setScalar(TOY_SCALE * (hot ? 1.18 : 1));
-        m.visible = true;
-      } else if (toy.fallen) {
-        // на полу у ёлки: лежат на боку
-        if (m.parent !== this.root) this.root.add(m);
-        m.position.set(TREE.x + 0.62 + (toy.uid % 3) * 0.13, 0.03, TREE.z + 0.55 + (toy.uid % 2) * 0.12);
-        m.rotation.set(Math.PI / 2, 0, toy.uid);
-        m.scale.setScalar(TOY_SCALE);
-        m.visible = true;
-      } else m.visible = false;
-    }
-    for (const [uid, m] of this.toyMeshes)
-      if (!live.has(uid)) {
-        m.removeFromParent();
-        this.toyMeshes.delete(uid);
-      }
-    // игрушка в руке — «примерка» над свободной веткой под мышью
-    const hand = s.treeHand != null ? s.toys.find((x) => x.uid === s.treeHand) : null;
-    // 0.10: пока игрушка в руке, свободные ветки светятся точками (под мышью — крупнее)
-    if (!this.slotDots) {
-      const geo = new THREE.SphereGeometry(0.026, 12, 10);
-      this.slotDots = TREE_SLOTS.map((sl) => {
-        const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffc928, transparent: true, opacity: 0.95, depthTest: false }));
-        m.position.set(sl.x, sl.y - 0.02, sl.z);
-        m.renderOrder = 6;
-        m.visible = false;
-        tr.group.add(m);
-        return m;
-      });
-    }
-    const taken = new Set((s.toys ?? []).filter((x) => x.slot != null).map((x) => x.slot));
-    this.slotDots.forEach((m, i) => {
-      m.visible = !!hand && s.panel === 'tree' && !taken.has(i);
-      if (m.visible) m.scale.setScalar((this.treeHover === i ? 1.7 : 1) * (1 + 0.25 * Math.sin(t * 5 + i)));
-    });
-    const free = this.treeHover != null && !s.toys.some((x) => x.slot === this.treeHover);
-    if (hand && free && s.panel === 'tree') {
-      if (this.toyGhost?.userData.id !== hand.id) {
-        this.toyGhost?.removeFromParent();
-        this.toyGhost = ghostify(toyModel(hand.id));
-        this.toyGhost.userData.id = hand.id;
-        this.toyGhost.scale.setScalar(TOY_SCALE);
-        tr.group.add(this.toyGhost);
-      }
-      const sl = TREE_SLOTS[this.treeHover];
-      this.toyGhost.position.set(sl.x, sl.y, sl.z);
-      this.toyGhost.rotation.y = Math.atan2(sl.x, sl.z);
-      this.toyGhost.visible = true;
-    } else if (this.toyGhost) this.toyGhost.visible = false;
+  _syncTree(s, dt, t) {
+    if (!this.k.tree) return;
+    this.tree.sync(s, dt, t);
     // подарки: открытые исчезают
     (this.k.gifts ?? []).forEach((g, i) => {
       const open = s.gifts?.opened.has(i);
@@ -1454,11 +1354,10 @@ export class CampaignView {
       b.material.emissiveIntensity = on;
     });
     g.light.intensity = broken && !fixing ? 0.9 : 2.2;
-    this._syncTree(s, t);
+    this._syncTree(s, dt, t);
     this._syncGift(s, t);
-    // кот безобразничает: ёлка качается, гирлянда дёргается
+    // кот безобразничает: ёлка качается (tree-view.js), гирлянда дёргается
     const mis = s.cat.state === 'mischief' ? s.cat.kind : null;
-    if (this.k.tree) this.k.tree.group.rotation.z = mis === 'star' || mis === 'toys' ? Math.sin(t * 17) * 0.035 : 0;
     g.group.position.y = mis === 'garland' ? Math.max(0, Math.sin(t * 13)) * -0.025 : 0;
     // звезда на ёлке: горит и мягко дышит; погасла — тёмная, изредка вспыхивает (плохой контакт); чинят — мигает
     const tr = this.k.tree;

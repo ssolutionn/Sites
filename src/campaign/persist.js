@@ -1,6 +1,6 @@
 // Что из прохождения попадает в сохранение кампании (0.8). Чистые функции: main.js только вызывает их и пишет в хранилище.
 // Правило: испытания и практика кампанию не трогают; баллы дня попадают в сохранение только итогом дня.
-import { DECOR, TOYS, GIFTS, TOY_SETS, CAMPAIGN } from './data.js';
+import { DECOR, TOYS, GIFTS, TOY_SETS, CAMPAIGN, TINSEL } from './data.js';
 import { mergeViewers } from './stream-rules.js';
 
 /** Отметить, что идёт день кампании (чтобы после перезагрузки начать его заново). Возвращает true, если сохранение изменилось. */
@@ -29,9 +29,11 @@ export function applyDecorPurchase(saveData, { id, practice = false, challenge =
  * Ёлка (0.9): открытый подарок, купленная игрушка, игрушки на ёлке — сохраняются сразу, как декор.
  * Подарок помечается открытым в тот же момент, что и начисляются его баллы, — переиграть день и получить их снова нельзя.
  * В конце дня save.bonus всё равно берётся из сессии: там эти баллы уже учтены.
- * toys — полный список из сессии (session.toysForSave()). Возвращает true, если сохранение изменилось.
+ * toys — полный список из сессии (session.toysForSave(): { id, at }); tinsel — { threads, rolls } (session.tinselForSave()).
+ * 0.11: покупка с source 'delivery' очки не списывает (деньги — из бюджета дня, это делает доставка); упала ёлка — игрушки
+ * на полу уходят в коробку, мишура — в мотки. Возвращает true, если сохранение изменилось.
  */
-export function applyTreeEvent(saveData, e, { toys = null, practice = false, challenge = false } = {}) {
+export function applyTreeEvent(saveData, e, { toys = null, tinsel = null, practice = false, challenge = false } = {}) {
   if (practice || challenge) return false;
   saveData.toys ??= [];
   saveData.gifts ??= {};
@@ -41,19 +43,26 @@ export function applyTreeEvent(saveData, e, { toys = null, practice = false, cha
     opened.add(e.index);
     saveData.gifts[e.dayId] = [...opened].sort((a, b) => a - b);
     if (e.prize?.kind === 'points') saveData.bonus = (saveData.bonus ?? 0) + e.prize.n;
-  } else if (e.type === 'toyBought') {
-    const t = TOYS[e.id];
-    const price = e.price ?? t?.price; // 0.10: товар дня — со скидкой
-    if (!t || (saveData.bonus ?? 0) < price) return false;
-    saveData.bonus = Math.max(0, (saveData.bonus ?? 0) - price);
+  } else if (e.type === 'toyBought' || e.type === 'tinselBought') {
+    const item = e.type === 'toyBought' ? TOYS[e.id] : TINSEL[e.color];
+    if (!item) return false;
+    if (e.source !== 'delivery') {
+      const price = e.price ?? item.price; // 0.10: товар дня — со скидкой
+      if ((saveData.bonus ?? 0) < price) return false;
+      saveData.bonus = Math.max(0, (saveData.bonus ?? 0) - price);
+    }
   } else if (e.type === 'setComplete') {
     // 0.10: набор собран — награда разовая, набор запоминается
     saveData.sets ??= [];
     if (!TOY_SETS[e.id] || saveData.sets.includes(e.id)) return false;
     saveData.sets = [...saveData.sets, e.id];
     saveData.bonus = (saveData.bonus ?? 0) + (e.n ?? 0);
-  } else if (!['toyHung', 'toyTaken', 'toysKnocked', 'toysPicked'].includes(e.type)) return false;
-  if (toys) saveData.toys = toys.filter((t) => TOYS[t.id]).map((t) => ({ id: t.id, slot: Number.isInteger(t.slot) ? t.slot : null }));
+  } else if (!TREE_EVENTS.includes(e.type)) return false;
+  if (toys) saveData.toys = toys.filter((t) => TOYS[t.id]).map((t) => ({ id: t.id, at: t.at ?? null }));
+  if (tinsel) {
+    saveData.tinsel = tinsel.threads ?? [];
+    saveData.tinselRolls = tinsel.rolls ?? {};
+  }
   return true;
 }
 
@@ -80,3 +89,6 @@ export function rememberViewers(saveData, counts, keep = CAMPAIGN.stream.viewers
   saveData.stream.viewers = merged;
   return changed;
 }
+
+// События, после которых меняется то, что висит на ёлке или лежит в моточках: сохраняем сразу.
+const TREE_EVENTS = ['toyHung', 'toyTaken', 'toysKnocked', 'toyPicked', 'toyBroken', 'treeFell', 'tinselHung', 'tinselTaken', 'tinselEmpty'];
