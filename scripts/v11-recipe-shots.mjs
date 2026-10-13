@@ -256,6 +256,9 @@ try {
 
   // отказ браузера: toBlob молчит, toDataURL бросает — плашка «что случилось — как исправить», игра цела
   await S(() => {
+    // плашка живёт 3,6 с, а кадры в облачном браузере долгие: чтобы успеть снять, на время проверки она не исчезает
+    window.__timeout = window.setTimeout;
+    window.setTimeout = (fn, ms, ...rest) => window.__timeout(fn, ms >= 3000 && ms < 4000 ? 600000 : ms, ...rest);
     window.__blob = HTMLCanvasElement.prototype.toBlob;
     window.__url = HTMLCanvasElement.prototype.toDataURL;
     HTMLCanvasElement.prototype.toBlob = function (cb) { cb(null); };
@@ -269,6 +272,7 @@ try {
   await S(() => {
     HTMLCanvasElement.prototype.toBlob = window.__blob;
     HTMLCanvasElement.prototype.toDataURL = window.__url;
+    window.setTimeout = window.__timeout;
   });
   check('после отказа телефон и игра на месте', await S(() => window.__sueta.session.panel === 'phone'));
 } catch (e) {
