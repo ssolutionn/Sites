@@ -297,6 +297,7 @@ export class CampaignUI {
         <div class="skills">Новое: ${skills}</div>
         ${resumed ? '<p class="small warn">Страница перезагружалась во время дня: начинаем этот день заново, прошлые результаты сохранены.</p>' : ''}
         <p class="small">Ориентир: около ${day.targetMinutes} минут — уложишься, получишь медаль «В ритме». Время не ограничено. Бюджет на покупки: <b>${day.budget ?? 0} ₽</b>.</p>
+        ${this.app.session?.live ? '<p class="small stream-note">📺 Режим стримера: день с чатом записывается отдельно, кампания и медали не изменятся.</p>' : ''}
         ${mods?.length ? `<div class="skills">Испытание: ${mods.map((m) => `<span class="chip warn">${esc(MODIFIERS[m].label)} — ${esc(MODIFIERS[m].desc)}</span>`).join(' ')}</div>` : ''}
         <div class="actions"><button class="primary big" data-ui="enter">На кухню!</button><button class="ghost" data-ui="journal">Журнал</button></div>
       </div>`,

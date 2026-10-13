@@ -419,7 +419,7 @@ export class PhoneUI {
       : '';
     return `${this._head('Ёлочный базар', 'игрушки на ёлку за очки домохозяйки')}<div class="app-body bank bazaar">
       <div class="baz-bal">Для украшений: <b>${s.bonus.banked}</b> очк. домохозяйки${s.bonus.points > s.bonus.banked ? `<small>ещё ${s.bonus.points - s.bonus.banked} за готовку — после дня</small>` : ''}</div>
-      ${closed ? '<p class="fine">В испытании и практике базар закрыт.</p>' : dealCard}
+      ${closed ? `<p class="fine">${s.live ? 'В дне с чатом' : 'В испытании и практике'} базар закрыт.</p>` : dealCard}
       <p class="fine">Купленная игрушка ждёт в коробке у ёлки. Повесь весь набор — вернём часть очков.</p>
       ${sets}</div>`;
   }
