@@ -52,7 +52,10 @@ export function gestureNow(s) {
     case 'puddle':
       return 'wipe';
     case 'stove':
+      // продукт в руках и есть куда поставить — переносим на конфорку; готовая кастрюля — оттаскиваем; залитая конфорка — трём
+      if (s.carry?.boilStep && s.burners.some((b) => b.state === 'empty' && !b.dirty)) return 'stove-place';
       if (s.stoveWipe || s.burners.some((b) => b.dirty)) return 'wipe';
+      if (s.burners.some((b) => b.state === 'ready')) return 'stove-pot';
       return s.burners.some((b) => b.state !== 'empty') ? 'knob' : null;
     case 'tree':
       if (s.gift) return { bow: 'gift-bow', paper: 'gift-paper', lid: 'gift-lid' }[s.gift.stage] ?? null;
@@ -130,9 +133,23 @@ export function paramsFor(id, s) {
       const to = freeSpot(s);
       return to ? { to } : {};
     }
+    case 'stove-place':
+      return { burner: (s.usableBurners?.() ?? s.burners).find((b) => b.state === 'empty' && !b.dirty)?.i ?? 0 };
+    case 'stove-pot':
+      return { burner: s.burners.find((b) => b.state === 'ready')?.i ?? 0 };
     default:
       return {};
   }
+}
+
+/**
+ * Показ ещё нужен, хотя игрока пока нет на месте: кот безобразничает, пена убегает. Рука ждёт, пока игрок подойдёт или
+ * пока это не кончится; остальные жесты ждут не дольше CAMPAIGN.ghost.wait секунд.
+ */
+export function stillRelevant(id, s) {
+  if (id === 'cat-wave') return !!s?.catActive?.();
+  if (id === 'knob') return !!s?.burners?.some((b) => b.overflow);
+  return false;
 }
 
 /** Игрок там, где жест имеет смысл (станция открыта, подарок в руках, кот безобразничает)? */
@@ -166,6 +183,10 @@ export function placeOk(id, s) {
       return p === 'puddle' || p === 'stove';
     case 'knob':
       return p === 'stove';
+    case 'stove-place':
+      return p === 'stove' && !!s.carry?.boilStep;
+    case 'stove-pot':
+      return p === 'stove' && s.burners.some((b) => b.state === 'ready');
     case 'washer-door':
     case 'washer-drag':
       return p === 'dishwasher';
@@ -214,11 +235,20 @@ export function cueOf(e, s) {
     case 'open':
       if (e.station === 'bowl') return s?.bowl?.contents.length && s.mixTarget?.()?.ok ? first('stir') : null;
       if (e.station === 'puddle') return first('wipe');
-      if (e.station === 'stove') return s?.burners.some((b) => b.dirty) ? first('wipe') : null;
+      if (e.station === 'stove') {
+        if (s?.carry?.boilStep) return first('stove-place');
+        if (s?.burners.some((b) => b.state === 'ready')) return first('stove-pot');
+        if (s?.burners.some((b) => b.overflow)) return first('knob');
+        return s?.burners.some((b) => b.dirty) ? first('wipe') : null;
+      }
       if (e.station === 'dishwasher') return first('washer-door');
       return null;
-    case 'potPlaced':
+    case 'potBoil': // пена поднимается — пора убавить огонь крутилкой
       return first('knob');
+    case 'stoveMiss':
+      return refuse('stove-place', 'miss');
+    case 'potStay':
+      return refuse('stove-pot', 'stay');
     case 'dwDoor':
       return e.open ? first('washer-drag') : null;
     case 'giftStart':

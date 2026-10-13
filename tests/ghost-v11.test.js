@@ -3,7 +3,7 @@
 // тест красный. Время и случайность задаются руками — реального времени и Math.random здесь нет.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CAMPAIGN } from '../src/campaign/data.js';
+import { CAMPAIGN, kitchenSec } from '../src/campaign/data.js';
 import { CLAYOUT, BOWL, STOVE, PUDDLE, DISHWASHER } from '../src/campaign/layout.js';
 import { BOARD_UNIT } from '../src/campaign/st-board.js';
 import { onTree, pathLength } from '../src/campaign/tree-geo.js';
@@ -13,11 +13,11 @@ import { Stirrer, Waver, Grater } from '../src/campaign/mechanics.js';
 import { GHOST_IDS, isGhostId } from '../src/ghost/ghost-ids.js';
 import { DEMOS, DEMO_IDS, demoPath, demoStation, sampleAt } from '../src/ghost/ghost-demos.js';
 import { GhostTrigger } from '../src/ghost/ghost-trigger.js';
-import { gestureNow, paramsFor, placeOk, cueOf, freeSpot, PressWatch, PROGRESS } from '../src/ghost/ghost-cues.js';
+import { gestureNow, paramsFor, placeOk, cueOf, freeSpot, stillRelevant, PressWatch, PROGRESS } from '../src/ghost/ghost-cues.js';
 import { defaultSettings, normalizeSettings, normalizeGhostSeen, pickPreferences } from '../src/settings.js';
 import { emptySave, parseSave, SaveStore, SAVE_KEY } from '../src/campaign/save.js';
 import { SettingsController } from '../src/settings-controller.js';
-import { KitchenSession, arrive, run, take } from './helpers-campaign.js';
+import { KitchenSession, arrive, run, take, startBoil } from './helpers-campaign.js';
 
 const U = BOARD_UNIT;
 const G = CAMPAIGN.ghost;
@@ -889,4 +889,106 @@ test('сквозной случай: мелкие круги ложкой три
   }
   assert.deepEqual(shows.map((x) => x?.why ?? null), [null, null, 'refuse']);
   assert.equal(attempt(0.09), null, 'нормальные круги — прогресс есть, отказа нет');
+});
+
+// ======================= плита: продукт на конфорку и кастрюля прочь (G1) =======================
+
+// Кастрюля с яйцами сварилась на конфорке 1 — игрок у плиты
+function readyPot() {
+  const s = day(0);
+  startBoil(s, 'olivier:boilEgg', { burner: 1, heat: 6 });
+  run(s, kitchenSec(8) + kitchenSec(10) + 1);
+  assert.equal(s.burners[1].state, 'ready');
+  arrive(s, 'stove');
+  return s;
+}
+
+test('продукт на конфорку: рука отпускает над центром выбранной конфорки — игра ставит кастрюлю именно на неё', () => {
+  for (const burner of [0, 2, 3]) {
+    const s = day(0);
+    take(s, 'olivier:boilEgg');
+    arrive(s, 'stove');
+    const path = demoPath('stove-place', { burner });
+    const end = down(path).at(-1);
+    assert.ok(Math.hypot(end.x - STOVE.burners[burner].x, end.z - STOVE.burners[burner].z) <= STOVE.r * 1.5, 'внутри допуска конфорки');
+    assert.equal(s.stoveDrop(end.x, end.z), true, s.hint?.text);
+    run(s, 2);
+    assert.equal(s.burners[burner].state, 'boiling', `конфорка ${burner}`);
+  }
+  assert.ok(DEMOS['stove-place'].startDom, 'фишка в доке — начало пути');
+});
+
+test('кастрюля прочь: зажала за кастрюлю на готовой конфорке и утащила дальше dragOff — игра её снимает', () => {
+  const s = readyPot();
+  const path = demoPath('stove-pot', { burner: 1 });
+  const first = down(path)[0], last = down(path).at(-1);
+  assert.ok(Math.hypot(first.x - STOVE.burners[1].x, first.z - STOVE.burners[1].z) <= STOVE.r * 1.5, 'берут у конфорки');
+  assert.ok(Math.hypot(last.x - STOVE.burners[1].x, last.z - STOVE.burners[1].z) > STOVE.r * CAMPAIGN.stove.dragOff, 'утащила дальше порога');
+  replay(s, path);
+  run(s, 2);
+  assert.equal(s.burners[1].state, 'empty', s.hint?.text);
+  // с левой конфорки уносят влево, с правой — вправо
+  assert.ok(down(demoPath('stove-pot', { burner: 0 })).at(-1).x < STOVE.burners[0].x);
+  assert.ok(down(demoPath('stove-pot', { burner: 3 })).at(-1).x > STOVE.burners[3].x);
+  assert.equal(DEMOS['stove-pot'].lift, 0.1, 'рука на уровне кастрюли, а не плиты');
+});
+
+test('плита: первая встреча — продукт в руках, готовая кастрюля, пена; промах и «не оттащила» — отказы', () => {
+  const s = day(0);
+  take(s, 'olivier:boilEgg');
+  events(s);
+  arrive(s, 'stove');
+  assert.deepEqual(cues(s).filter((c) => c.kind === 'first'), [{ kind: 'first', id: 'stove-place' }]);
+  assert.equal(gestureNow(s), 'stove-place');
+  assert.equal(placeOk('stove-place', s), true);
+  assert.deepEqual(paramsFor('stove-place', s), { burner: 0 });
+  s.burners[0].dirty = true;
+  assert.deepEqual(paramsFor('stove-place', s), { burner: 1 }, 'залитую конфорку обходит');
+  s.burners[0].dirty = false;
+  assert.equal(s.stoveDrop(0.45, 0.4), false);
+  assert.deepEqual(cues(s), [{ kind: 'refuse', id: 'stove-place', reason: 'miss' }]);
+
+  const r = readyPot();
+  events(r);
+  assert.equal(gestureNow(r), 'stove-pot');
+  assert.equal(placeOk('stove-pot', r), true);
+  assert.deepEqual(paramsFor('stove-pot', r), { burner: 1 });
+  const [x, z] = [STOVE.burners[1].x, STOVE.burners[1].z];
+  r.pointer('down', x, z);
+  r.pointer('move', x + 0.02, z);
+  assert.equal(r.pointer('up', x + 0.02, z), 'up', 'недотащила — кастрюля вернулась');
+  assert.deepEqual(cues(r), [{ kind: 'refuse', id: 'stove-pot', reason: 'stay' }]);
+  assert.equal(r.burners[1].state, 'ready');
+
+  // пока кастрюля ещё варится, нажатие на неё — не отказ жеста (унести пока нельзя)
+  const b = day(0);
+  startBoil(b, 'olivier:boilEgg', { burner: 1, heat: 6 });
+  arrive(b, 'stove');
+  events(b);
+  b.pointer('down', x, z);
+  b.pointer('up', x, z);
+  assert.deepEqual(cues(b).filter((c) => c.kind === 'refuse'), []);
+  assert.equal(gestureNow(b), 'knob', 'варится — в руках крутилка');
+});
+
+test('пена убегает: рука покажет крутилку, ждёт игрока у плиты, пока пена не осела', () => {
+  const s = day(0);
+  startBoil(s, 'olivier:boilEgg', { burner: 1, heat: 9 });
+  events(s);
+  let guard = 0;
+  while (!s.burners[1].overflow && guard++ < 4000) s.update(0.05);
+  assert.ok(s.burners[1].overflow, 'на девятке пена убежала');
+  const got = cues(s);
+  assert.ok(got.some((c) => c.kind === 'first' && c.id === 'knob'));
+  assert.equal(stillRelevant('knob', s), true);
+  arrive(s, 'stove');
+  assert.deepEqual(paramsFor('knob', s), { burner: 1, heat: 9 });
+  assert.equal(cueOf({ type: 'open', station: 'stove' }, s)?.id, 'knob');
+  assert.ok(s.setHeat(1, 4));
+  assert.equal(stillRelevant('knob', s), false, 'убавила огонь — ждать больше нечего');
+  assert.equal(stillRelevant('cat-wave', s), false);
+  s._startCatTheft('sausage');
+  assert.equal(stillRelevant('cat-wave', s), true);
+  assert.equal(stillRelevant('stir', s), false);
+  assert.equal(stillRelevant('knob', null), false);
 });

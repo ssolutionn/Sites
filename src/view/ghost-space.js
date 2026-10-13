@@ -24,7 +24,7 @@ export function makeMapper(view, id, params = {}, doc = document) {
       const st = demoStation(id, params);
       if (!view.workPlane(st)) return null;
       return (p) => {
-        const q = view.localToScreen(st, p.x, p.z);
+        const q = view.localToScreen(st, p.x, p.z, demo.lift ?? 0); // lift — высота над плоскостью (кастрюля стоит выше конфорки)
         return q ? toPx(q.x, q.y) : null;
       };
     }

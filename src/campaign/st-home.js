@@ -369,6 +369,7 @@ export const homeMethods = {
     const b = this._burnerAt(x, z);
     if (!b) {
       this.setHint('Опусти продукт на конфорку — кольцо подсветится зелёным', 2.5);
+      this._emit('stoveMiss'); // рука-призрак (src/ghost/): три промаха — покажет, как переносить
       return false;
     }
     return this.placePot(b.i, null, null);
@@ -424,7 +425,10 @@ export const homeMethods = {
     this.potDrag = null;
     const p = STOVE.burners[d.i];
     const away = Math.hypot(x - p.x, z - p.z) > STOVE.r * this.cfg.stove.dragOff;
-    if (!away) return 'up';
+    if (!away) {
+      if (this.burners[d.i].state === 'ready') this._emit('potStay'); // рука-призрак: готовую кастрюлю не оттащили
+      return 'up';
+    }
     this.takePot(d.i);
     return 'potTake';
   },

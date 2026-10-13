@@ -4,7 +4,7 @@
 import { CAMPAIGN } from '../campaign/data.js';
 import { DEMOS, demoPath } from '../ghost/ghost-demos.js';
 import { GhostTrigger } from '../ghost/ghost-trigger.js';
-import { gestureNow, paramsFor, placeOk, cueOf, PressWatch } from '../ghost/ghost-cues.js';
+import { gestureNow, paramsFor, placeOk, cueOf, stillRelevant, PressWatch } from '../ghost/ghost-cues.js';
 import { makeMapper, startAnchor, cameraSettled } from '../view/ghost-space.js';
 import { GhostHand } from './ghost-hand.js';
 
@@ -135,8 +135,8 @@ export class GhostCoach {
     if (p) {
       p.waited += dt;
       if (this._start(p.show, s)) this.pending = null;
-      // кот ждёт, пока игрок выйдет из крупного плана, пока безобразничает; остальным хватает cfg.wait секунд
-      else if (p.waited > this.cfg.wait && !(p.show.id === 'cat-wave' && s.catActive?.())) this.pending = null;
+      // кот и убегающая пена ждут игрока, пока всё это длится; остальным хватает cfg.wait секунд
+      else if (p.waited > this.cfg.wait && !stillRelevant(p.show.id, s)) this.pending = null;
     }
     const cur = this.hand.cur;
     if (!cur) return;

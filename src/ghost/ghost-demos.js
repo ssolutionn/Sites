@@ -1,6 +1,6 @@
 // «Рука-призрак» (0.11): реестр демонстраций жестов. Чистый модуль без DOM и Three.js.
 //
-// DEMOS[id] = { id, label, space, station, dur, startDom?, path(params) } — путь руки как список точек
+// DEMOS[id] = { id, label, space, station, dur, startDom?, lift?, path(params) } — путь руки как список точек
 // { x, z, t, down } (у ёлки ещё y): t — секунды от начала, down — кнопка зажата. Координаты — как у реальных жестов,
 // чтобы показанное движение распознавалось настоящей игрой (tests/ghost-v11.test.js гоняет каждую демонстрацию
 // через настоящие Stroke, Stirrer, Grater, ShakeTracker, Scrubber, Waver, KibbleShake, WandPlay и tree-geo):
@@ -9,6 +9,7 @@
 //   space 'tree'  — координаты ёлки (tree-geo.js): метры от центра на полу, y вверх;
 //   space 'cat'   — вокруг кота на экране, единицы — высота экрана (как у Waver);
 //   space 'knob'  — вокруг крутилки огня, единицы — её радиус; x вправо, z вниз по экрану.
+// lift — высота руки над плоскостью, м (кастрюля стоит выше конфорки); startDom — фишка в доке, откуда жест начинается.
 // Все числа берутся из данных станций (CAMPAIGN, BOWL, STOVE, PUDDLE, DISHWASHER, TREE, PRODUCTS), а не «на глаз».
 import { CAMPAIGN, PRODUCTS } from '../campaign/data.js';
 import { BOWL, STOVE, PUDDLE, DISHWASHER, TREE } from '../campaign/layout.js';
@@ -223,6 +224,25 @@ function knob(p) {
   }, { lead: 0.16, tail: 0.14, away: { x: 0.5, z: -0.5 } });
 }
 
+// ---------- плита: продукт на конфорку и кастрюля прочь (плоскость плиты, центр — середина варочной панели) ----------
+const burnerOf = (p) => STOVE.burners[num(p?.burner, 2)] ?? STOVE.burners[2];
+
+function stovePlace(p) {
+  // из дока (фишка внизу) дугой на конфорку: отпускание ближе stove.r · 1,5 к центру — кастрюля встаёт
+  const c = burnerOf(p);
+  return press(2, (v) => {
+    const k = smooth(v);
+    return { x: c.x + (1 - k) * 0.08, z: c.z + (1 - k) * 0.5 - Math.sin(Math.PI * k) * 0.04 };
+  }, { lead: 0.14, tail: 0.14, away: { x: 0.05, z: 0.06 } });
+}
+
+function stovePot(p) {
+  // зажать кастрюлю и утащить от центра конфорки дальше stove.dragOff · r — на столешницу сбоку
+  const c = burnerOf(p), dir = c.x < 0 ? -1 : 1;
+  const far = STOVE.r * CAMPAIGN.stove.dragOff + 0.28;
+  return stroke(1.8, [{ x: c.x, z: c.z }, { x: c.x + dir * far, z: c.z + 0.12 }], { lead: 0.2, tail: 0.15, away: { x: 0.04, z: -0.05 } });
+}
+
 // ---------- посудомойка (плоскость дверцы: x вправо, z вниз) ----------
 function washerDoor() {
   const h = DISHWASHER.handle, travel = CAMPAIGN.dishwasher.door.travel;
@@ -287,6 +307,8 @@ export const DEMOS = {
   'gift-lid': demo('gift-lid', 'Зажми крышку и сдвинь', 'plane', 'tree', giftLid),
   wipe: demo('wipe', 'Зажми и три тряпкой туда-обратно', 'plane', 'puddle', wipe),
   knob: demo('knob', 'Зажми крутилку и поверни по кругу', 'knob', 'knob', knob),
+  'stove-place': demo('stove-place', 'Зажми продукт и перетащи на конфорку', 'plane', 'stove', stovePlace, { startDom: '[data-drag-stove]' }),
+  'stove-pot': demo('stove-pot', 'Зажми кастрюлю и оттащи в сторону', 'plane', 'stove', stovePot, { lift: 0.1 }),
   'washer-door': demo('washer-door', 'Зажми ручку и потяни вниз', 'plane', 'dishwasher', washerDoor),
   'washer-drag': demo('washer-drag', 'Зажми посуду и перетащи в проём', 'plane', 'dishwasher', washerDrag, { startDom: '[data-drag-dw]' }),
 };
