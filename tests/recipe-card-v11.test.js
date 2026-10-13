@@ -26,6 +26,13 @@ test('все десять рецептов помещаются на карто�
   }
 });
 
+test('размер текста по длине рецепта: короткие рецепты крупнее обычного, длинные не мельче 0,82', () => {
+  const scale = (id) => build(id).L.scale;
+  for (const id of ['sandwiches', 'canape', 'fruit', 'chicken']) assert.ok(scale(id) > 1, `${id}: ${scale(id)}`);
+  assert.ok(scale('sandwiches') > scale('olivier'));
+  for (const id of IDS) assert.ok(scale(id) <= 1.3 && scale(id) >= 0.82, id);
+});
+
 test('QR: не меньше 240 px, целые пиксели на модуль, тихая зона 4 модуля, чёрный на белом, прижат к нижней полосе', () => {
   for (const id of IDS) {
     const { qr, L } = build(id);
