@@ -8,6 +8,7 @@ import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
 import { LOGO_URL, NEUTRAL } from '../view/textures.js';
 import { formatFreq } from '../campaign/st-radio.js';
+import { inCavity } from '../campaign/st-dishwasher.js';
 import { PICON } from './icons.js';
 import { tipClosedBy } from './tip-done.js';
 import { pts, tsp, tspText, gramsText, kitchenMin } from '../campaign/words.js';
@@ -38,7 +39,9 @@ function saveNote(save) {
 const metres = (m) => `${(Math.round(m * 10) / 10).toFixed(1).replace('.', ',')} м`;
 const stars = (n) => [0, 1, 2].map((i) => `<span class="star ${i < n ? 'on' : ''}">★</span>`).join('');
 const ICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗', practice: '🔪' };
-const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🍗', sink: '🚰', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', table: '🥂', puddle: '🧽' };
+const STATION_ICON = { catbowl: '🐾', board: '🔪', tray: '🍽', bowl: '🥣', phone: '📱', stove: '♨️', oven: '🍗', sink: '🚰', dishwasher: '🧼', radio: '📻', garland: '💡', tree: '🎄', fridge: '🧊', table: '🥂', puddle: '🧽' };
+// 0.11: значки посуды в доке посудомойки
+const WASH_ICON = { knife: '🔪', bowl: '🥣', tray: '🍽', form: '🥘', board: '🪵' };
 const TOOL = { knife: '🔪 Нож', spoon: '🥄 Ложка', spatula: '🧈 Лопатка', brush: '🖌 Кисточка', hand: '✋ Рука', skewer: '🍡 Шпажка' };
 
 // Шкала пробы: где вкус относительно «в самый раз» — понятнее, чем слово «пресно».
@@ -72,6 +75,7 @@ export const TIPS = {
   peel: 'Чистка. Картофель — ножом: зажми кнопку и веди по клубню, кожура снимается там, где прошёл нож. Яйцо — пальцами: сначала нажми на каждое пару раз (постучать о доску — скорлупа треснет), потом зажми и снимай скорлупу.',
   bowl: 'Миска руками: выбери банку или майонез внизу, зажми кнопку и веди над миской — горошек высыпается, майонез ложится там, где ведёшь. Солонку возьми внизу и кликай над миской — каждый клик ⅛ ч. л. соли. Ложкой мешай по кругу.',
   sink: 'Раковина: горячее — «Под кран», потом зажми кнопку над раковиной: льётся холодная вода, держи, пока не уйдёт пар. Грязную посуду — выбери и три губкой.',
+  dishwasher: 'Посудомойка: потяни ручку дверцы вниз — она откроется. Зажми фишку грязной посуды внизу и перетащи в проём, потом подними дверцу и нажми кнопку на ней. Цикл идёт 10 кухонных минут (около 40 секунд), пока он идёт, посуда внутри недоступна. Что стоит в машине к концу дня, не считается немытым: к утру оно чистое.',
   puddle: 'Уборка: зажми кнопку и води тряпкой по луже.',
   'tray:sandwiches': 'Бутерброды: лопаткой (зажми кнопку) намажь каждый ломтик — масло видно там, где прошла лопатка. Потом ложкой кликай по ломтикам: норма — 2 ложки икры.',
   'tray:eggs': 'Яйца: ножом кликни по яйцу — половинки. Ложкой кликни по каждой половинке — желток уйдёт в миску для начинки.',
@@ -447,7 +451,7 @@ export class CampaignUI {
         ${rows}
         ${wish ? `<div class="wishes">${wish}</div>` : ''}
         ${guests}
-        <div class="order-row"><b>Порядок на кухне: ${r.order}</b>${r.orderNotes.length ? ' — ' + r.orderNotes.map(esc).join('; ') : ' — чисто и празднично'}</div>
+        <div class="order-row"><b>Порядок на кухне: ${r.order}</b>${r.orderNotes.length ? ' — ' + r.orderNotes.map(esc).join('; ') : ' — чисто и празднично'}${r.overnight?.length ? ` · в посудомойке на ночь: ${r.overnight.map((x) => esc(x.toLowerCase())).join(', ')}` : ''}</div>
         ${save.writeError ? `<p class="small warn">⚠ Результат дня не сохранён. ${esc(saveNote(save))}</p>` : ''}
         <p class="small">Время на кухне: ${fmt(r.time)} при ориентире ${fmt(r.par ?? 0)} — темп ${r.pace ?? '—'} (ходьба ${fmt(r.stats.walk)}, крупный план ${fmt(r.stats.closeup)}, телефон ${fmt(r.stats.phone)}). Покупки: ${r.spent ?? 0} из ${r.budget ?? 0} ₽.</p>
         <div class="actions" style="justify-content:center">
@@ -779,7 +783,7 @@ export class CampaignUI {
         this.tip(e.topic);
         break;
       case 'open':
-        if (['bowl', 'sink', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
+        if (['bowl', 'sink', 'dishwasher', 'puddle', 'catbowl'].includes(e.station)) this.tip(e.station);
         if (e.station === 'phone') this.tip('money');
         if (e.station === 'fridge') this.tip('fridge');
         if (e.station === 'tree' && s.treeFall?.down) this.tip('treeDown');
@@ -869,6 +873,12 @@ export class CampaignUI {
         break;
       case 'dirty':
         if (e.item === 'board') this.tip('boardDirty');
+        break;
+      case 'dwStart':
+        this.toast(`🧼 Посудомойка запущена — готово через ${kitchenMin(e.sec, CAMPAIGN.kitchenScale)}`, 'good', 2.6);
+        break;
+      case 'dwDone':
+        this.toast(`🧼 Посудомойка закончила — чистые: ${e.items.map((id) => esc(s.equipment[id].label.toLowerCase())).join(', ')}`, 'good', 4);
         break;
       case 'pinch':
         this.popup(e.kind === 'salt' ? '🧂' : '🌶', 'small');
@@ -1281,6 +1291,44 @@ export class CampaignUI {
       this.el.ghost.classList.add('hidden');
       this.app.dropToy(e, d.back);
     });
+    // 0.11: посудомойка — зажать фишку посуды и перетащить в проём; клик по фишке берёт её в руку, нажатие в проёме кладёт
+    p.addEventListener('pointerdown', (e) => {
+      const chip = e.target.closest('[data-drag-dw]');
+      if (!chip || chip.disabled) return;
+      e.preventDefault();
+      this.sound.unlock();
+      const item = chip.dataset.dragDw;
+      const was = this.app.session?.dishwasher.hand === item;
+      if (!was) this.act('dwPick', item);
+      this.dwDrag = { item, x0: e.clientX, y0: e.clientY, moved: false, was, icon: WASH_ICON[item] ?? '🍽' };
+    });
+    window.addEventListener('pointermove', (e) => {
+      const d = this.dwDrag;
+      if (!d) return;
+      if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 8) {
+        d.moved = true;
+        this.el.ghost.innerHTML = `<span class="toy-ghost">${d.icon}</span>`;
+        this.el.ghost.classList.remove('hidden');
+      }
+      if (!d.moved) return;
+      this._moveGhost(e);
+      const p = this._dwLocal(e);
+      this.view.dwHot = !!p && this.app.session?.dishwasher.door === 'open' && inCavity(p.x, p.z, CAMPAIGN.dishwasher.drop);
+    });
+    window.addEventListener('pointerup', (e) => {
+      const d = this.dwDrag;
+      if (!d) return;
+      this.dwDrag = null;
+      this.view.dwHot = false;
+      if (!d.moved) {
+        if (d.was) this.act('dwPick', d.item); // второй клик по той же фишке — убрать из руки
+        return;
+      }
+      this.el.ghost.classList.add('hidden');
+      const p = this._dwLocal(e);
+      if (p) this.act('dwDrop', d.item, p.x, p.z);
+      else this.act('dwDrop', d.item, 99, 99);
+    });
     // перетаскивание блюд на стол
     p.addEventListener('pointerdown', (e) => {
       const card = e.target.closest('[data-dish]');
@@ -1344,6 +1392,13 @@ export class CampaignUI {
     this.el.ghost.style.top = `${e.clientY}px`;
   }
 
+  /** Точка отпущенной фишки на плоскости дверцы посудомойки (локальные метры) или null — курсор вне сцены или над панелью. */
+  _dwLocal(e) {
+    const c = this.view.sv.canvas, r = c.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom || e.target?.closest?.('#panel')) return null;
+    return this.view.pickLocal({ x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 }, 'dishwasher');
+  }
+
   releaseHolds() {
     if (this.holding) {
       this.act('setHold', this.holding, false);
@@ -1387,6 +1442,10 @@ export class CampaignUI {
         return `${base}|${s.oven.state}|${s.dishes.chicken?.steps.marinade.done}|${s.dishes.chicken?.done}`;
       case 'sink':
         return `${base}|${s.dirtyItems().map((x) => x.id).join(',')}|${s.sinkJob?.item}|${s.hotList().map((x) => x.product).join()}|${s.sinkCool?.product}`;
+      case 'dishwasher': {
+        const d = s.dishwasher;
+        return `${base}|${d.door}|${d.loaded.join()}|${!!d.run}|${d.hand}|${s.dirtyItems().map((x) => x.id).join()}`;
+      }
       case 'radio':
         return `${base}|${s.radio.broken}|${s.radio.enabled}`;
       case 'garland':
@@ -1497,6 +1556,18 @@ export class CampaignUI {
           return `<span class="qbar"><i style="width:${k * 100}%"></i></span><span class="q">${s.sinkCool.open ? 'Вода льётся — остывает' : 'Зажми над раковиной — откроется кран'} · ${Math.round(k * 100)} %</span>`;
         }
         return s.sinkJob ? `Моем: ${esc(s.equipment[s.sinkJob.item].label)} · Чистота: ${Math.round(s.sinkJob.scrub.progress * 100)} %` : '';
+      case 'dishwasher': {
+        const d = s.dishwasher;
+        const names = (list) => list.map((id) => s.equipment[id].label.toLowerCase()).join(', ');
+        if (d.run) {
+          const k = 1 - s.dwLeft() / s.dwCycleSec();
+          return `<span class="qbar"><i style="width:${Math.max(0, Math.min(1, k)) * 100}%"></i></span><span class="q">Идёт цикл · ещё ${kitchenMin(s.dwLeft(), CAMPAIGN.kitchenScale)}</span><span>${esc(names(d.loaded))} — внутри, недоступно</span>`;
+        }
+        if (d.door === 'open') return d.hand ? `<span class="q">${esc(s.equipment[d.hand].label)} в руке</span><span>отпусти фишку над проёмом</span>` : '<span class="q">Дверца открыта</span><span>перетащи посуду в проём, потом подними дверцу вверх</span>';
+        if (d.loaded.length) return `<span class="q">В машине: ${esc(names(d.loaded))}</span><span>нажми кнопку на дверце или «Запустить»</span>`;
+        if (d.done && s.t - d.done.at < 25) return `<span class="q">Готово: ${esc(names(d.done.items))}</span><span>всё чистое и снова на месте</span>`;
+        return s.dirtyItems().length ? '<span class="q">Потяни ручку вниз — дверца откроется</span>' : '<span class="small">Вся посуда чистая — загружать нечего.</span>';
+      }
       case 'puddle': {
         const p = s._activePuddle();
         return p ? `Вытерто: ${Math.round(p.mask.coverage() * 100)} %` : '';
@@ -1638,6 +1709,15 @@ export class CampaignUI {
         rows.push(back);
         const stage = { empty: 'Духовка пустая', baking: 'Запекается…', ready: 'Готово — достань!', over: 'Перегревается!', burnt: 'Сгорела' }[s.oven.state];
         return `<h2>🍗 Духовка<span class="sub">${stage}</span></h2><div class="row">${rows.join('')}</div><div class="row">${bar}</div>${live}<p class="note">${ch ? 'Курица запекается около часа (по часам кухни); после сигнала есть окно, чтобы достать.' : 'Сегодня духовка не нужна.'}</p>`;
+      }
+      case 'dishwasher': {
+        const d = s.dishwasher;
+        const chip = (icon, label, cls, attrs, title = '') => `<button class="prod-chip ${cls}" ${attrs} title="${esc(title)}"><span class="pi">${icon}</span><span class="pn">${esc(label)}</span></button>`;
+        const outside = s.dirtyItems().map((x) => chip(WASH_ICON[x.id] ?? '🍽', x.label, d.hand === x.id ? 'active' : '', `data-drag-dw="${x.id}" ${d.run ? 'disabled' : ''}`, 'Зажми и перетащи в проём'));
+        const inside = d.loaded.map((id) => this._btn(`<span class="pi">${WASH_ICON[id] ?? '🍽'}</span><span class="pn">${esc(s.equipment[id].label)}</span>`, 'dwTake', [id], 'prod-chip done', !!d.run, d.run ? 'Идёт цикл' : d.door === 'open' ? 'Достать обратно' : 'Сначала открой дверцу'));
+        const why = d.run ? 'Цикл уже идёт' : d.door === 'open' ? 'Сначала закрой дверцу — подними её вверх' : !d.loaded.length ? 'В машине пусто — сначала загрузи посуду' : 'Нажми кнопку на дверце или здесь';
+        const go = !d.run && d.door === 'closed' && d.loaded.length > 0;
+        return `<h2>🧼 Посудомойка<span class="sub">${d.run ? 'идёт цикл' : d.door === 'open' ? 'дверца открыта' : 'дверца закрыта'}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items">${outside.join('')}${inside.join('')}${outside.length || inside.length ? '' : '<span class="small">Вся посуда чистая, загружать нечего.</span>'}</div><div class="dock-main">${this._btn(d.run ? '⏳ Идёт цикл' : '▶ Запустить', 'dwStart', [], 'primary big ' + (go ? 'ready-pulse' : 'soft-disabled'), false, why)}</div></div><div class="dock-live" data-live></div>`;
       }
       case 'sink': {
         const dirty = s.dirtyItems();

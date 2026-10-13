@@ -309,6 +309,33 @@ export class Sound {
       case 'click':
         this._tone(1200, 0.03, { vol: 0.06 });
         break;
+      case 'dwDoor':
+        // 0.11: дверца посудомойки — глухой стук на защёлке и короткий скрип петель
+        this._noise(0.07, { vol: 0.28, freq: 380, q: 0.7, type: 'lowpass' });
+        this._tone(180 * j, 0.1, { type: 'triangle', vol: 0.12, slideTo: 110 });
+        this._tone(520 * j, 0.14, { type: 'sawtooth', vol: 0.025, slideTo: 380, at: 0.02 });
+        break;
+      case 'dwClink':
+        // посуда встала в корзину: фарфор о металл
+        this._tone(1760 * j, 0.16, { type: 'triangle', vol: 0.11 });
+        this._tone(2349 * j, 0.1, { type: 'triangle', vol: 0.06, at: 0.025 });
+        this._noise(0.03, { vol: 0.1, freq: 4200, q: 2 });
+        break;
+      case 'dwStart':
+        // кнопка пуска: щелчок, писк, вода набирается
+        this._tone(1500, 0.05, { type: 'square', vol: 0.05 });
+        this._tone(990, 0.12, { type: 'sine', vol: 0.12, at: 0.06 });
+        this._noise(0.5, { vol: 0.1, freq: 900, q: 0.4, type: 'lowpass', at: 0.12 });
+        break;
+      case 'dwHum':
+        // идущий цикл: приглушённый плеск и ровный гул, слышно и с другого конца кухни
+        this._noise(0.9, { vol: 0.055, freq: 700 * j, q: 0.5, type: 'lowpass' });
+        this._tone(96, 0.9, { type: 'sine', vol: 0.03, attack: 0.2 });
+        break;
+      case 'dwDone':
+        // цикл кончился: три мягких сигнала
+        [0, 0.22, 0.44].forEach((at) => this._tone(1318, 0.28, { type: 'sine', vol: 0.16, at }));
+        break;
       default:
     }
   }

@@ -18,6 +18,7 @@ import { radioMethods } from './st-radio.js';
 import { treeMethods } from './st-tree.js';
 import { catMethods } from './st-cat.js';
 import { streamMethods } from './st-stream.js';
+import { dishwasherMethods, KNIFE_EVENTS } from './st-dishwasher.js';
 import { RADIO } from './radio-data.js';
 import { CHATTER } from './chatter.js';
 
@@ -70,7 +71,9 @@ export class KitchenSession {
       tray: { clean: !this.day.dirty?.includes('tray'), owner: null, label: 'Поднос', cleanText: 'Поднос чистый' },
       form: { clean: true, owner: null, label: 'Форма для запекания', cleanText: 'Форма чистая' },
       board: { clean: true, owner: null, label: 'Доска', cleanText: 'Доска чистая', by: null },
+      knife: { clean: true, owner: null, label: 'Нож', cleanText: 'Нож чистый' }, // 0.11: пачкается при любом разрезе, ничего не блокирует
     };
+    this._initDishwasher(); // посудомойка (st-dishwasher.js)
 
     this.recipes = practice ? { practice: this.day.recipe } : Object.fromEntries(this.day.dishes.map((id) => [id, RECIPES[id]]));
     this.dishes = {};
@@ -134,6 +137,7 @@ export class KitchenSession {
     return this._nextId++;
   }
   _emit(type, data = {}) {
+    if (KNIFE_EVENTS.has(type)) this._dirtyKnife(); // 0.11: любой разрез пачкает нож (st-dishwasher.js)
     this.outbox.push({ type, t: this.t, ...data });
   }
   drain() {
@@ -349,6 +353,7 @@ export class KitchenSession {
     this._updateBoard(h);
     this._updateHolds(h);
     this._updateSinkCool(h);
+    this._updateDishwasher(h);
     this._updateStove(h);
     this._updateOven(h);
     this._updateDelivery(h);
@@ -463,6 +468,7 @@ export class KitchenSession {
     if (!this.stationStand(id)) return false;
     if (id === 'puddle') return this.puddles.length > 0;
     if (id === 'table') return !!(this.day.finalServe || this.phase === 'ready');
+    if (id === 'dishwasher') return !this.practice;
     // духовка — дверца под конфорками той же плиты: отдельное место, только когда в ней что-то есть
     // или сегодня есть что запекать; иначе метка, клик и пробел ведут к плите (владелец, 0.10)
     if (id === 'oven') return this.oven.state !== 'empty' || Object.values(this.recipes).some((r) => r.steps.some((st) => stationOfStep(st) === 'oven'));
@@ -747,6 +753,8 @@ export class KitchenSession {
         return this._trayPointer(type, x, z);
       case 'sink':
         return this._sinkPointer(type, x, z);
+      case 'dishwasher':
+        return this._dwPointer(type, x, z);
       case 'puddle':
         return this._puddlePointer(type, x, z);
       case 'radio':
@@ -787,6 +795,7 @@ export class KitchenSession {
     if (this.tray.drag) this._dropDrag(null);
     this._radioRelease();
     this._treePointerUp?.(); // 0.11: нитка мишуры закончилась, ёлку отпустили
+    this._dwRelease();
   }
 
   // ---------- расписание помех и сообщений ----------
@@ -1019,6 +1028,7 @@ export class KitchenSession {
       dishes,
       order: order.score,
       orderNotes: order.notes,
+      overnight: this.overnightItems(), // 0.11: что стоит в посудомойке — к утру чистое
       notes: Object.fromEntries(Object.values(this.dishes).map((d) => [d.id, d.notes])),
       time: Math.round(this.t),
       stats: { ...this.stats },
@@ -1090,7 +1100,7 @@ export class KitchenSession {
 }
 
 // Методы станций в отдельных модулях — общий источник состояния остаётся один.
-Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods, catMethods, streamMethods);
+Object.assign(KitchenSession.prototype, boardMethods, bowlMethods, trayMethods, homeMethods, phoneMethods, extraMethods, radioMethods, treeMethods, catMethods, streamMethods, dishwasherMethods);
 
 export function emptyBurner(i) {
   // dirty — конфорку залило убежавшей пеной: пока не вытерта, на ней не варят; overT — сколько стоит «готово» на огне

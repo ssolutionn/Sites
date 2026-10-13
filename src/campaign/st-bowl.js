@@ -8,6 +8,8 @@ import { pickObservations } from './observations.js';
 
 export const bowlMethods = {
   _bowlBlock(dishId) {
+    const washer = this.equipBlock('bowl'); // миска в посудомойке — пока не достанешь или не кончится цикл, не взять
+    if (washer) return washer;
     if (!this.equipment.bowl.clean) return 'Миска грязная — помой её у раковины';
     if (this.bowl.owner && this.bowl.owner !== dishId) return `Миска занята: ${this.recipes[this.bowl.owner].name.toLowerCase()}`;
     return null;

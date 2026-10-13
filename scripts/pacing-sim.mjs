@@ -457,6 +457,7 @@ function fill(conts) {
 }
 function finish() {
   fixHome();
+  s.equipment.knife.clean = true; // 0.11: нож пачкается от каждого разреза; моется в простоях, время не считаем (темп не меняется)
   for (const d of s.dirtyItems()) wash(d.id);
   readPhone();
   think(PACE.inspect);

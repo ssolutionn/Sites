@@ -61,6 +61,7 @@ export const CAMPAIGN = {
   roundTarget: { thickness: 1, min: 0.64, max: 1.44, minCut: 0.36 }, // кружочки, см
   cutReady: 0.8, // доля продукта в кусках нужного размера, с которой доска говорит «нарезано — можно в миску» (0.9, пункт 8)
 
+  kitchenScale: 15, // 0.11: игровая секунда = 15 секунд на часах кухни (kitchenMin в words.js): 10 кухонных минут = 40 с игры
   durations: {
     take: 0.8, // достать продукт из холодильника в руки
     placePot: 1,
@@ -98,7 +99,12 @@ export const CAMPAIGN = {
   spread: { cols: 16, rows: 12, brush: 0.016, complete: 0.8 },
   marinade: { cols: 18, rows: 12, brush: 0.022, complete: 0.75 },
   layer: { cols: 18, rows: 18, brush: 0.03, complete: 0.7 },
-  wash: { need: 0.75, maxStep: 0.24, reverseBonus: 1.6, bowlRadius: 0.13, width: 0.32, depth: 0.22 }, // путь губки, без поиска пикселей
+  wash: { need: 0.75, maxStep: 0.24, reverseBonus: 1.6, bowlRadius: 0.13, width: 0.32, depth: 0.22, knifeW: 0.3, knifeD: 0.1 }, // путь губки, без поиска пикселей; нож — узкая полоска knifeW × knifeD
+  // Посудомойка (0.11, владелец: «поставил посуду туда — не снимаются баллы за грязноту; на следующий день тоже можешь, но ждать 10 минут»):
+  // цикл идёт cycleMin кухонных минут (cycleMin·60/kitchenScale с игры), пока идёт — загруженная посуда недоступна, дверца заперта.
+  // Дверца — жест «потяни ручку»: ход ручки travel м по плоскости дверцы; открыта при ≥ open хода, закрыта при ≤ closed (как у духовки в спецификации).
+  // hum — через сколько секунд повторяется шум воды; drop — во сколько раз шире видимого проёма ловит отпущенная фишка.
+  dishwasher: { cycleMin: 10, door: { travel: 0.32, open: 0.7, closed: 0.1 }, hum: 1.6, drop: 1.2 },
   wipe: { cols: 14, rows: 10, brush: 0.035, complete: 0.92, autoFinish: 0.92 },
   fill: { scoop: 0.34, normalMin: 0.75, normalMax: 1.25, overflow: 1.35 },
   dose: { scoop: 1, normal: 2, max: 3 },
