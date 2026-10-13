@@ -1,7 +1,7 @@
 // Телефон героини: цельный смартфон с новогодним домашним экраном и пятью приложениями.
 // Только отображение и команды через act(...): состояние живёт в KitchenSession.
 import { clockText, wallAgo } from '../campaign/clock.js';
-import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER, TOYS, TOY_SETS, BAZAAR, TINSEL } from '../campaign/data.js';
+import { PRODUCTS, RECIPES, DAYS, DECOR, BONUS, STORE_EXTRAS, DISH_ORDER, TOYS, TOY_SETS, BAZAAR, TINSEL, cartItem } from '../campaign/data.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { NEUTRAL, LOGO_URL } from '../view/textures.js';
 import { FEED_AUTHORS } from '../campaign/feed-data.js';
@@ -11,10 +11,6 @@ import { pts as ptsWord, kitchenMin } from '../campaign/words.js';
 import { CHATTER_AVATARS, QUICK_CHAT, QUICK_COMMENT } from '../campaign/chatter.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const fmt = (sec) => {
-  const s = Math.max(0, Math.ceil(sec));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-};
 const DICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗' };
 const SHOP = NEUTRAL ? 'Доставка продуктов' : 'Пятёрочка Доставка';
 
@@ -282,7 +278,7 @@ export class PhoneUI {
       const steps = ['accepted', 'assembling', 'onTheWay', 'arrived'];
       const idx = steps.indexOf(o.status === 'collecting' ? 'arrived' : o.status);
       const items = Object.entries(o.items)
-        .map(([id, q]) => `<li>${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)} <b>× ${q}</b></li>`)
+        .map(([id, q]) => `<li>${PICON[id] ?? cartItem(id)?.icon ?? ''} ${esc(cartItem(id)?.name ?? id)} <b>× ${q}</b></li>`)
         .join('');
       return `${head}<div class="app-body"><div class="track"><div class="t-big">${o.status === 'onTheWay' ? '🛵' : o.status === 'arrived' ? '🚪' : '🛍'}</div><b>${st}</b>
         <div class="steps-line">${steps.map((x, i) => `<span class="${i <= idx ? 'on' : ''}"></span>`).join('')}</div></div>
@@ -296,7 +292,7 @@ export class PhoneUI {
     const lack = Object.fromEntries(lackList.map((x) => [x.id, x.lack]));
     const repl = new Set(lackList.filter((x) => x.repl).map((x) => x.id)); // 0.11: нужно для замены украденного
     const need = Object.entries(lack);
-    const total = Object.entries(s.delivery.draft).reduce((a, [id, q]) => a + (PRODUCTS[id].price ?? 0) * q, 0);
+    const total = Object.entries(s.delivery.draft).reduce((a, [id, q]) => a + (cartItem(id)?.price ?? 0) * q, 0);
     const cat = s.catalog().sort((a, b) => repl.has(b.id) - repl.has(a.id)); // «для замены» стоит первой
     const card = (c) => {
       const q = s.delivery.draft[c.id] ?? 0;
@@ -305,6 +301,18 @@ export class PhoneUI {
       return `<div class="pcard ${lack[c.id] ? 'need' : ''} ${repl.has(c.id) ? 'repl' : ''} ${tooMuch ? 'na' : ''}"><div class="pi">${PICON[c.id] ?? '🛒'}</div><div class="pn">${esc(c.name)}</div><div class="pp">${price} ₽</div>
         <div class="pq">${btn('−', 'draftSet', [c.id, q - 1], 'mini', q <= 0)}<span>${q}</span>${btn('+', 'draftSet', [c.id, q + 1], 'mini', q >= 6 || tooMuch)}</div>${lack[c.id] ? `<i class="tag">${repl.has(c.id) ? 'для замены' : 'нужно'}</i>` : ''}</div>`;
     };
+    // 0.11: ёлочные игрушки и мотки мишуры тоже едут в доставке (за рубли из бюджета дня), падают в коробку у ёлки
+    const closed = s.practice || s.challenge;
+    const treeCard = (key) => {
+      const it = cartItem(key);
+      const q = s.delivery.draft[key] ?? 0;
+      const tooMuch = it.price > m.left + s.bonus.points && !q;
+      return `<div class="pcard ${tooMuch ? 'na' : ''}"><div class="pi">${it.icon}</div><div class="pn">${esc(it.name)}</div><div class="pp">${it.price} ₽</div>
+        <div class="pq">${btn('−', 'draftSet', [key, q - 1], 'mini', q <= 0)}<span>${q}</span>${btn('+', 'draftSet', [key, q + 1], 'mini', q >= 6 || tooMuch)}</div></div>`;
+    };
+    const treeShop = closed
+      ? ''
+      : `<h4>Для ёлки</h4><div class="pgrid">${Object.keys(TOYS).map((id) => treeCard(`toy:${id}`)).join('')}${Object.keys(TINSEL).map((c) => treeCard(`tinsel:${c}`)).join('')}</div>`;
     const extras = STORE_EXTRAS.map((x) => `<div class="pcard na"><div class="pi">${x.icon}</div><div class="pn">${esc(x.name)}</div><div class="pp">${x.price} ₽</div><div class="pq"><span class="muted">не по карману</span></div></div>`).join('');
     const pts = s.pointsFor(total);
     const modes = s.deliveryModes()
@@ -320,6 +328,7 @@ export class PhoneUI {
       <div class="wallet-row"><span>💰 <b>${m.left} ₽</b> на сегодня</span><span>⭐ ${s.bonus.points}</span></div>
       ${need.length ? `<div class="need-box"><b>Не хватает для рецептов</b>${need.map(([id, q]) => `<div>${PICON[id] ?? ''} ${esc(PRODUCTS[id].name)} — ${q} шт.${repl.has(id) ? ' <i class="repl-tag">для замены</i>' : ''} ${btn('В корзину', 'draftSet', [id, Math.max(q, s.delivery.draft[id] ?? 0)], 'mini primary')}</div>`).join('')}</div>` : '<div class="ok-box">✓ Всё для сегодняшних рецептов есть</div>'}
       <h4>Продукты</h4><div class="pgrid">${cat.map(card).join('')}</div>
+      ${treeShop}
       <h4>К празднику</h4><div class="pgrid">${extras}</div>
       </div>
       <div class="cart"><div class="cart-sum"><b>Корзина: ${total} ₽</b>${s.bonus.points ? `<label class="pts"><input type="checkbox" data-act="setUsePoints" ${s.delivery.usePoints ? 'checked' : ''} /> очками домохозяйки ${pts ? `−${pts}` : `до ${Math.round(BONUS.payShare * 100)} %`}</label>` : ''}</div><div class="modes">${modes}</div></div>`;

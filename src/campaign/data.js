@@ -32,7 +32,7 @@ export const CAMPAIGN = {
   crumbs: { area: 0.12, thick: 0.15 }, // кусок меньше 12 мм² или тоньше 1,5 мм — крошка, осыпается с доски
   cutRules: { angleTolerance: 28, cover: 0.6, maxWobble: 3.8, minLength: 1.2 }, // кружочки: допуски росчерка (gestures.js), см
   assist: { k: 1.5 }, // 0.11, «Мягкие жесты» в настройках: допуски жестов шире в k раз (1–2), список — campaign/assist.js
-  kitchenScale: KITCHEN_SCALE,
+  kitchenScale: KITCHEN_SCALE, // 0.11: игровая секунда = 15 секунд на часах кухни (kitchenMin в words.js): 10 кухонных минут = 40 с игры
   potatoReadyAfter: kitchenSec(25),
   boilTimes: { potato: kitchenSec(25), egg: kitchenSec(10), beet: kitchenSec(45) }, // сколько варится после закипания: картофель 25 мин, яйца вкрутую 10, свёкла 45 (кухонных)
   // Крутилка огня 0–9: вода греется на heatRate·огонь °C/с и остывает на loss·(T−20); на 2 и ниже не закипает.
@@ -44,6 +44,7 @@ export const CAMPAIGN = {
   stove: {
     heatRate: 0.56, loss: 0.02, boilAt: 99.5, simmer: 4, foamHeat: 7, foamAfter: 8, placeHeat: 6, eventHeat: 6, maxHeat: 9,
     evap: 1 / (kitchenSec(40) * 6), levelWarn: 0.35, levelUrgent: 0.15, idleWarn: 20,
+    dragOff: 1.9, // кастрюлю надо утащить от центра конфорки дальше 1,9 радиуса (в 0.11 вместо кнопки «Достать»)
     burnPrepPenalty: 20, potatoCrumbK: 3, // переваренный картофель: порог «крошки» втрое выше
     overcook: { egg: kitchenSec(4), potato: kitchenSec(10), beet: kitchenSec(15), default: kitchenSec(10) }, overcookPenalty: 10, overcookPenaltyBy: { egg: 15 },
     wipe: { need: 0.55, maxStep: 0.12, reverseBonus: 1.6 },
@@ -61,7 +62,6 @@ export const CAMPAIGN = {
   roundTarget: { thickness: 1, min: 0.64, max: 1.44, minCut: 0.36 }, // кружочки, см
   cutReady: 0.8, // доля продукта в кусках нужного размера, с которой доска говорит «нарезано — можно в миску» (0.9, пункт 8)
 
-  kitchenScale: 15, // 0.11: игровая секунда = 15 секунд на часах кухни (kitchenMin в words.js): 10 кухонных минут = 40 с игры
   durations: {
     take: 0.8, // достать продукт из холодильника в руки
     placePot: 1,
@@ -306,6 +306,19 @@ export const STORE_EXTRAS = [
 
 // Каталог доставки: всё, что можно заказать.
 export const CATALOG = Object.keys(PRODUCTS).filter((id) => !['skewer'].includes(id));
+
+/**
+ * 0.11: позиция корзины доставки. Ключ — id продукта, 'toy:<id>' (ёлочная игрушка) или 'tinsel:<цвет>' (моток мишуры).
+ * Возвращает { kind: 'product' | 'toy' | 'tinsel', id, name, icon, price } (price — рубли) или null, если такой позиции нет.
+ */
+export function cartItem(key) {
+  if (typeof key !== 'string') return null;
+  const [head, tail] = key.split(':');
+  if (tail === undefined) return PRODUCTS[key] ? { kind: 'product', id: key, name: PRODUCTS[key].name, icon: null, price: PRODUCTS[key].price ?? 0 } : null;
+  if (head === 'toy' && TOYS[tail]) return { kind: 'toy', id: tail, name: TOYS[tail].name, icon: TOYS[tail].icon, price: TOYS[tail].rub };
+  if (head === 'tinsel' && TINSEL[tail]) return { kind: 'tinsel', id: tail, name: TINSEL[tail].name, icon: TINSEL[tail].icon, price: TINSEL[tail].rub };
+  return null;
+}
 
 
 // --- Рецепты ---

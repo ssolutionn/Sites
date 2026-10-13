@@ -1,7 +1,7 @@
 // Механики 0.5: вкус (соль, перец, проба), остывание сваренного, кот как система,
 // пожелания гостей, деньги, темп, звёзды и медали, события стрима.
 import { CLAYOUT } from './layout.js';
-import { PRODUCTS, RECIPES } from './data.js';
+import { PRODUCTS, RECIPES, cartItem } from './data.js';
 import { WISHES } from './extras.js';
 import { createRng } from '../game/rng.js';
 
@@ -326,7 +326,7 @@ export const extraMethods = {
   orderCost(items, mode = 'standard') {
     const m = this.cfg.money.modes[mode];
     let goods = 0;
-    for (const [id, q] of Object.entries(items)) goods += (PRODUCTS[id]?.price ?? 0) * q;
+    for (const [id, q] of Object.entries(items)) goods += (cartItem(id)?.price ?? 0) * q; // продукты, игрушки и мишура (0.11)
     return { goods, fee: m?.fee ?? 0, total: goods + (m?.fee ?? 0) };
   },
 

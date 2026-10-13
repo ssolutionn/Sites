@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KitchenSession } from '../src/campaign/session.js';
-import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, stepProducts } from '../src/campaign/data.js';
+import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, BONUS, TOYS, TINSEL, stepProducts } from '../src/campaign/data.js';
+import { applyTreeEvent } from '../src/campaign/persist.js';
 import { TEMPTING } from '../src/campaign/st-extra.js';
 import { arrive, run, cutCubes } from './helpers-campaign.js';
 
@@ -59,4 +60,89 @@ test('кот унёс колбасу, запаса нет → замены не�
   assert.ok(s.takeReplacement());
   run(s, CAMPAIGN.durations.replacement + 0.5);
   assert.equal(s.boardCur().missing.length, 0);
+});
+
+// ---------- B4: игрушки и мишура едут в доставке ----------
+
+function orderAndReceive(s, mode = 'self') {
+  assert.ok(s.confirmOrder(mode), 'заказ принят');
+  run(s, (CAMPAIGN.money.modes[mode].away ?? 0) + 40);
+}
+
+test('корзина принимает игрушки и мишуру, считает рублями по TOYS.rub / TINSEL.rub', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  arrive(s, 'phone');
+  assert.ok(s.draftSet('toy:ballRed', 2));
+  assert.ok(s.draftSet('tinsel:gold', 1));
+  assert.equal(s.draftSet('toy:нет-такой', 1), false, 'чужого ключа нет');
+  assert.equal(s.draftSet('tinsel:green', 1), false);
+  assert.equal(s.orderCost(s.delivery.draft, 'self').goods, TOYS.ballRed.rub * 2 + TINSEL.gold.rub);
+  assert.ok(s.draftSet('toy:ballRed', 0));
+  assert.equal(s.delivery.draft['toy:ballRed'], undefined, 'ноль убирает позицию');
+});
+
+test('заказала шар и мишуру → привезли: игрушка в коробке у ёлки, моток в запасе, очки домохозяйки не тронуты', () => {
+  const s = new KitchenSession({ dayIndex: 2, seed: 1, bonus: 0 });
+  s.triggers = [];
+  const events = [];
+  const pts = s.bonus.points;
+  arrive(s, 'phone');
+  s.draftSet('toy:ballGold', 2);
+  s.draftSet('tinsel:red', 1);
+  s.draftSet('sausage', 1);
+  const rolls0 = s.tinselLeft('red');
+  const sausage0 = s.inventory.available('sausage');
+  const cost = s.orderCost(s.delivery.draft, 'self').total;
+  const spent0 = s.wallet.spent;
+  orderAndReceive(s);
+  for (const e of s.drain?.() ?? []) events.push(e);
+  assert.equal(s.toysInBox().filter((t) => t.id === 'ballGold').length, 2, 'два шара в коробке');
+  assert.equal(s.tinselLeft('red'), rolls0 + CAMPAIGN.tinsel.roll, 'моток прибавился');
+  assert.equal(s.inventory.available('sausage'), sausage0 + 1, 'колбаса — в запас, как раньше');
+  assert.equal(s.wallet.spent, spent0 + cost, 'платили рублями из бюджета');
+  assert.equal(s.bonus.points, pts + Math.round(cost * BONUS.cashback), 'очки не списывались: только кешбэк');
+  assert.equal(s.inventory.available('toy:ballGold'), 0, 'игрушка не попала в запас продуктов');
+});
+
+test('привоз игрушки отправляет в сохранение событие toyBought с source=delivery, очки в сохранении не списываются', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.triggers = [];
+  const save = { bonus: 100, toys: [], gifts: {} };
+  const seen = [];
+  arrive(s, 'phone');
+  s.draftSet('toy:bell', 1);
+  s.draftSet('tinsel:blue', 1);
+  s.confirmOrder('self');
+  const origEmit = s._emit.bind(s);
+  s._emit = (type, data) => {
+    if (type === 'toyBought' || type === 'tinselBought') seen.push({ type, ...data });
+    return origEmit(type, data);
+  };
+  run(s, CAMPAIGN.money.modes.self.away + 40);
+  assert.equal(seen.length, 2);
+  assert.ok(seen.every((e) => e.source === 'delivery' && !e.price));
+  for (const e of seen) assert.ok(applyTreeEvent(save, e, { toys: s.toysForSave(), tinsel: s.tinselForSave() }));
+  assert.equal(save.bonus, 100, 'очки в сохранении не списаны');
+  assert.equal(save.toys.filter((t) => t.id === 'bell').length, 1, 'игрушка записана в сохранение');
+  assert.ok(save.tinselRolls.blue >= CAMPAIGN.tinsel.roll - 0.001);
+});
+
+test('в практике и испытании украшения не заказываются, продукты — как обычно', () => {
+  for (const opts of [{ practice: true }, { challenge: true }]) {
+    const s = new KitchenSession({ dayIndex: 0, seed: 1, ...opts });
+    arrive(s, 'phone');
+    assert.equal(s.draftSet('toy:ballRed', 1), false, JSON.stringify(opts));
+    assert.equal(s.draftSet('tinsel:gold', 1), false);
+    assert.ok(s.draftSet('sausage', 1));
+  }
+});
+
+test('заказ с игрушками нельзя оплатить сверх бюджета: денег не хватает → заказ не уходит', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  arrive(s, 'phone');
+  s.wallet.spent = s.wallet.budget - 10;
+  s.draftSet('toy:santa', 1);
+  assert.equal(s.confirmOrder('self'), false);
+  assert.equal(s.delivery.order, null);
+  assert.equal(s.toysInBox().length, 0);
 });

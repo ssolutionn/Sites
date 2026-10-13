@@ -1,8 +1,8 @@
 // Интерфейс кампании (DOM). Читает состояние и отправляет команды через act().
-import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS, TINSEL } from '../campaign/data.js';
+import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS, TINSEL, cartItem } from '../campaign/data.js';
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
-import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
+import { CLAYOUT, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
@@ -60,13 +60,6 @@ function burnerStatus(s, b) {
   if (b.water === 'boil') return `кипит · ещё ≈ ${kmin(b.readyAt - s.t)}${b.heat >= CAMPAIGN.stove.foamHeat ? ' · убавь, убежит!' : ''}`;
   const left = b.readyAt - s.t;
   return left > 5000 ? `вода ${Math.round(b.temp)}° · так не закипит` : `вода ${Math.round(b.temp)}° · греется`;
-}
-
-function plural(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
 }
 
 export const TIPS = {
@@ -864,9 +857,12 @@ export class CampaignUI {
       case 'catSleep':
         this.toast('Сытый кот спит и к еде не лезет 😴', 'good', 3);
         break;
-      case 'potPlaced':
+      case 'potPlaced': {
         this.tip('stove');
+        const st = s.dishes[e.dishId]?.recipe.steps.find((x) => x.type === 'boil' && x.product === e.product);
+        if (st) this._note('Как на самом деле', this._lessonStep(e.dishId, st.id)?.how);
         break;
+      }
       case 'taken':
         this.tip('fridge');
         break;
@@ -896,9 +892,11 @@ export class CampaignUI {
         break;
       case 'seasoned':
         if (e.q >= 0.999) this.popup('😋 Идеальный вкус!', 'good');
+        this._lessonWhy(s, e);
         break;
       case 'stepDone':
         if (e.q >= 0.95 && ['cut', 'grate'].includes(s.stepDef(e.dishId, e.stepId)?.type)) this.popup('🔪 Чётко!', 'good');
+        this._lessonWhy(s, e);
         break;
       case 'paid':
         this.toast(`💳 −${e.total} ₽`, '', 2);
@@ -958,7 +956,7 @@ export class CampaignUI {
         this.toast('Ёлка снова стоит 🎄', 'good');
         break;
       case 'tinselBought':
-        this.toast(`${TINSEL[e.color].icon} ${esc(TINSEL[e.color].name)}: моток ${String(e.roll).replace('.', ',')} м у ёлки`, 'good', 3);
+        if (e.source !== 'delivery') this.toast(`${TINSEL[e.color].icon} ${esc(TINSEL[e.color].name)}: моток ${String(e.roll).replace('.', ',')} м у ёлки`, 'good', 3);
         this.tipWhenFree('tinsel');
         break;
       case 'setComplete':
@@ -988,21 +986,9 @@ export class CampaignUI {
           this._note('Как на самом деле', this._lessonStep(dishId, stepId)?.how);
         }
         break;
-      case 'potPlaced': {
-        const d = s.dishes[e.dishId];
-        const st = d?.recipe.steps.find((x) => x.type === 'boil' && x.product === e.product);
-        if (st) this._note('Как на самом деле', this._lessonStep(e.dishId, st.id)?.how);
-        break;
-      }
       case 'added':
-      case 'seasoned':
-      case 'stepDone': {
-        if (e.type === 'stepDone' && !['add', 'season', 'mix'].includes(s.stepDef(e.dishId, e.stepId)?.type)) break;
-        const stepId = e.stepId ?? s.dishes[e.dishId]?.recipe.steps.find((x) => x.product === e.product)?.id;
-        const l = stepId && this._lessonStep(e.dishId, stepId);
-        if (l) this._note('Зачем так', l.why);
+        this._lessonWhy(s, e);
         break;
-      }
       case 'practiceResult':
         this.toast(`<b>Результат: ${Math.round(e.q * 100)} %</b>`, 'good', 4);
         break;
@@ -1010,7 +996,8 @@ export class CampaignUI {
         this.confirmCollect();
         break;
       case 'delivered':
-        this.toast(`🛍 Привезли: ${e.items.map((it) => `${(PRODUCTS[it.id].name).toLowerCase()} ×${it.qty}`).join(', ')}`, 'good', 4);
+        this.toast(`🛍 Привезли: ${e.items.map((it) => `${(cartItem(it.id)?.name ?? it.id).toLowerCase()} ×${it.qty}`).join(', ')}`, 'good', 4);
+        if (e.items.some((it) => cartItem(it.id)?.kind === 'toy')) this.tipWhenFree('treeDecor'); // игрушки ждут в коробке у ёлки
         break;
       case 'ovenEarly':
         this.toast('Курица ещё сырая — верни её в духовку', 'bad', 3);
@@ -1020,6 +1007,14 @@ export class CampaignUI {
         break;
       default:
     }
+  }
+
+  /** «Зачем так» из урока: после добавления, посолки и шагов-смесей (резка и варка объясняются при выборе шага). */
+  _lessonWhy(s, e) {
+    if (e.type === 'stepDone' && !['add', 'season', 'mix'].includes(s.stepDef(e.dishId, e.stepId)?.type)) return;
+    const stepId = e.stepId ?? s.dishes[e.dishId]?.recipe.steps.find((x) => x.product === e.product)?.id;
+    const l = stepId && this._lessonStep(e.dishId, stepId);
+    if (l) this._note('Зачем так', l.why);
   }
 
   confirmCollect() {
@@ -1338,6 +1333,41 @@ export class CampaignUI {
       if (p) this.act('dwDrop', d.item, p.x, p.z);
       else this.act('dwDrop', d.item, 99, 99);
     });
+    // 0.11: плита — зажать фишку продукта из рук и перетащить на конфорку (кольцо под курсором светится)
+    p.addEventListener('pointerdown', (e) => {
+      const chip = e.target.closest('[data-drag-stove]');
+      if (!chip || chip.disabled) return;
+      e.preventDefault();
+      this.sound.unlock();
+      this.stoveDrag = { x0: e.clientX, y0: e.clientY, moved: false, icon: PICON[chip.dataset.dragStove] ?? '🍽' };
+    });
+    window.addEventListener('pointermove', (e) => {
+      const d = this.stoveDrag;
+      if (!d) return;
+      if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 8) {
+        d.moved = true;
+        this.el.ghost.innerHTML = `<span class="toy-ghost">${d.icon}</span>`;
+        this.el.ghost.classList.remove('hidden');
+      }
+      if (!d.moved) return;
+      this._moveGhost(e);
+      const loc = this._planeLocal(e, 'stove');
+      this.view.stoveHot = loc ? this.app.session?.burnerIndexAt(loc.x, loc.z) ?? null : null;
+    });
+    window.addEventListener('pointerup', (e) => {
+      const d = this.stoveDrag;
+      if (!d) return;
+      this.stoveDrag = null;
+      this.view.stoveHot = null;
+      this.el.ghost.classList.add('hidden');
+      if (!d.moved) {
+        this.app.session?.setHint('Зажми продукт и перетащи на конфорку', 2);
+        return;
+      }
+      const loc = this._planeLocal(e, 'stove');
+      if (loc) this.act('stoveDrop', loc.x, loc.z);
+      else this.act('stoveDrop', 99, 99);
+    });
     // перетаскивание блюд на стол
     p.addEventListener('pointerdown', (e) => {
       const card = e.target.closest('[data-dish]');
@@ -1403,9 +1433,14 @@ export class CampaignUI {
 
   /** Точка отпущенной фишки на плоскости дверцы посудомойки (локальные метры) или null — курсор вне сцены или над панелью. */
   _dwLocal(e) {
+    return this._planeLocal(e, 'dishwasher');
+  }
+
+  /** Локальные метры рабочей плоскости станции под курсором; null — курсор вне сцены или над панелью. */
+  _planeLocal(e, station) {
     const c = this.view.sv.canvas, r = c.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom || e.target?.closest?.('#panel')) return null;
-    return this.view.pickLocal({ x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 }, 'dishwasher');
+    return this.view.pickLocal({ x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 }, station);
   }
 
   releaseHolds() {
@@ -1692,10 +1727,9 @@ export class CampaignUI {
             if (!usable.has(b.i)) return `<div class="burner off"><b>${name}</b><span class="bstat">не работает (испытание)</span></div>`;
             let act = '';
             if (b.overflow) act = '<span class="small warn">🔥 убегает — поверни крутилку ниже 6!</span>';
-            else if (b.state === 'ready') act = this._btn(`${PICON[b.product]} Достать`, 'takePot', [b.i], 'primary', busy);
+            else if (b.state === 'ready') act = `<span class="small good">${PICON[b.product]} готово — оттащи кастрюлю</span>`;
             else if (b.state === 'boiling') act = `<span class="small">${PICON[b.product]} ${esc(PRODUCTS[b.product].name)}</span>`;
             else if (b.dirty) act = '<span class="small warn">🧽 залита — потри тряпкой</span>';
-            else if (canPlace) act = this._btn(`${PICON[c.product]} Положить сюда`, 'placePot', [b.i, null, null], 'primary', busy, 'В кастрюлю с водой на этой конфорке');
             // крутилка огня: только крутить — зажми и веди по кругу; 0 — выключено, 9 — максимум
             const heat = b.heat ?? 0;
             const knob = `<div class="knob ${heat ? 'on' : ''}" data-knob="${b.i}" style="--a:${-135 + heat * 30}deg" title="Крутилка огня: зажми и поверни по кругу"><i></i><span>${heat}</span></div>`;
@@ -1703,7 +1737,7 @@ export class CampaignUI {
           })
           .join('');
         const need = !canPlace && tasks.length ? `<p class="note live">Чтобы варить, сначала достань продукт: 🧊 холодильник (яйца, картофель).</p>` : '';
-        return `<h2>♨️ Плита<span class="sub">${c ? `в руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name.toLowerCase())}` : 'четыре конфорки'}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="burners4">${burners}</div></div><div class="row">${bar}</div>${need}${tasks.length || c || s.burners.some((b) => b.state !== 'empty' || b.dirty) ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
+        return `<h2>♨️ Плита<span class="sub">${c ? `в руках: ${PICON[c.product] ?? ''} ${esc(PRODUCTS[c.product].name.toLowerCase())}` : 'четыре конфорки'}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}${canPlace ? `<div class="dock-items"><button class="prod-chip active" data-drag-stove="${c.product}" ${busy ? 'disabled' : ''} title="Зажми и перетащи на конфорку — кастрюля с водой стоит на плите"><span class="pi">${PICON[c.product] ?? '🍽'}</span><span class="pn">${esc(PRODUCTS[c.product].name)} ⤵</span></button></div>` : ''}<div class="burners4">${burners}</div></div><div class="row">${bar}</div>${need}${tasks.length || c || s.burners.some((b) => b.state !== 'empty' || b.dirty) ? '' : '<p class="note live">Сегодня плита не нужна.</p>'}`;
       }
       case 'catbowl': {
         const h = Math.round(s.catNeeds.hunger);

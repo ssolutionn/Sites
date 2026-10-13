@@ -1,6 +1,6 @@
 // Доска: нарезка кубиками (по реальному контуру), кружочки, тёрка.
 import { PRODUCTS } from './data.js';
-import { initialBatch, cutLine, totalVolume, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
+import { cutLine, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
 import { Stroke, classifyCut, CUT_HINTS, CUT_RULES } from './gestures.js';
 import { CoverageMask } from './coverage.js';
 import { CutBody, rasterQuality } from '../game/raster-cut.js';

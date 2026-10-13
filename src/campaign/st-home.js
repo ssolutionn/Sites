@@ -2,7 +2,7 @@
 import { CoverageMask } from './coverage.js';
 import { CLAYOUT, SINK, PUDDLE, TABLE_SLOTS, STOVE, CLOSEUP_STATIONS } from './layout.js';
 import { Scrubber, Waver } from './mechanics.js';
-import { PRODUCTS, DISH_ORDER } from './data.js';
+import { DISH_ORDER } from './data.js';
 import { TEMPTING, BOILED } from './st-extra.js';
 import { kitchenMin, kitchenIn } from './words.js';
 
@@ -354,13 +354,39 @@ export const homeMethods = {
     return best ? this.burners[best.i] : null;
   },
 
+  /** Номер рабочей конфорки под точкой (x, z) плоскости плиты или null — для подсветки кольца при переносе. */
+  burnerIndexAt(x, z) {
+    const b = this._burnerAt(x, z);
+    return b && this.usableBurners().some((u) => u.i === b.i) ? b.i : null;
+  },
+
+  /**
+   * 0.11 (G1.1): продукт из рук — на конфорку под точкой (x, z) плоскости плиты; вызывается, когда фишку продукта из дока
+   * отпустили над плитой. Мимо конфорки — подсказка, ничего не тратится.
+   */
+  stoveDrop(x, z) {
+    if (!this.carry?.boilStep) return this.placePot();
+    const b = this._burnerAt(x, z);
+    if (!b) {
+      this.setHint('Опусти продукт на конфорку — кольцо подсветится зелёным', 2.5);
+      return false;
+    }
+    return this.placePot(b.i, null, null);
+  },
+
   _stovePointer(type, x, z) {
     if (type === 'up') {
       this.stoveWipe?.scrub.release();
-      return 'up';
+      return this._potDragEnd(x, z);
     }
     if (type === 'down') {
       const b = this._burnerAt(x, z);
+      // 0.11 (G1.2): кастрюлю берут за ручку — зажать и утащить с конфорки на столешницу
+      if (b && (b.state === 'ready' || b.state === 'boiling') && !this.action) {
+        this.potDrag = { i: b.i, x, z, x0: x, z0: z };
+        this.stoveWipe = null;
+        return 'pot';
+      }
       if (!b?.dirty) {
         this.stoveWipe = null;
         return 'ignored';
@@ -370,6 +396,11 @@ export const homeMethods = {
         return 'blocked';
       }
       if (this.stoveWipe?.i !== b.i) this.stoveWipe = { i: b.i, scrub: new Scrubber(this.cfg.stove.wipe) };
+    }
+    if (this.potDrag) {
+      this.potDrag.x = x;
+      this.potDrag.z = z;
+      return 'potDrag';
     }
     const w = this.stoveWipe;
     if (!w || !this.pointerDown) return 'hover';
@@ -384,6 +415,18 @@ export const homeMethods = {
       this.setHint('Конфорка чистая', 1.5);
     }
     return inside ? 'wipe' : 'off';
+  },
+
+  // Отпустила кастрюлю: унесла дальше края конфорки — сняла (если сварилась); не дотащила — вернулась на место.
+  _potDragEnd(x, z) {
+    const d = this.potDrag;
+    if (!d) return 'up';
+    this.potDrag = null;
+    const p = STOVE.burners[d.i];
+    const away = Math.hypot(x - p.x, z - p.z) > STOVE.r * this.cfg.stove.dragOff;
+    if (!away) return 'up';
+    this.takePot(d.i);
+    return 'potTake';
   },
 
   takePot(i = null) {
