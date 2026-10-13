@@ -1017,6 +1017,28 @@ export class CampaignView {
   }
 
   /** Мышь над котом (ndc): для жеста «помахать» — с запасом вокруг кота, он маленький на экране. */
+  /**
+   * 0.11 (G2.1): что чинят удержанием на самом предмете: погасшая гирлянда у окна или звезда на ёлке — по радиусу вокруг лампочек / звезды.
+   * 'garland' | 'star' | null; радиус — доля высоты экрана, с запасом на неточную руку.
+   */
+  holdHit(ndc) {
+    const s = this.session;
+    if (!ndc || !s) return null;
+    const r = s.cfg.keys?.holdHitRadius ?? CAMPAIGN.keys.holdHitRadius;
+    const cam = this.sv.camera;
+    if (s.panel === 'garland' && s.garland.broken) {
+      for (const b of this.k.garland.bulbs) {
+        const c = b.getWorldPosition(new THREE.Vector3()).project(cam);
+        if (screenGestureHit(ndc, c, cam.aspect, r)) return 'garland';
+      }
+    }
+    if (s.panel === 'tree' && s.star.broken && !s.gift) {
+      const c = this.k.tree.star.getWorldPosition(new THREE.Vector3()).project(cam);
+      if (screenGestureHit(ndc, c, cam.aspect, r * 1.6)) return 'star';
+    }
+    return null;
+  }
+
   /** Конфорка, на которой стоит кастрюля под курсором (за ручку или бок), или null: 3D-тело выше плоскости плиты, плоскостью его не поймать. */
   potAt(ndc) {
     if (!ndc || !this.pots) return null;

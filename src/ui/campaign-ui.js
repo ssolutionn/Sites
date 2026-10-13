@@ -1800,7 +1800,7 @@ export class CampaignUI {
         return `<h2>📻 Радио</h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Назад (Esc)')}<div class="dock-items radio-tuner"><div class="radio-readout" data-live></div></div><div class="dock-main">${main}</div></div>`;
       }
       case 'garland':
-        return `<h2>💡 Гирлянда</h2><div class="row">${s.garland.broken ? `<button class="primary big hold-btn" title="Удерживай кнопку мыши или пробел" data-hold="garland" data-act="hold">🔌 Поправить контакт (удерживай)</button>` : ''}${back}</div>${live}<p class="note">${s.garland.broken ? 'Удерживай 2 секунды.' : 'Гирлянда горит.'}</p>`;
+        return `<h2>💡 Гирлянда</h2><div class="row">${back}</div>${live}<p class="note">${s.garland.broken ? 'Зажми погасшую лампочку (или пробел) и держи пару секунд — контакт сам найдётся.' : 'Гирлянда горит.'}</p>`;
       case 'tree': {
         // 0.10: подарок в руках — три движения по шагам; «←» (Esc) — отложить, прогресс сохранится
         if (s.gift) {
@@ -1813,7 +1813,7 @@ export class CampaignUI {
           return `<h2>🎁 Подарок ${s.gift.index + 1}<span class="sub">${what}</span></h2><div class="dock">${this._btn('←', 'closePanel', [], 'dock-back', false, 'Отложить подарок (Esc)')}<div class="dock-items gift-steps">${steps}</div></div>${live}`;
         }
         // ёлка (0.9): звезда, подарки дня, игрушки из коробки — выбрать и кликнуть по ветке
-        const star = s.star.broken ? `<button class="primary big hold-btn" title="Удерживай кнопку мыши или пробел" data-hold="star" data-act="hold">⭐ Поправить звезду (удерживай)</button>` : '';
+        const star = s.star.broken ? `<span class="small warn">⭐ Звезда погасла — зажми её на ёлке (или пробел) на пару секунд</span>` : '';
         // 0.10: подарок открывают руками — кнопка только берёт его в руки; начатый показывает, сколько осталось
         const gifts = s.giftsLeft().map((i) => {
           const p = s.giftProgress(i);

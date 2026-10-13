@@ -738,6 +738,13 @@ async function boot() {
       act('chaseCat');
       return;
     }
+    // 0.11 (G2.1): погасшую лампочку гирлянды или звезду чинят, зажав саму лампочку / звезду в сцене (пробел остался)
+    const holdKind = view.holdHit(ndc);
+    if (holdKind && act('setHold', holdKind, true)) {
+      sceneHold = holdKind;
+      canvas.setPointerCapture?.(e.pointerId);
+      return;
+    }
     if (session.panel === 'table' || session.panel === 'phone') return;
     // ёлка крупным планом: клик по ветке — повесить игрушку из руки; зажать висящую — снять и тянуть на другую ветку
     if (session.panel === 'tree' && sv.camT >= 0.95) {
@@ -812,8 +819,15 @@ async function boot() {
     const r = session.pointer('up', lastLocal?.x ?? 0, lastLocal?.z ?? 0);
     if (session.panel === 'board' && KNIFE_DENY.has(r)) sound.play('deny');
   };
+  let sceneHold = null; // что сейчас удерживается мышью прямо в сцене (гирлянда / звезда)
+  const releaseHold = () => {
+    if (!sceneHold) return;
+    act('setHold', sceneHold, false);
+    sceneHold = null;
+  };
+  window.addEventListener('pointerup', releaseHold);
   window.addEventListener('pointerup', release);
-  window.addEventListener('pointercancel', () => session?.pointerUp());
+  window.addEventListener('pointercancel', () => (releaseHold(), session?.pointerUp()));
   // радио: колёсико мыши — точная подстройка частоты
   let wheelAcc = 0;
   canvas.addEventListener(

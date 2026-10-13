@@ -84,6 +84,29 @@ if (want('stove')) {
   await wait(500);
   check('жестом: кастрюля снята с конфорки', await S(() => window.__sueta.session.burners[2].state === 'empty'));
 }
+if (want('hold')) {
+  await openDay(1);
+  const screenOfWorld = (expr) => S((expr) => { const v = window.__sueta.view; const o = new Function('v', `return (${expr});`)(v); const p = o.getWorldPosition(new o.position.constructor()).project(v.sv.camera); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height }; }, expr);
+  for (const [kind, panel, expr, label] of [['garland', 'garland', 'v.k.garland.bulbs[2]', 'лампочку гирлянды'], ['star', 'tree', 'v.k.tree.star', 'звезду']]) {
+    await S((kind) => { const s = window.__sueta.session; s.lightsOff(kind, { by: 'test' }); }, kind);
+    await S((panel) => window.__sueta.session.goTo(panel), panel);
+    await S(() => window.__sueta.session.fastForward(30, () => window.__sueta.session.heroine.station != null && !window.__sueta.session.heroine.target));
+    await waitFor((p) => window.__sueta.session.panel === p && window.__sueta.sv.camMode === (p === 'garland' ? 'c-overview' : 'c-' + p) && window.__sueta.sv.camT >= 1, 120000, panel); await wait(900);
+    check(`${kind}: погасла, кнопки «удерживай» в доке нет`, await S((k) => window.__sueta.session[k].broken && !document.querySelector('[data-hold]'), kind));
+    const at = await screenOfWorld(expr);
+    console.log('  цель', kind, Math.round(at.x), Math.round(at.y), 'поверх:', await S((a) => { const e = document.elementFromPoint(a.x, a.y); return e?.id || e?.className || e?.tagName; }, at));
+    await page.mouse.move(at.x, at.y); await page.mouse.down(); await wait(400);
+    check(`зажала ${label} в сцене — идёт починка`, await S((k) => window.__sueta.session.holds[k], kind));
+    await shot(`hold_${kind}`);
+    await S((k) => window.__sueta.session.fastForward(6, () => !window.__sueta.session[k].broken), kind);
+    await wait(300);
+    check(`${kind}: держала — огоньки горят`, await S((k) => !window.__sueta.session[k].broken, kind));
+    await page.mouse.up(); await wait(200);
+    check(`${kind}: отпустила — удержание снято`, await S((k) => !window.__sueta.session.holds[k], kind));
+    await S(() => window.__sueta.session.closePanel());
+    await wait(500);
+  }
+}
 console.log('errors', errs.length, errs.slice(0, 5));
 console.log(`${ok} OK, ${fail} FAIL`);
 await browser.close();
