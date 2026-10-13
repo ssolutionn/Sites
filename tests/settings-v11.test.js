@@ -163,7 +163,7 @@ test('«Новая кампания» не стирает настройки, н
   assert.equal(store.data.settings.inProgress, undefined);
   assert.equal(store.data.settings.radioFreq, undefined);
   assert.deepEqual(JSON.parse(mem.get(SAVE_KEY)).settings.volume, { master: 0.3, sfx: 1, music: 0.5 }, 'и на диске тоже');
-  assert.deepEqual(Object.keys(pickPreferences(store.data.settings)).sort(), ['assist', 'fullscreen', 'keys', 'quality', 'reduceMotion', 'textScale', 'volume']);
+  assert.deepEqual(Object.keys(pickPreferences(store.data.settings)).sort(), ['assist', 'fullscreen', 'ghostHints', 'ghostSeen', 'keys', 'quality', 'reduceMotion', 'textScale', 'volume']);
 });
 
 // ======================= клавиши =======================

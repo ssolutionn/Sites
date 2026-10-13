@@ -133,6 +133,10 @@ export const CAMPAIGN = {
   // сообщения «просто так» (chatter.js): первое через start с, дальше раз в every с; в первый день реже
   delivery: { bagShow: 6 }, // 0.11: сколько секунд пакет стоит на столешнице после доставки (украшение, разбирать не нужно)
   ui: { dishQuiet: 2.5 }, // 0.11: после готового блюда столько секунд видна одна карточка, остальные всплывашки и заметки молчат
+  // 0.11: «рука-призрак» показывает жест (src/ghost/). refuseCount одинаковых отказов за refuseWindow с → призрак на refuseShow с,
+  // не чаще раза в refuseGap с. Первая встреча и «?» — loops проходов с паузой loopPause с. wait — сколько секунд ждём, пока камера
+  // доедет до станции. press: нажатие дольше minTime с и длиннее minTravel (доли высоты экрана) без прогресса считается отказом.
+  ghost: { refuseCount: 3, refuseWindow: 20, refuseGap: 20, refuseShow: 1.5, loops: 2, loopPause: 0.5, wait: 6, press: { minTime: 0.9, minTravel: 0.08 } },
   notify: { start: 20, every: [30, 45], startFirstDay: 45, everyFirstDay: [50, 70] },
 
   // Деньги и доставка

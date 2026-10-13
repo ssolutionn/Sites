@@ -2,6 +2,7 @@
 // Лежат в save.data.settings рядом с качеством графики и любимой волной радио; старые сохранения читаются
 // (normalizeSettings достраивает недостающие поля), чужие поля (radioFreq, inProgress, stream) не трогаются.
 import { normalizeKeys } from './keymap.js';
+import { GHOST_IDS } from './ghost/ghost-ids.js';
 
 /** Размер текста интерфейса: 100 %, 115 %, 130 %. */
 export const TEXT_SCALES = [1, 1.15, 1.3];
@@ -21,6 +22,8 @@ export function defaultSettings() {
     reduceMotion: null, // null — как в системе (prefers-reduced-motion), true/false — выбор игрока
     fullscreen: false, // последний выбор игрока: настольная версия вернёт его при запуске
     keys: {}, // только изменённые клавиши { действие: код } (keymap.js)
+    ghostHints: true, // «Подсказки рукой»: рука-призрак показывает жест при первой встрече и после неудач (src/ghost/)
+    ghostSeen: {}, // какие жесты рука уже показывала: { 'cut-v': true, … }; один раз за игру, «Новая кампания» это не стирает
   };
 }
 
@@ -52,6 +55,14 @@ export function snapTextScale(v) {
 /** 1.15 → 115 (для подписей и атрибута data-ts). */
 export const scalePercent = (s) => Math.round(snapTextScale(s) * 100);
 
+/** Что рука уже показывала: только известные жесты со значением true, остальное из сохранения отбрасывается. */
+export function normalizeGhostSeen(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const id of GHOST_IDS) if (raw[id] === true) out[id] = true;
+  return out;
+}
+
 /**
  * Настройки из сохранения → полный набор без неверных значений. Неизвестные поля остаются как есть.
  * @param {unknown} raw — что лежало в save.settings (или ничего)
@@ -68,11 +79,13 @@ export function normalizeSettings(raw) {
     reduceMotion: typeof src.reduceMotion === 'boolean' ? src.reduceMotion : null,
     fullscreen: src.fullscreen === true,
     keys: normalizeKeys(src.keys),
+    ghostHints: typeof src.ghostHints === 'boolean' ? src.ghostHints : true, // по умолчанию рука включена
+    ghostSeen: normalizeGhostSeen(src.ghostSeen),
   };
 }
 
 /** Поля, которые переживают «Новую кампанию»: настройки — не прогресс. */
-export const PREFERENCE_KEYS = ['quality', 'volume', 'assist', 'textScale', 'reduceMotion', 'fullscreen', 'keys'];
+export const PREFERENCE_KEYS = ['quality', 'volume', 'assist', 'textScale', 'reduceMotion', 'fullscreen', 'keys', 'ghostHints', 'ghostSeen'];
 
 /** Предпочтения игрока из настроек (без radioFreq, inProgress и прочего, что относится к кампании). */
 export function pickPreferences(settings) {

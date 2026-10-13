@@ -1,6 +1,7 @@
 // Изменение настроек (0.11): проверка значения → запись в save.data.settings → сохранение → применение.
 // Без DOM: всё, что трогает страницу, сцену или окно, приходит снаружи колбэками (hooks) — так логика проверяется в node:test.
 import { VOLUME_BUSES, QUALITIES, normalizeVolume, snapTextScale } from './settings.js';
+import { isGhostId } from './ghost/ghost-ids.js';
 
 export class SettingsController {
   /**
@@ -81,6 +82,23 @@ export class SettingsController {
     this.persist();
     this.hooks.motion?.(this.s.reduceMotion);
     return this.s.reduceMotion;
+  }
+
+  /** «Подсказки рукой»: рука-призрак показывает жесты (src/ghost/). */
+  setGhostHints(on) {
+    this.s.ghostHints = !!on;
+    this.persist();
+    return this.s.ghostHints;
+  }
+
+  /** Рука показала жест id: запомнить, чтобы не повторять при каждой встрече. true — запись новая. */
+  markGhostSeen(id) {
+    if (!isGhostId(id)) return false;
+    const seen = (this.s.ghostSeen ??= {});
+    if (seen[id]) return false;
+    seen[id] = true;
+    this.persist();
+    return true;
   }
 
   /** Запомнить выбор полноэкранного режима (сам режим включает hooks.fullscreen). */
