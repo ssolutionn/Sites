@@ -1,0 +1,19 @@
+/* «Рецепт домой» (0.11): окошко с крупным QR и плашка о сохранении карточки. Токены — из theme.css. */
+
+.rc-pop { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; box-sizing: border-box; background: radial-gradient(ellipse at 30% 20%, rgba(31, 92, 70, 0.5), rgba(18, 12, 8, 0.74)); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: rcIn var(--t-med) ease-out; }
+.rc-card { width: min(500px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; padding: 18px 22px 20px; border-radius: var(--r-l); background: linear-gradient(180deg, var(--paper), #fdf2de); box-shadow: var(--shadow-2), inset 0 0 0 1px rgba(255, 255, 255, 0.7); color: var(--ink); text-align: center; }
+.rc-card h3 { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 900; color: var(--pine); }
+.rc-sub { margin: 2px 0 12px; font-size: 14px; font-weight: 700; color: var(--ink-2); }
+.rc-qr { display: block; margin: 0 auto; width: min(400px, calc(100vh - 300px), 100%); min-width: 240px; aspect-ratio: 1; height: auto; image-rendering: pixelated; background: #fff; border-radius: 10px; box-shadow: 0 0 0 1px var(--paper-line), var(--shadow-1); }
+.rc-note { margin: 12px 0 0; font-size: 14px; line-height: 1.35; font-weight: 600; color: var(--ink-2); }
+.rc-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 14px; }
+
+.rc-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 90; max-width: min(520px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 18px; border-radius: var(--r-pill); background: var(--glass-strong); color: var(--on-glass); border: 1px solid var(--glass-line); font-size: 14px; font-weight: 800; text-align: center; box-shadow: var(--shadow-2); animation: rcToastIn var(--t-med) ease-out; pointer-events: none; }
+.rc-toast.good { background: rgba(31, 92, 70, 0.94); color: #fff; }
+.rc-toast.bad { background: rgba(163, 42, 47, 0.94); color: #fff; }
+
+@keyframes rcIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rcToastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* низкий экран: код чуть меньше, чтобы окошко не прокручивалось */
+@media (max-height: 640px) { .rc-qr { width: min(320px, calc(100vh - 260px)); min-width: 240px; } }

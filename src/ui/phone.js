@@ -9,6 +9,8 @@ import { feedArt, dishArt, heartIcon } from './feed-art.js';
 import { PICON } from './icons.js';
 import { pts as ptsWord, kitchenMin } from '../campaign/words.js';
 import { CHATTER_AVATARS, QUICK_CHAT, QUICK_COMMENT } from '../campaign/chatter.js';
+import { servingsText } from '../campaign/recipe-home.js';
+import { saveRecipeCard, showRecipeQr } from './recipe-card.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const DICON = { olivier: '🥗', crab: '🦀', sandwiches: '🥪', eggs: '🥚', tartlets: '🧁', tomatoes: '🍅', shuba: '🐟', canape: '🍢', fruit: '🍊', chicken: '🍗' };
@@ -73,6 +75,11 @@ export class PhoneUI {
       const card = e.target.closest('[data-card]');
       if (card) {
         saveRecipeCard(card.dataset.card);
+        return;
+      }
+      const qr = e.target.closest('[data-qr]');
+      if (qr) {
+        showRecipeQr(qr.dataset.qr);
         return;
       }
       const b = e.target.closest('button[data-act]');
@@ -492,13 +499,14 @@ export class PhoneUI {
         return `<li class="${done ? 'done' : ''}"><b>${i + 1}. ${esc(st.label)}</b>${l ? `<p>${esc(l.how)}</p><p class="why">Зачем: ${esc(l.why)}</p><p class="err">Ошибка: ${esc(l.mistake)}</p>` : ''}</li>`;
       })
       .join('');
-    return `${this._head(esc(L.title), `${L.servings} порции`, 'book')}<div class="app-body lesson">
+    return `${this._head(esc(L.title), servingsText(L.servings), 'book')}<div class="app-body lesson">
       <p class="intro">${esc(L.intro)}</p>
       <h4>Продукты</h4><ul class="ingr">${L.ingredients.map((g) => `<li><span>${g.product ? PICON[g.product] ?? '' : '🧂'} ${esc(g.product ? PRODUCTS[g.product]?.name ?? g.name : g.name)}</span><b>${esc(g.amount)}</b></li>`).join('')}</ul>
       <h4>Шаг за шагом</h4><ol class="lsteps">${steps}</ol>
       <h4>Как понять, что получилось</h4><p>${esc(L.check)}</p>
       <h4>А вы знали?</h4>${L.facts.map((f) => `<p class="fact">✨ ${esc(f)}</p>`).join('')}
-      <button class="primary wide" data-card="${id}">💾 Сохранить карточку рецепта</button></div>`;
+      <button class="primary wide" data-card="${id}">💾 Сохранить карточку рецепта</button>
+      <button class="ghost wide" data-qr="${id}">Показать QR</button></div>`;
   }
 
   // ---------- Таймеры ----------
@@ -522,67 +530,5 @@ export class PhoneUI {
   }
 }
 
-// Карточка рецепта картинкой — для флешмоба: сохранить и выложить.
-export function saveRecipeCard(id) {
-  const L = LESSONS[id];
-  if (!L) return;
-  const W = 1080, H = 1350;
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const g = c.getContext('2d');
-  const grad = g.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#fff8ec');
-  grad.addColorStop(1, '#f6e6c8');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, W, H);
-  g.fillStyle = '#d23c3c';
-  g.fillRect(0, 0, W, 22);
-  g.fillStyle = '#1f5c46';
-  g.font = '900 84px Nunito, sans-serif';
-  g.fillText(`${DICON[id] ?? ''} ${L.title}`, 70, 150);
-  g.font = '600 34px Nunito, sans-serif';
-  g.fillStyle = '#6e5e50';
-  const wrap = (text, x, y, maxW, lh) => {
-    let line = '';
-    for (const w of String(text).split(' ')) {
-      if (g.measureText(line + w).width > maxW) {
-        g.fillText(line, x, y);
-        y += lh;
-        line = '';
-      }
-      line += w + ' ';
-    }
-    g.fillText(line, x, y);
-    return y + lh;
-  };
-  let y = wrap(L.intro, 70, 220, W - 140, 44);
-  g.fillStyle = '#2b221c';
-  g.font = '800 40px Nunito, sans-serif';
-  g.fillText('Продукты', 70, y + 30);
-  y += 84;
-  g.font = '600 34px Nunito, sans-serif';
-  for (const it of L.ingredients) {
-    g.fillText(`• ${it.product ? PRODUCTS[it.product]?.name ?? it.name : it.name} — ${it.amount}`, 90, y);
-    y += 46;
-  }
-  g.font = '800 40px Nunito, sans-serif';
-  g.fillText('Как готовить', 70, y + 30);
-  y += 84;
-  g.font = '600 31px Nunito, sans-serif';
-  RECIPES[id].steps.forEach((st, i) => {
-    if (y > H - 170) return;
-    y = wrap(`${i + 1}. ${L.steps[st.id]?.how ?? st.label}`, 90, y, W - 170, 40);
-  });
-  g.fillStyle = '#1f5c46';
-  g.fillRect(0, H - 110, W, 110);
-  g.fillStyle = '#fff';
-  g.font = '800 36px Nunito, sans-serif';
-  g.fillText('Симулятор новогодней суеты · #новогодняясуета', 70, H - 45);
-  const a = document.createElement('a');
-  a.href = c.toDataURL('image/png');
-  a.download = `recept-${id}.png`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+// Карточка рецепта картинкой с QR-списком покупок — src/ui/recipe-card.js (0.11); сюда реэкспорт для campaign-ui.js
+export { saveRecipeCard };
