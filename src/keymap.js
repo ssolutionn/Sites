@@ -15,6 +15,7 @@ export const ACTIONS = {
   rotate: { label: 'Повернуть доску', group: 'Кухня', def: 'KeyR', alt: [] },
   recipe: { label: 'Книга рецептов', group: 'Кухня', def: 'KeyQ', alt: [] },
   shout: { label: 'Крикнуть на кота', group: 'Кухня', def: 'KeyF', alt: [] }, // обработчик — блок «кот» 0.11
+  pauseChat: { label: 'Пауза чата (режим стримера)', group: 'Режим стримера', def: 'KeyP', alt: [] },
   pause: { label: 'Назад, пауза', group: 'Игра', def: 'Escape', alt: [] },
   mute: { label: 'Звук', group: 'Игра', def: 'KeyM', alt: [] },
   fullscreen: { label: 'Полный экран', group: 'Игра', def: 'F11', alt: [] },

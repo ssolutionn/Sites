@@ -6,6 +6,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const fs = require('node:fs');
+const { registerStreamIpc } = require('./stream-ipc.cjs');
 // в собранном приложении игра лежит рядом (game/), при запуске из исходников — в ../dist
 const GAME_DIR = fs.existsSync(path.join(__dirname, 'game')) ? path.join(__dirname, 'game') : path.join(__dirname, '..', 'dist');
 
@@ -59,7 +60,7 @@ function smoke(win) {
   });
   win.webContents.on('did-finish-load', () => {
     setTimeout(async () => {
-      const state = await win.webContents.executeJavaScript(`({ mode: window.__sueta?.mode, ls: (() => { try { localStorage.setItem('t','1'); return localStorage.getItem('t'); } catch (e) { return String(e); } })(), webgl: !!document.createElement('canvas').getContext('webgl2'), fullscreenBridge: typeof window.suetaDesktop?.setFullscreen })`);
+      const state = await win.webContents.executeJavaScript(`({ mode: window.__sueta?.mode, ls: (() => { try { localStorage.setItem('t','1'); return localStorage.getItem('t'); } catch (e) { return String(e); } })(), webgl: !!document.createElement('canvas').getContext('webgl2'), fullscreenBridge: typeof window.suetaDesktop?.setFullscreen, bridge: typeof window.suetaDesktop?.publishStream, overlay: typeof window.suetaDesktop?.overlay?.configure })`);
       const img = await win.webContents.capturePage();
       fs.writeFileSync(process.env.SUETA_SMOKE, img.toPNG());
       console.log('SMOKE', JSON.stringify({ state, errors }));
@@ -79,7 +80,11 @@ function buildMenu() {
   );
 }
 
+// режим стримера: сервер оверлея для OBS (127.0.0.1) включает и настраивает сама игра через preload.cjs
+let streamIpc = null;
+
 app.whenReady().then(() => {
+  streamIpc = registerStreamIpc({ ipcMain, staticDir: GAME_DIR });
   protocol.handle('app', (req) => {
     const { pathname } = new URL(req.url);
     const file = path.normalize(path.join(GAME_DIR, decodeURIComponent(pathname)));
@@ -95,3 +100,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => {
+  streamIpc?.stop();
+});

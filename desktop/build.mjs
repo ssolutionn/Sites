@@ -16,8 +16,9 @@ mkdirSync(stage, { recursive: true });
 cpSync('dist', `${stage}/game`, { recursive: true });
 // эти страницы и модели в самой игре не загружаются (старый режим и галерея — только веб, ?dev): в упаковку не кладём
 for (const extra of ['classic.html', 'gallery.html', 'model-gallery.html', 'models']) rmSync(`${stage}/game/${extra}`, { recursive: true, force: true });
-cpSync('desktop/main.cjs', `${stage}/main.cjs`);
-cpSync('desktop/preload.cjs', `${stage}/preload.cjs`); // мост полного экрана (настройки 0.11)
+// страница оверлея для OBS отдаётся локальным сервером из папки игры: без неё режим стримера не заработает
+if (!existsSync(`${stage}/game/overlay.html`)) throw new Error('В сборке нет overlay.html: проверь rollupOptions.input в vite.config.js');
+for (const f of ['main.cjs', 'preload.cjs', 'overlay-server.cjs', 'stream-ipc.cjs']) cpSync(`desktop/${f}`, `${stage}/${f}`);
 writeFileSync(`${stage}/package.json`, JSON.stringify({ name: 'novogodnyaya-sueta', productName: 'Novogodnyaya Sueta', version: pkg.version, description: 'Симулятор новогодней суеты', author: 'Novogodnyaya Sueta team', main: 'main.cjs' }, null, 2));
 
 const icon = existsSync('desktop/icon.icns') && platform === 'darwin' ? 'desktop/icon.icns' : existsSync('desktop/icon.png') ? 'desktop/icon.png' : undefined;

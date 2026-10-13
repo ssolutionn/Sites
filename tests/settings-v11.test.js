@@ -168,9 +168,9 @@ test('«Новая кампания» не стирает настройки, н
 
 // ======================= клавиши =======================
 
-test('клавиши по умолчанию: WASD и стрелки, пробел, R, Q, F, Esc, M, F11', () => {
+test('клавиши по умолчанию: WASD и стрелки, пробел, R, Q, F, Esc, M, F11, P (пауза чата)', () => {
   const k = new Keymap();
-  const want = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'interact', KeyR: 'rotate', KeyQ: 'recipe', KeyF: 'shout', Escape: 'pause', KeyM: 'mute', F11: 'fullscreen' };
+  const want = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'interact', KeyR: 'rotate', KeyQ: 'recipe', KeyF: 'shout', Escape: 'pause', KeyM: 'mute', F11: 'fullscreen', KeyP: 'pauseChat' };
   for (const [code, action] of Object.entries(want)) assert.equal(k.actionOf(code), action, code);
   assert.equal(k.actionOf('KeyZ'), null);
   assert.equal(k.get('shout'), 'KeyF', 'действие «крикнуть» объявлено заранее, обработчик — в блоке про кота');
@@ -225,10 +225,10 @@ test('нельзя назначить Esc, Tab, Enter, Shift и F5: они ну�
 
 test('пауза: Esc закреплён за ней всегда, даже если основную клавишу поменяли', () => {
   const k = new Keymap();
-  assert.deepEqual(k.bind('pause', 'KeyP'), { ok: true });
-  assert.equal(k.actionOf('KeyP'), 'pause');
+  assert.deepEqual(k.bind('pause', 'KeyJ'), { ok: true });
+  assert.equal(k.actionOf('KeyJ'), 'pause');
   assert.equal(k.actionOf('Escape'), 'pause', '«назад» не пропадает');
-  assert.deepEqual(k.codes('pause'), ['KeyP', 'Escape']);
+  assert.deepEqual(k.codes('pause'), ['KeyJ', 'Escape']);
   assert.deepEqual(k.bind('pause', 'Escape'), { ok: true }, 'вернуть Esc можно');
   assert.deepEqual(k.toJSON(), {});
 });

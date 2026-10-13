@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Оверлей чата</title>
+    <link rel="stylesheet" href="./src/overlay/overlay.css" />
+  </head>
+  <body>
+    <!-- Страница для источника «Браузер» в OBS: фон прозрачный. Адрес: http://127.0.0.1:17771/overlay (порт — в настройках игры).
+         Параметры: ?scale=1.25 — размер, ?side=right — к правому краю. -->
+    <main id="ov" class="hidden" aria-live="polite"></main>
+    <script type="module" src="./src/overlay/overlay.js"></script>
+  </body>
+</html>

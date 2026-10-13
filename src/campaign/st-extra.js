@@ -217,7 +217,8 @@ export const extraMethods = {
   },
 
   catCalm() {
-    return this.catNeeds.hunger < this.cfg.cat.calm || this.cat.state === 'play' || this.cat.state === 'eat';
+    // 0.11: sleepUntil — чат убаюкал кота («!помощь»), он спит и к еде не лезет
+    return this.catNeeds.hunger < this.cfg.cat.calm || this.cat.state === 'play' || this.cat.state === 'eat' || this.t < (this.catNeeds.sleepUntil ?? 0);
   },
 
   _temptingItem() {
@@ -227,6 +228,7 @@ export const extraMethods = {
   _updateCatNeeds(h) {
     if (this.practice) return;
     const n = this.catNeeds;
+    if (this.t < (n.sleepUntil ?? 0)) return; // 0.11: чат убаюкал кота — пока спит, не голодает, не скучает и не ищет еду
     if (this.cat.state === 'home' || this.cat.state === 'visit') n.hunger = Math.min(100, n.hunger + this._catRate() * h);
     const c = this.cfg.cat;
     if (n.hunger >= c.warnAt && !n.warned) {
@@ -369,9 +371,18 @@ export const extraMethods = {
 
   // ---------- стрим: события по голосованию чата ----------
   streamEvent(kind) {
+    const ok = this._streamEvent(kind);
+    if (ok) this.stats.chatEvents = (this.stats.chatEvents ?? 0) + 1; // для строки «С чатом» в итоге дня
+    return ok;
+  },
+
+  _streamEvent(kind) {
     if (this.isOver() || this.practice) return false;
     switch (kind) {
+      case 'help':
+        return this._streamHelp(); // st-stream.js: кот засыпает или курьер едет быстрее
       case 'cat':
+        this.catNeeds.sleepUntil = 0; // разбудили
         this.catNeeds.hunger = 100;
         if (this.cat.state === 'play' || this.cat.state === 'eat') this.cat = { state: 'home' };
         this._emit('stream', { kind, text: 'Чат разбудил кота — он голоден!' });
