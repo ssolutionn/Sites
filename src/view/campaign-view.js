@@ -1388,8 +1388,9 @@ export class CampaignView {
     if (this.ovenP > 0.04) this.ovenGlow.material.opacity = 0; // за стеклом уже не светит
     const sp = this.k.stoveGroup.position, oc = this.k.stoveModel.oven.chicken;
     if (od.drag && s.panel === 'oven') {
-      const wp = this.workPlane('oven');
-      this.ovenChicken.position.set(wp.c.x + od.drag.x, wp.c.y - od.drag.z, wp.c.z + 0.12);
+      // рука тянет вниз по экрану — форма выезжает с решётки вперёд по открытой дверце (а не уходит под пол за плоскостью)
+      const k = THREE.MathUtils.clamp(od.drag.z / (OVEN.cavity.z1 + (s.cfg.oven.takeOut ?? 0.07)), 0, 1.15);
+      this.ovenChicken.position.set(sp.x + oc.x + THREE.MathUtils.clamp(od.drag.x, -0.2, 0.2), oc.y + 0.03 * Math.sin(k * Math.PI), sp.z + oc.z + k * 0.62);
     } else this.ovenChicken.position.set(sp.x + oc.x, oc.y, sp.z + oc.z);
   }
 
