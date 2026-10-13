@@ -23,8 +23,8 @@ export const CLAYOUT = {
     tray: { label: 'Поднос', stand: { x: -1.2, z: -0.22 }, facing: 0, anchor: { x: -1.2, y: 0.92, z: 0.52 } },
     bowl: { label: 'Миска', stand: { x: 0.6, z: -0.22 }, facing: 0, anchor: { x: 0.62, y: 0.95, z: 0.55 } },
     phone: { label: 'Телефон', stand: { x: 1.4, z: -0.22 }, facing: 0, anchor: { x: 1.45, y: 0.92, z: 0.62 } },
-    stove: { label: 'Плита', stand: { x: 1.6, z: -1.6 }, facing: Math.PI, anchor: { x: 1.45, y: 1.0, z: -2.25 } },
-    oven: { label: 'Духовка', stand: { x: 1.15, z: -1.6 }, facing: Math.PI, anchor: { x: 1.45, y: 0.2, z: -1.86 } }, // метка — на дверце, не над конфорками
+    stove: { label: 'Плита', stand: { x: 1.6, z: -1.6 }, facing: Math.PI, anchor: { x: 1.33, y: 1.0, z: -2.25 } }, // x — центр плиты между ручками шкафов (stove-model.js)
+    oven: { label: 'Духовка', stand: { x: 1.15, z: -1.6 }, facing: Math.PI, anchor: { x: 1.33, y: 0.2, z: -1.84 } }, // метка — на дверце, не над конфорками
     sink: { label: 'Раковина', stand: { x: 0.25, z: -1.6 }, facing: Math.PI, anchor: { x: 0.25, y: 0.95, z: -2.25 } },
     radio: { label: 'Радио', stand: { x: -1.85, z: -1.6 }, facing: Math.PI, anchor: { x: -1.85, y: 1.06, z: -2.18 } },
     garland: { label: 'Гирлянда', stand: { x: -1.0, z: -1.6 }, facing: Math.PI, anchor: { x: -1.25, y: 1.72, z: -2.55 } },

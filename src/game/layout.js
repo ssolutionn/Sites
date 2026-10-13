@@ -12,7 +12,7 @@ export const LAYOUT = {
     board: { label: 'Доска', stand: { x: -0.45, z: -0.22 }, facing: 0, anchor: { x: -0.45, y: 0.92, z: 0.5 } },
     bowl: { label: 'Миска', stand: { x: 0.6, z: -0.22 }, facing: 0, anchor: { x: 0.62, y: 0.95, z: 0.55 } },
     phone: { label: 'Телефон', stand: { x: 1.4, z: -0.22 }, facing: 0, anchor: { x: 1.45, y: 0.92, z: 0.62 } },
-    stove: { label: 'Плита', stand: { x: 1.45, z: -1.6 }, facing: Math.PI, anchor: { x: 1.45, y: 1.0, z: -2.25 } },
+    stove: { label: 'Плита', stand: { x: 1.45, z: -1.6 }, facing: Math.PI, anchor: { x: 1.33, y: 1.0, z: -2.25 } }, // x — центр плиты между ручками шкафов (stove-model.js)
     garland: { label: 'Гирлянда', stand: { x: -1.25, z: -1.6 }, facing: Math.PI, anchor: { x: -1.25, y: 1.72, z: -2.55 } },
     radio: { label: 'Радио', stand: { x: -1.85, z: -1.6 }, facing: Math.PI, anchor: { x: -1.85, y: 1.06, z: -2.18 } },
   },
