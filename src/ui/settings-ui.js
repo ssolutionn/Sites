@@ -50,7 +50,7 @@ export function settingsHTML({ settings, muted, keymap, fs, reduce }) {
     .list()
     .map(
       (r) =>
-        `<li class="st-krow"><span class="st-name">${esc(r.label)}</span><span class="st-kctl"><button type="button" class="st-key${r.changed ? ' changed' : ''}" data-key="${r.action}" aria-label="${esc(r.label)}: ${esc(r.name)}. Нажми, чтобы выбрать другую клавишу">${esc(r.name)}</button>${r.alts.length ? `<small class="st-alt">или ${esc(r.alts.join(', '))}</small>` : ''}</span></li>`,
+        `<li class="st-krow"><span class="st-name">${esc(r.label)}</span><button type="button" class="st-key${r.changed ? ' changed' : ''}" data-key="${r.action}" aria-label="${esc(r.label)}: ${esc(r.name)}. Нажми, чтобы выбрать другую клавишу">${esc(r.name)}</button></li>`,
     )
     .join('');
   return `<div class="card dialog settings" role="dialog" aria-modal="true" aria-labelledby="st-title" tabindex="-1">
@@ -62,20 +62,21 @@ export function settingsHTML({ settings, muted, keymap, fs, reduce }) {
           ${switchRow('muted', 'Без звука', muted, { extra: ` <kbd>${esc(keyName(keymap.get('mute')))}</kbd>` })}
         </section>
         <section class="st-sec" aria-labelledby="st-h-game"><h3 id="st-h-game">Игра</h3>
-          ${switchRow('assist', 'Мягкие жесты', settings.assist, { hint: 'Нож, ложка, солонка и кот прощают неточности. Для тачпада и неуверенной руки.' })}
+          ${switchRow('assist', 'Мягкие жесты', settings.assist, { hint: 'Допуски шире: для тачпада и неуверенной руки.' })}
           ${segRow('ts', 'Размер текста', TEXT_SCALES.map((s) => ({ value: s, label: `${scalePercent(s)} %` })), settings.textScale)}
-          ${switchRow('motion', 'Меньше движения', reduce, { hint: 'Без качки камеры, искр вдвое меньше, без снега в меню.' })}
+          ${switchRow('motion', 'Меньше движения', reduce, { hint: 'Камера без качки, искр вдвое меньше.' })}
+        </section>
+      </div>
+      <div class="st-col">
+        <section class="st-sec" aria-labelledby="st-h-keys">
+          <div class="st-head"><h3 id="st-h-keys">Управление</h3><button type="button" class="ghost st-reset" data-act="keysReset">Вернуть по умолчанию</button></div>
+          <ul class="st-keys">${keys}</ul>
+          <p class="st-hint">Стрелки всегда ходят, Esc всегда пауза.</p>
+          <p class="st-msg" id="st-msg" role="status" aria-live="polite">Нажми на клавишу в списке, потом на новую. Esc — отмена.</p>
         </section>
         <section class="st-sec" aria-labelledby="st-h-screen"><h3 id="st-h-screen">Экран</h3>
           ${switchRow('fullscreen', 'Полный экран', fs.active, { extra: ` <kbd>${esc(keyName(keymap.get('fullscreen')))}</kbd>`, disabled: !fs.supported, title: fs.supported ? '' : 'В этом окне полный экран недоступен' })}
           ${segRow('q', 'Графика', [{ value: 'high', label: 'Красиво' }, { value: 'low', label: 'Экономно' }], settings.quality)}
-        </section>
-      </div>
-      <div class="st-col">
-        <section class="st-sec" aria-labelledby="st-h-keys"><h3 id="st-h-keys">Управление</h3>
-          <ul class="st-keys">${keys}</ul>
-          <p class="st-msg" id="st-msg" role="status" aria-live="polite">Нажми на клавишу в списке, потом на новую. Esc — отмена.</p>
-          <button type="button" class="ghost st-reset" data-act="keysReset">Вернуть клавиши по умолчанию</button>
         </section>
       </div>
     </div>
@@ -132,8 +133,6 @@ export function bindSettings(root, { ctl, fs, sound, keymap, onBack, onKeys }) {
       b.textContent = r.name;
       b.classList.toggle('changed', r.changed);
       b.setAttribute('aria-label', `${r.label}: ${r.name}. Нажми, чтобы выбрать другую клавишу`);
-      const alt = b.parentElement.querySelector('.st-alt');
-      if (alt) alt.textContent = r.alts.length ? `или ${r.alts.join(', ')}` : '';
     }
   }
 

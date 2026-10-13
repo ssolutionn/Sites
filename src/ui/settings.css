@@ -6,7 +6,7 @@
 .dialog.settings:focus { outline: none; }
 .dialog.settings h2 { margin: 0 0 4px; font-size: 28px; }
 .dialog.settings h2::before { margin-bottom: 8px; }
-.st-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 32px; align-items: start; }
+.st-grid { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 0 32px; align-items: start; }
 @media (max-width: 780px) { .st-grid { grid-template-columns: minmax(0, 1fr); } }
 .st-sec { margin: 0 0 4px; }
 .st-sec h3 { margin: 8px 0 2px; font-size: 12.5px; font-weight: 900; letter-spacing: 0.7px; text-transform: uppercase; color: var(--ink-2); }
@@ -33,17 +33,17 @@
 .st-seg button[aria-checked=true] { background: linear-gradient(180deg, #36a06e, var(--pine-hi)); color: #fff; box-shadow: var(--shadow-1); }
 
 /* клавиши */
-.st-keys { list-style: none; margin: 0; padding: 0; }
+.st-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.st-keys { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; }
 .st-krow { min-height: 33px; }
-.st-kctl { display: flex; align-items: center; gap: 8px; flex: none; }
-.st-key { min-width: 84px; padding: 4px 12px; font-size: 14px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--paper-line), inset 0 -3px 0 rgba(0, 0, 0, 0.08); }
+.st-krow .st-name { font-size: 14.5px; }
+.st-key { flex: none; min-width: 70px; padding: 4px 10px; font-size: 14px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--paper-line), inset 0 -3px 0 rgba(0, 0, 0, 0.08); }
 .st-key.changed { box-shadow: inset 0 0 0 2px var(--gold), inset 0 -3px 0 rgba(0, 0, 0, 0.08); }
 .st-key.listening { background: var(--gold-soft); box-shadow: 0 0 0 3px var(--gold); }
-.st-alt { min-width: 44px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
-.st-msg { min-height: 36px; margin: 8px 0 6px; font-size: 13px; line-height: 1.3; font-weight: 700; color: var(--ink-2); }
+.st-msg { min-height: 36px; margin: 2px 0 4px; font-size: 13px; line-height: 1.3; font-weight: 700; color: var(--ink-2); }
 .st-msg.warn { color: var(--berry-dark); }
 .st-msg.ok { color: var(--pine); }
-.st-reset { padding: 6px 16px; font-size: 14px; }
+.st-reset { padding: 3px 12px; font-size: 13px; }
 
 /* «Готово» не уезжает при прокрутке */
 .st-actions { position: sticky; bottom: 0; justify-content: flex-end; margin: 6px -24px 0; padding: 10px 24px 14px; background: linear-gradient(180deg, rgba(253, 242, 222, 0), #fdf2de 35%); }
