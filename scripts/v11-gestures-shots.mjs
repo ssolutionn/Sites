@@ -87,10 +87,10 @@ if (want('stove')) {
 if (want('oven')) {
   await openDay(7);
   // курица замаринована и на подносе — остальное жестом
-  await S(() => { const s = window.__sueta.session; const d = s.dishes.chicken; d.steps.marinade = { done: true, q: 1, info: null }; d.work = d.work ?? { inOven: false, baked: 0 }; s.tray.owner = 'chicken'; s.equipment.tray.owner = 'chicken'; });
+  await S(() => { const s = window.__sueta.session; s.goTo('tray'); s.fastForward(40, () => s.panel === 'tray'); s.traySelect('chicken'); s.dishes.chicken.steps.marinade = { done: true, q: 1, info: null }; });
   await S(() => window.__sueta.session.goTo('oven'));
   await S(() => window.__sueta.session.fastForward(30, () => window.__sueta.session.panel === 'oven'));
-  await waitFor(() => window.__sueta.session.panel === 'oven' && window.__sueta.sv.camMode === 'c-oven' && window.__sueta.sv.camT >= 1, 120000); await wait(900);
+  await waitFor(() => window.__sueta.session.panel === 'oven' && window.__sueta.sv.camMode === 'c-oven' && window.__sueta.sv.camT >= 1, 240000); await wait(900);
   console.log('  состояние', await S(() => { const s = window.__sueta.session; return JSON.stringify({ panel: s.panel, cam: window.__sueta.sv.camMode, camT: window.__sueta.sv.camT, target: s.heroine.target, hint: s.hint?.text }); }));
   check('в доке духовки нет кнопок «Поставить форму» / «Достать»', await S(() => ![...document.querySelectorAll('#panel button')].some((b) => /Поставить форму|Достать/.test(b.textContent))));
   await shot('oven_closed');
@@ -105,7 +105,7 @@ if (want('oven')) {
   await page.mouse.up(); await wait(1500);
   await shot('oven_open');
   // форма из дока в проём
-  await page.waitForSelector('[data-drag-oven]:not([disabled])', { timeout: 30000 });
+  await page.waitForSelector('[data-drag-oven]:not([disabled])', { timeout: 120000 });
   const cb = await page.locator('[data-drag-oven]').boundingBox();
   const c = await pt(0, 0);
   await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2); await page.mouse.down();

@@ -88,6 +88,7 @@ export function buildKitchen(scene, { bakedOrnaments = false } = {}) {
   // задняя столешница
   const bc = LAYOUT.backCounter;
   const backModel = instantiateModel('back_counter');
+  const backParts = backModel ? [backModel] : []; // что вырезается под плиту (ниже)
   if (backModel) { backModel.position.set(.15, 0, bc.z); scene.add(backModel); } else {
   const backBase = box(5.6, bc.h - 0.05, bc.d, woodMat);
   backBase.position.set(0.15, (bc.h - 0.05) / 2, bc.z);
@@ -95,6 +96,7 @@ export function buildKitchen(scene, { bakedOrnaments = false } = {}) {
   const backTop = box(5.7, 0.05, bc.d + 0.06, topMat);
   backTop.position.set(0.15, bc.h - 0.025, bc.z + 0.02);
   scene.add(backTop);
+  backParts.push(backBase, backTop);
   // ручки ящиков
   for (let i = 0; i < 7; i++) {
     const hnd = box(0.18, 0.02, 0.02, metal);
@@ -113,6 +115,29 @@ export function buildKitchen(scene, { bakedOrnaments = false } = {}) {
   const sp = stovePlacement(st.anchor.x, bc.z);
   stove.position.set(sp.x, 0, sp.z);
   scene.add(stove);
+  // шкафы задней столешницы стоят в объёме плиты (она глубже на 70 см): внутри духовки были бы видны их фасады — вырезаем коробку плиты
+  // из материалов шкафов (clipIntersection: отсекается только то, что внутри всех шести плоскостей)
+  {
+    const hw = 0.3, y0 = 0.07, y1 = 0.906, z1 = sp.z - 0.002, z0 = sp.z - 0.705;
+    const planes = [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), -(sp.x + hw)), new THREE.Plane(new THREE.Vector3(-1, 0, 0), sp.x - hw),
+      new THREE.Plane(new THREE.Vector3(0, 1, 0), -y1), new THREE.Plane(new THREE.Vector3(0, -1, 0), y0),
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), -z1), new THREE.Plane(new THREE.Vector3(0, 0, -1), z0),
+    ];
+    const cut = (root) => root?.traverse?.((o) => {
+      if (!o.isMesh) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      const out = mats.map((m) => {
+        const c = m.clone();
+        c.clippingPlanes = planes;
+        c.clipIntersection = true;
+        return c;
+      });
+      o.material = Array.isArray(o.material) ? out : out[0];
+    });
+    for (const r of backParts) cut(r);
+    k.stoveClip = planes;
+  }
   k.stoveKnobs = stoveModel.knobs; // белая метка на крутилке показывает, на сколько повёрнута
   k.stoveModel = stoveModel;
   k.stoveGroup = stove;

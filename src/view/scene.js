@@ -17,6 +17,7 @@ export class SceneView {
   constructor(canvas, { bakedOrnaments = false } = {}) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer.localClippingEnabled = true; // шкафы вырезаются под плиту (kitchen.js)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
