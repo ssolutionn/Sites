@@ -2,7 +2,7 @@
 // выключенные подсказки и обход всех жестов (рука стоит там, где жест).
 //   npx vite build && npx vite preview --port 4187 --strictPort --host 127.0.0.1
 //   PW=/opt/node-tools/node_modules/playwright/index.mjs OUT=production/qa/evidence node scripts/v11-ghost-shots.mjs http://127.0.0.1:4187/ all
-//   части: knife,refuse,repeat,cat,settings,motion,tour  (через запятую); код выхода 1 при провале.
+//   части: knife,refuse,repeat,cat,settings,motion,tour1,tour2,tour3  (через запятую; tour = tour1,tour2,tour3); код выхода 1 при провале.
 // Снимки v11_ghost_*.png: рука заморожена в середине движения (GhostHand.hold), чтобы медленный SwiftShader не съел показ.
 const { chromium } = await import(process.env.PW ?? 'playwright');
 const url = process.argv[2] || 'http://127.0.0.1:4187/';
@@ -29,7 +29,7 @@ const check = (name, cond, extra = '') => {
   (cond ? ok++ : fail++);
   console.log(cond ? 'OK  ' : 'FAIL', name, extra);
 };
-const want = (p) => part === 'all' || part.split(',').includes(p);
+const want = (p) => part === 'all' || part.split(',').includes(p) || (p.startsWith('tour') && part.split(',').includes('tour'));
 const setting = (key) => S((k) => window.__sueta.save.data.settings[k], key);
 
 // ---------- помощники ----------
@@ -84,6 +84,7 @@ async function freeze(frac = 0.55, timeout = 90000) {
     h.hold = true;
     h.cur.t = Math.min(h.cur.pass * frac, h.cur.show.dur - 0.01);
   }, frac);
+  await waitFor(() => getComputedStyle(document.getElementById('ghost-hand')).opacity === '1', 30000); // слой уже проявился (gh-in), снимок не поймает середину
   await wait(500);
   return true;
 }
@@ -110,6 +111,43 @@ const midReport = async (name, near) => {
   return g;
 };
 const catScreen = () => S(() => { const v = window.__sueta.sv; const c = v.cat.getWorldPosition(new v.cat.position.constructor()); c.y += 0.15; c.project(v.camera); const r = v.canvas.getBoundingClientRect(); return { x: r.left + (c.x * 0.5 + 0.5) * r.width, y: r.top + (-c.y * 0.5 + 0.5) * r.height }; });
+
+// ---------- обход всех жестов: рука стоит там, где жест ----------
+const sessS = (expr) => S(new Function(`const s = window.__sueta.session; return (${expr});`));
+/** Пойти к станции и дождаться крупного плана. */
+async function goStation(st) {
+  let arrived = false;
+  for (let k = 0; k < 4 && !arrived; k++) {
+    await S((st) => window.__sueta.session.goTo(st), st);
+    arrived = await waitFor((st) => window.__sueta.session.panel === st && window.__sueta.sv.camT >= 0.95 && !window.__sueta.session.heroine.target, 60000, st);
+  }
+  check(`пришла к станции «${st}»`, arrived, arrived ? '' : await S(() => window.__sueta.session.hint?.text ?? ''));
+  await wait(900);
+}
+/** Показать жест id принудительно (как «?»), заморозить и снять кадр рядом с рукой. near — {x, y, r}: где должен быть кончик. */
+async function tourShot(id, { near = null, frac = 0.55, where = '' } = {}) {
+  await unfreeze();
+  const queued = await S((id) => {
+    const c = window.__sueta.app.ghost.coach;
+    const sh = c.trigger.repeat(id);
+    if (sh) c._queue(sh);
+    return !!sh;
+  }, id);
+  const started = queued && (await freeze(frac, 90000));
+  const g = started ? await ghostState() : null;
+  const inside = !!g?.tip && g.tip.x >= 0 && g.tip.x <= 1280 && g.tip.y >= 0 && g.tip.y <= 720;
+  check(`обход: ${id}${where ? ` (${where})` : ''} — рука пошла, кончик в окне, путь виден`, !!g && g.gesture === id && inside && g.route > 20, g ? `tip ${Math.round(g.tip.x)},${Math.round(g.tip.y)} «${g.label}»` : 'руки нет');
+  if (near && g?.tip) {
+    const d = Math.hypot(g.tip.x - near.x, g.tip.y - near.y);
+    check(`обход: ${id} — кончик у цели (${Math.round(d)} px)`, d < (near.r ?? 120));
+  }
+  if (g?.tip) {
+    const clip = { x: Math.max(0, Math.min(1280 - 760, g.tip.x - 380)), y: Math.max(0, Math.min(720 - 480, g.tip.y - 240)), width: 760, height: 480 };
+    await page.screenshot({ path: `${out}/v11_ghost_tour_${id}.png`, clip, timeout: 150000 }).catch((e) => console.log('shot fail', id, e.message.split('\n')[0]));
+  }
+  return g;
+}
+const knobScreen = (i) => S((i) => { const r = document.querySelector(`[data-knob="${i}"]`)?.getBoundingClientRect(); return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; }, i);
 
 try {
   // ======================= нож: первая встреча в день 1 =======================
@@ -220,8 +258,7 @@ try {
     await shot('03_cat_wave');
     // кота прогнали — рука уходит сама
     await S(() => window.__sueta.session.shoo());
-    await wait(900);
-    check('кота прогнали — рука ушла', (await ghostState()) === null);
+    check('кота прогнали — рука ушла', await waitFor(() => document.getElementById('ghost-hand').classList.contains('hidden'), 20000));
     await unfreeze();
     // второй раз тот же жест сам не показывается
     await S(() => { window.__sueta.session.catNeeds.hunger = 0; window.__sueta.session._startCatTheft('crab'); });
@@ -270,6 +307,126 @@ try {
     const g = await ghostState();
     check('«Меньше движения»: рука стоит, путь — стрелкой', started && g?.stat === true && g.head === true && g.trail > 20, JSON.stringify({ stat: g?.stat, head: g?.head, trail: g?.trail }));
     await shot('08_reduced_motion');
+  }
+
+  // ======================= обход: доска, чистка, миска, практика =======================
+  if (want('tour1')) {
+    await fresh(1);
+    await enterDay();
+    await goStation('board');
+    await S(() => window.__sueta.session.boardSelect('olivier:carrot'));
+    await freeze(0.2); // первая встреча с ножом идёт сама — даём ей отыграть, потом показываем поперечный росчерк
+    await unfreeze();
+    await tourShot('cut-h', { where: 'морковь, поперёк' });
+    // чистка картофеля: достать из холодильника, принести на доску
+    await unfreeze();
+    await goStation('fridge');
+    await S(() => window.__sueta.session.fridgeTake('olivier', 'peelPotato'));
+    await S(() => window.__sueta.session.fastForward(4, () => !window.__sueta.session.action));
+    await goStation('board');
+    await S(() => window.__sueta.session.boardSelect('olivier:peelPotato'));
+    await wait(600);
+    const prod = await station('board', 0, 0);
+    await tourShot('peel', { near: { ...prod, r: 200 }, where: 'картофель' });
+    await unfreeze();
+    await goStation('bowl');
+    const bowl = await station('bowl', 0, 0);
+    await tourShot('salt', { near: { ...bowl, r: 150 } });
+    await tourShot('pour', { near: { ...bowl, r: 150 }, frac: 0.4 });
+    await tourShot('stir', { near: { ...bowl, r: 150 }, where: 'миска' });
+    // практика: кружочки и тёрка — свой продукт и своя станция (практика мешания падает в bowl3d, это не рука: см. заметки)
+    await unfreeze();
+    for (const [id, arg, st] of [['round', 'rounds:sausage', 'board'], ['grate', 'grate:cheese', 'board']]) {
+      await S((a) => window.__sueta.app.ui('practiceGo', a), arg);
+      await waitFor((st) => window.__sueta.session?.panel === st && window.__sueta.sv.camT >= 0.95, 120000, st);
+      await wait(1200);
+      await unfreeze();
+      const c0 = await station(st, 0, 0);
+      await tourShot(id, { near: { ...c0, r: 220 }, where: 'практика' });
+    }
+  }
+
+  // ======================= обход: кот, уборка, плита =======================
+  if (want('tour2')) {
+    await fresh(2);
+    await enterDay();
+    await S(() => window.__sueta.session._startCatTheft('crab'));
+    await waitFor(() => window.__sueta.session.cat.state === 'theft', 5000);
+    await wait(600);
+    await tourShot('cat-wave', { near: { ...(await catScreen()), r: 150 }, where: 'обзор' });
+    await unfreeze();
+    await S(() => window.__sueta.session.shoo());
+    await wait(1200);
+    await goStation('catbowl');
+    const cb = await station('catbowl', 0, 0);
+    await tourShot('cat-kibble', { near: { ...cb, r: 200 } });
+    await tourShot('cat-wand', { near: { ...cb, r: 260 } });
+    await unfreeze();
+    // лужа и залитая конфорка
+    await S(() => window.__sueta.session._addPuddle('spill', { x: 1.05, z: 1.3, r: 0.32 }));
+    await goStation('puddle');
+    const pd = await station('puddle', 0, 0);
+    await tourShot('wipe', { near: { ...pd, r: 200 }, where: 'лужа' });
+    await unfreeze();
+    await S(() => { window.__sueta.session.puddles = []; });
+    await goStation('stove');
+    // крутилка огня: 1-я конфорка стоит пустой, показываем на ней
+    const k0 = await knobScreen(0);
+    await tourShot('knob', { near: { ...k0, r: 130 } });
+    await unfreeze();
+    await S(() => { window.__sueta.session.burners[0].dirty = true; });
+    await wait(500);
+    await tourShot('wipe', { where: 'конфорка' });
+    await unfreeze();
+    await S(() => { window.__sueta.session.burners[0].dirty = false; });
+    // продукт на конфорку: достали яйца → к плите
+    await goStation('fridge');
+    const t = await S(() => { const s = window.__sueta.session; const x = s.fridgeTasks().find((q) => q.product === 'egg') ?? s.fridgeTasks()[0]; return { d: x.dishId, st: x.stepId }; });
+    await S((t) => window.__sueta.session.fridgeTake(t.d, t.st), t);
+    await S(() => window.__sueta.session.fastForward(4, () => !window.__sueta.session.action));
+    await goStation('stove');
+    await wait(700);
+    await tourShot('stove-place', { where: 'продукт в руках', frac: 0.7 });
+    await unfreeze();
+    // поставили, довели до готовности — оттаскиваем
+    await S(() => { const s = window.__sueta.session; s.stoveDrop(0.15, -0.14); s.fastForward(3, () => !s.action); });
+    await S(() => { const s = window.__sueta.session; const i = s.burners.findIndex((b) => b.state === 'boiling'); s.setHeat(i, 9); s.fastForward(400, () => s.burners[i].state === 'ready'); });
+    await wait(700);
+    await tourShot('stove-pot', { where: 'кастрюля готова', frac: 0.6 });
+    check('есть готовая кастрюля, жест не пропал', await sessS("s.burners.some((b) => b.state === 'ready')"));
+  }
+
+  // ======================= обход: ёлка, подарок, посудомойка =======================
+  if (want('tour3')) {
+    await fresh(2);
+    await enterDay();
+    await goStation('tree');
+    await S(() => { const s = window.__sueta.session; s.addTinselRoll('gold'); s.tinselPick('gold'); });
+    await wait(600);
+    const tree = await S(() => { const v = window.__sueta.view; const g = v.tree.g; const c = g.getWorldPosition(new g.position.constructor()); c.y += 1.0; c.project(v.sv.camera); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + (c.x * 0.5 + 0.5) * r.width, y: r.top + (-c.y * 0.5 + 0.5) * r.height }; });
+    await tourShot('tinsel', { near: { ...tree, r: 280 } });
+    await unfreeze();
+    await S(() => { const s = window.__sueta.session; const uid = s.addToy('bell'); s.pickToy(uid); });
+    await wait(900);
+    await tourShot('toy-drag', { where: 'игрушка в руке', frac: 0.7 });
+    await unfreeze();
+    await S(() => { const s = window.__sueta.session; s.treeHand = null; s.tinsel.tool = null; s.startGift(0); });
+    await waitFor(() => window.__sueta.sv.camT >= 0.95, 60000);
+    await wait(1200);
+    const gift = await station('tree', 0, 0);
+    await tourShot('gift-bow', { near: { ...gift, r: 140 }, frac: 0.6 });
+    await tourShot('gift-paper', { near: { ...gift, r: 140 } });
+    await tourShot('gift-lid', { near: { ...gift, r: 160 }, frac: 0.6 });
+    await unfreeze();
+    await S(() => window.__sueta.session.leaveGift());
+    await wait(900);
+    await goStation('dishwasher');
+    const door = await station('dishwasher', 0, -0.19 + 0.15);
+    await tourShot('washer-door', { near: { ...door, r: 160 }, frac: 0.6 });
+    await unfreeze();
+    await S(() => { const s = window.__sueta.session; s.equipment.bowl.clean = false; s._dwSetDoor(true); s.dwPick('bowl'); });
+    await wait(1200);
+    await tourShot('washer-drag', { where: 'дверца открыта, миска в руке', frac: 0.6 });
   }
 
   check('в консоли нет ошибок', errs.length === 0, errs.slice(0, 3).join(' | '));
