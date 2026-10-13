@@ -1,5 +1,9 @@
 // Временные синтезированные эффекты через WebAudio — внешних файлов нет.
 // AudioContext создаётся только после первого действия пользователя.
+// Три шины (0.11, настройки): эффекты (sfx) и радио/музыка (music) идут через общую (master) к выходу.
+import { volumeGain } from '../settings.js';
+
+const MASTER_BASE = 0.5; // усиление общей шины при громкости 1: ровно прежний уровень игры
 
 // Нож звучит по продукту: твёрдое глухо, хрусткое — шипением высоких, сыр звенит, мягкое — приглушённо.
 const CHOP_KIND = {
@@ -18,6 +22,7 @@ export class Sound {
     this.muted = false;
     this.radioNodes = new Set();
     this.radioStep = -1;
+    this.volumes = { master: 1, sfx: 1, music: 1 }; // 0..1, как на ползунках настроек
     try {
       this.muted = localStorage.getItem('olivie.muted') === '1';
     } catch {
@@ -31,15 +36,43 @@ export class Sound {
       if (!AC) return;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : 0.5;
       this.master.connect(this.ctx.destination);
+      this.sfx = this.ctx.createGain();
+      this.sfx.connect(this.master);
+      this.music = this.ctx.createGain(); // радио (radio-music.js) подключается сюда
+      this.music.connect(this.master);
+      this._levels(false);
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
 
+  /** Громкость шин master/sfx/music, 0..1 (settings.js). Можно звать до unlock(): применится при создании контекста. */
+  setVolumes(v = {}) {
+    for (const k of ['master', 'sfx', 'music']) if (Number.isFinite(v[k])) this.volumes[k] = Math.max(0, Math.min(1, v[k]));
+    this._levels(true);
+  }
+
+  // Усиления шин из громкостей и «без звука». smooth — плавно, без щелчка при движении ползунка.
+  _levels(smooth) {
+    if (!this.ctx || !this.master) return;
+    const t = this.ctx.currentTime;
+    const set = (node, v) => (smooth ? node.gain.setTargetAtTime(v, t, 0.02) : (node.gain.value = v));
+    set(this.master, this.muted ? 0 : MASTER_BASE * volumeGain(this.volumes.master));
+    set(this.sfx, volumeGain(this.volumes.sfx));
+    set(this.music, volumeGain(this.volumes.music));
+  }
+
+  /** Короткий пример звука шины — слышно, насколько громко (после отпускания ползунка). */
+  preview(bus = 'sfx') {
+    if (!this.ctx || this.ctx.state !== 'running' || this.muted) return;
+    if (bus === 'music') {
+      [0, 0.12].forEach((at, i) => this._tone(i ? 784 : 659, 0.5, { type: 'triangle', vol: 0.12, at, radio: true }));
+    } else this.play('chop', { key: 'p:carrot' });
+  }
+
   setMuted(m) {
     this.muted = m;
-    if (this.ctx && this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.5, this.ctx.currentTime, 0.02);
+    this._levels(true);
     try {
       localStorage.setItem('olivie.muted', m ? '1' : '0');
     } catch {
@@ -66,7 +99,7 @@ export class Sound {
     g.gain.setValueAtTime(0, t0);
     g.gain.linearRampToValueAtTime(vol, t0 + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(radio ? this.music : this.sfx);
     o.start(t0);
     o.stop(t0 + dur + 0.02);
     if (radio) this.radioNodes.add(o);
@@ -104,7 +137,7 @@ export class Sound {
     f.Q.value = q;
     const g = c.createGain();
     g.gain.value = vol;
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(this.sfx);
     src.start(t0);
   }
 

@@ -2193,8 +2193,10 @@ class Particles {
     this.list = [];
     this.m = new THREE.Matrix4();
     this.c = new THREE.Color();
+    this.density = 1; // «меньше движения» (настройки) ставит 0,5: искр вдвое меньше
   }
   emit(pos, color, n, { spread = 0.05, up = 0.5, life = 1, size = 0.01, gravity = 1 } = {}) {
+    n = Math.ceil(n * this.density);
     for (let i = 0; i < n && this.list.length < this.max; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = Math.random() * spread;

@@ -25,6 +25,7 @@ export const CAMPAIGN = {
   board: { turn: 7.5, spin: 1.9 }, // A/D: доворот на четверть оборота (рад/с) и свободное вращение при удержании (рад/с)
   crumbs: { area: 0.12, thick: 0.15 }, // кусок меньше 12 мм² или тоньше 1,5 мм — крошка, осыпается с доски
   cutRules: { angleTolerance: 28, cover: 0.6, maxWobble: 3.8, minLength: 1.2 }, // кружочки: допуски росчерка (gestures.js), см
+  assist: { k: 1.5 }, // 0.11, «Мягкие жесты» в настройках: допуски жестов шире в k раз (1–2), список — campaign/assist.js
   kitchenScale: KITCHEN_SCALE,
   potatoReadyAfter: kitchenSec(25),
   boilTimes: { potato: kitchenSec(25), egg: kitchenSec(10), beet: kitchenSec(45) }, // сколько варится после закипания: картофель 25 мин, яйца вкрутую 10, свёкла 45 (кухонных)
