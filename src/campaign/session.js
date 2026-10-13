@@ -81,7 +81,7 @@ export class KitchenSession {
     this.request = this.day.request ?? null;
     this.requestKnown = false;
 
-    this.board = { current: null, items: {}, grated: null, stroke: null };
+    this.board = { current: null, items: {}, grated: null, stroke: null, flat: false, sweep: null }; // flat — нож плашмя (смах в миску), sweep — идущий смах
     this.bowl = { owner: null, contents: [], stirrer: null, mixStep: null, pouring: null, shaker: null, freeStir: null, blend: 0 };
     this.workPlate = { owner: null, amount: 0 };
     this.spoon = { load: 0 };
@@ -559,6 +559,8 @@ export class KitchenSession {
   }
 
   _leaveStation() {
+    this.board.flat = false; // 0.11: нож плашмя остаётся в руке только у доски
+    this.board.sweep = null;
     this.catTool = null;
     this.catFeed = null;
     this.catPlay = null;
@@ -776,6 +778,7 @@ export class KitchenSession {
     this.pointerDown = false;
     if (this.board) {
       this.board.stroke = null;
+      this.board.sweep = null;
       this.board.peelLast = null;
       this.board.knife = null;
     }

@@ -227,9 +227,10 @@ try {
     for (const cz of body.zs) for (let z = cz - body.d / 2 + 1; z < cz + body.d / 2 - 0.3; z += 1) await stroke('board', [[(-body.w / 2 - 0.8) * U, z * U], [(body.w / 2 + 0.8) * U, z * U]], 16);
     await wait(400);
     check('нарезка готова — сигнал', (await sess('s.boardCur()?.cutReady')) === true, `качество ${await sess('Math.round(s.boardQuality(s.boardCur()).score * 100)')} %`);
-    check('кнопка «В миску» подсвечена', await S(() => !!document.querySelector('button.ready-pulse[data-act="boardTransfer"]')));
+    check('кнопка «Смахнуть в миску» подсвечена', await S(() => !!document.querySelector('button.ready-pulse[data-act="boardFlat"]')));
     await shot('board_cut_ready');
-    await S(() => document.querySelector('button[data-act="boardTransfer"]')?.click()); await wait(600);
+    await S(() => document.querySelector('button[data-act="boardFlat"]')?.click()); await wait(300);
+    await stroke('board', [[-0.06, 0], [0.2, 0]], 8); await wait(600); // 0.11: нож плашмя, смах к миске
     // 1: в миске только морковь — мешается всё равно
     await station('bowl');
     const c = await scr('bowl', 0, 0);

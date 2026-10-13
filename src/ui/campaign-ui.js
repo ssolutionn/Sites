@@ -3,6 +3,7 @@ import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS, TINSEL, 
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { CLAYOUT, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
+import { sweepTarget } from '../campaign/sweep.js';
 import { campaignScore } from '../campaign/save.js';
 import { PRACTICE } from '../campaign/session.js';
 import { MEDALS, MODIFIERS, guestLine } from '../campaign/extras.js';
@@ -1668,7 +1669,7 @@ export class CampaignUI {
               ${it.body ? this._btn(`⟲ <kbd>${esc(this._keyName('left'))}</kbd>`, 'boardTurn', [1], 'ghost turn', busy, `Повернуть доску против часовой (держи ${this._keyName('left')} — плавно)`) + this._btn(`<kbd>${esc(this._keyName('right'))}</kbd> ⟳`, 'boardTurn', [-1], 'ghost turn', busy, `Повернуть доску по часовой (держи ${this._keyName('right')} — плавно)`) : ''}
               ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
               ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
-              ${(it.grater && !s.practice) || it.peel ? '' : this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : it.cutReady ? 'ready-pulse' : ''), busy, block ?? '')}
+              ${(it.grater && !s.practice) || it.peel ? '' : s.practice ? this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : it.cutReady ? 'ready-pulse' : ''), busy, block ?? '') : this._btn(s.board.flat ? `🔪 ${esc(sweepTarget(step.dest, CAMPAIGN.board.sweep).word)} →` : `🔪 Смахнуть ${esc(sweepTarget(step.dest, CAMPAIGN.board.sweep).short)}`, 'boardFlat', [], 'primary big ' + (s.board.flat ? 'active ' : '') + (block ? 'soft-disabled' : it.cutReady && !s.board.flat ? 'ready-pulse' : ''), busy, block ?? 'Нож плашмя: зажми и смахни нарезку одним движением')}
             </div>
           </div>${it.missing.length ? bar : ''}<div class="dock-live" data-live></div>`;
       }

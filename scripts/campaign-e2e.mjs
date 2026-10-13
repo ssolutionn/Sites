@@ -97,6 +97,16 @@ async function zig(cx, cz, w, d, rows = 7) {
   await drag(pts, 6);
 }
 async function noAction() { await waitFor(() => !window.__sueta.session.action, 15000); }
+// 0.11: «в миску» — нож плашмя (кнопка-инструмент), зажать и смахнуть вправо; не вышло — честно записать, что ушла в API.
+async function sweepToBowl() {
+  await dismissTips();
+  await actBtn('boardFlat'); await wait(250);
+  const a = await local(-0.06, 0), b = await local(0.2, 0);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 4 });
+  await page.mouse.move(b.x, b.y, { steps: 4 });
+  await page.mouse.up(); await wait(200); await noAction();
+}
 const U = 0.021; // метров сцены на 1 см продукта (BOARD_UNIT)
 // Что лежит поверх canvas в точке экрана: null — canvas, иначе id/класс перехватчика.
 async function blockerAt(x, y) {
@@ -224,7 +234,8 @@ async function boardProduct(stepId, name, how = {}) {
   const ang = await sess('s.boardCur().angle ?? 0');
   check(`${name}: кубики 1 см${how.chop ? ' рубкой' : how.rotate === false ? ' без поворота' : ' с поворотом доски (D)'}`, q.score > 0.6 && (how.rotate === false || Math.abs(Math.abs(ang) - Math.PI / 2) < 0.05), `${Math.round(q.score * 100)} %, кубиков ${q.neat}, доска ${Math.round((ang * 180) / Math.PI)}°`);
   await shot(`d1_board_${stepId}_cubes`);
-  await actBtn('boardTransfer'); await wait(400);
+  await sweepToBowl(); await wait(300);
+  if (!(await sess(`s.stepDone('olivier','${stepId}')`))) { viaApi.push(`boardTransfer(${stepId})`); await S(() => window.__sueta.session.boardTransfer()); await wait(300); }
 }
 // Чистка: зигзаг ножом поверх продукта, пока кожура не снята (каждый проход чуть сдвинут).
 async function peelProduct(stepId, name) {
@@ -388,7 +399,7 @@ try {
   check('росчерк мимо продукта — без разреза, с подсказкой', (await sess('s.boardCur().cuts')) === 0 && /мимо/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
   { const c = await local(0, 0); await page.mouse.move(c.x, c.y); await page.mouse.down(); await wait(120); await page.mouse.up(); await wait(100); }
   check('клик без движения — не режет', (await sess('s.boardCur().cuts')) === 0, await sess('s.hint?.text'));
-  await actBtn('boardTransfer'); await wait(200);
+  await actBtn('boardFlat'); await wait(200);
   check('«В миску» до разреза — отказ с подсказкой', !(await sess("s.stepDone('olivier','carrot')")) && /разрез/i.test((await sess('s.hint?.text')) ?? ''), await sess('s.hint?.text'));
   // нож режет по следу мыши: прямой росчерк сверху вниз режет обе морковки сразу
   await knife(-5.5, b0.z0 - 0.9, -5.5, b0.z1 + 0.9, 6);
@@ -406,7 +417,7 @@ try {
   await actBtn('boardSelect', '"olivier:sausage"'); await wait(300);
   await actBtn('boardSelect', '"olivier:carrot"'); await wait(300);
   check('смена продукта сохраняет части', (await sess('s.boardCur().product')) === 'carrot' && (await sess('s.boardCur().pieces.length')) > 20);
-  await actBtn('boardTransfer'); await wait(400);
+  await sweepToBowl(); await wait(300);
   check('морковь в миске', await sess("s.stepDone('olivier','carrot')"));
   await boardProduct('sausage', 'Колбаса');
   await boardProduct('pickle', 'Солёные огурцы × 2', { chop: true });

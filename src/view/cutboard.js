@@ -684,7 +684,14 @@ export class CutBoardView {
     let kx, kz, ky, yaw = this.knifeYaw;
     const act = it.log && s.action?.type === 'cut' ? s.action : null;
     const stroke = s.board.stroke;
-    if (body) {
+    const flat = s.board.flat; // нож плашмя (0.11): лезвие поперёк движения, низко над доской, ничего не режет
+    if (flat) {
+      kx = pointer ? pointer.x / UNIT : 0;
+      kz = pointer ? pointer.z / UNIT : 0;
+      yaw = Math.PI / 2;
+      ky = (s.pointerDown && s.board.sweep ? 0.05 : 0.5) * UNIT + 0.004;
+      this.idleT = 0;
+    } else if (body) {
       // нож идёт за мышью; зажата кнопка — лезвие в продукте и режет по следу
       kx = pointer ? pointer.x / UNIT : 0;
       kz = pointer ? pointer.z / UNIT : 0;
@@ -736,8 +743,9 @@ export class CutBoardView {
     this.knife.rotation.y = this.knifeYaw;
     const kk = 1 - Math.exp(-dt * 30);
     const area = body ? this._boardBounds(it) : it.log ? { minX: -it.log.length / 2, maxX: it.log.length / 2, minZ: -it.radius, maxZ: it.radius } : { minX: -6, maxX: 6, minZ: -6, maxZ: 6 };
-    this.knifePos.x += (THREE.MathUtils.clamp(kx, area.minX - 3, area.maxX + 3) * UNIT - this.knifePos.x) * kk;
-    this.knifePos.z += (THREE.MathUtils.clamp(kz, area.minZ - 2.4, area.maxZ + 2.4) * UNIT - this.knifePos.z) * kk;
+    const padX = flat ? 14 : 3, padZ = flat ? 6 : 2.4; // смах уходит за край нарезки
+    this.knifePos.x += (THREE.MathUtils.clamp(kx, area.minX - padX, area.maxX + padX) * UNIT - this.knifePos.x) * kk;
+    this.knifePos.z += (THREE.MathUtils.clamp(kz, area.minZ - padZ, area.maxZ + padZ) * UNIT - this.knifePos.z) * kk;
     this.knifePos.y += (ky - this.knifePos.y) * (1 - Math.exp(-dt * 40));
     this.knife.position.copy(this.knifePos);
 

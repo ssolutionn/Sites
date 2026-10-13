@@ -2,6 +2,7 @@
 import { PRODUCTS } from './data.js';
 import { cutLine, largestPiece, pieceVolume, placeBeside, recenter } from '../game/cutting.js';
 import { Stroke, classifyCut, CUT_HINTS, CUT_RULES } from './gestures.js';
+import { sweepVerdict, sweepTarget, SWEEP_HINTS } from './sweep.js';
 import { CoverageMask } from './coverage.js';
 import { CutBody, rasterQuality } from '../game/raster-cut.js';
 import { pieceStats } from './observations.js';
@@ -43,6 +44,7 @@ export const boardMethods = {
       const block = this._boardDirtyBlock(this.board.items[key].product, this.board.items[key].type);
       if (block) { this.setHint(block); return false; }
       this.board.current = key;
+      this.board.flat = false;
       this._emit('boardSwitch', { key });
       return true;
     }
@@ -120,6 +122,8 @@ export const boardMethods = {
       return 'blocked';
     }
     const ux = x / BOARD_UNIT, uz = z / BOARD_UNIT;
+    // 0.11 (G2.4): нож плашмя — не режет, а смахивает нарезку к миске
+    if (this.board.flat && !it.peel && !it.grater) return this._sweepPointer(it, type, x, z);
     if (it.body) {
       // доска повёрнута: точку мыши — в систему продукта
       const a = it.angle ?? 0, c = Math.cos(a), sn = Math.sin(a);
@@ -156,6 +160,71 @@ export const boardMethods = {
       if (!stroke || this.action) return 'ignored';
       stroke.add(ux, uz, this.clock);
       return this._strokeCut(it, stroke);
+    }
+    return 'hover';
+  },
+
+  /**
+   * 0.11 (G2.4): нож плашмя. Включают фишкой в доке («Смахнуть в миску»), после этого движение мыши ничего не режет:
+   * зажала — отпустила дальше 15 см вправо (к миске) — нарезка ссыпана (boardTransfer). Не дотянула или не туда — подсказка, ничего не потрачено.
+   */
+  boardFlat(on = !this.board.flat) {
+    const it = this.boardCur();
+    if (!this._isIdleAt('board') || !it || it.peel || it.grater) return false;
+    if (on) {
+      const block = this.transferBlock(it);
+      if (block) {
+        this.setHint(block, 2.5);
+        return false;
+      }
+    }
+    this.board.flat = !!on;
+    this.board.sweep = null;
+    this.board.stroke = null;
+    this._emit('flat', { on: !!on });
+    if (on) this.setHint(`Нож плашмя: смахни нарезку ${sweepTarget(this.stepDef(it.dishId, it.stepId)?.dest, this.cfg.board.sweep).word}`, 3);
+    return true;
+  },
+
+  _sweepDenied(reason, text) {
+    this.setHint(text, 2.2);
+    this._emit('cutDenied', { reason });
+  },
+
+  _sweepPointer(it, type, x, z) {
+    const b = this.board;
+    if (type === 'down') {
+      if (this.action) return 'ignored';
+      b.sweep = { x0: x, z0: z, x, z };
+      return 'sweep';
+    }
+    if (type === 'move') {
+      if (!this.pointerDown || !b.sweep) return 'hover';
+      b.sweep.x = x;
+      b.sweep.z = z;
+      return 'sweep';
+    }
+    if (type === 'up') {
+      const w = b.sweep;
+      b.sweep = null;
+      if (!w || this.action) return 'ignored';
+      w.x = x;
+      w.z = z;
+      const base = this.cfg.board.sweep;
+      const target = sweepTarget(this.stepDef(it.dishId, it.stepId)?.dest, base);
+      const rules = { ...base, dir: target.dir };
+      const v = sweepVerdict({ x: w.x0, z: w.z0 }, { x: w.x, z: w.z }, rules, this.cfg.assist?.on ? this.cfg.assist.k : 1);
+      if (!v.ok) {
+        if (v.len > rules.minLen / 3) this._sweepDenied(v.reason, v.reason === 'wrong-way' ? `Смахивай ${target.word}` : SWEEP_HINTS[v.reason]);
+        return v.reason;
+      }
+      const block = this.transferBlock(it);
+      if (block) {
+        this._sweepDenied('blocked', block);
+        return 'blocked';
+      }
+      b.flat = false;
+      return this.boardTransfer() ? 'sweep-done' : 'blocked';
     }
     return 'hover';
   },

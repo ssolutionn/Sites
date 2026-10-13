@@ -149,7 +149,7 @@ async function boot() {
   // игрок вышел из полного экрана сам (Esc, F11, меню окна) — запоминаем как выбор
   fullscreen.onChange((on) => settings.setFullscreen(on));
 
-  const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'reduceHeat']);
+  const DENY = new Set(['goTo', 'goToPoint', 'boardTransfer', 'boardFlat', 'boardSelect', 'bowlAdd', 'traySelect', 'confirmDish', 'placePot', 'takePot', 'ovenLoad', 'confirmOrder', 'shubaChoose', 'shubaConfirmLayer', 'serveDish', 'collectOrder', 'takeReplacement', 'setVariant', 'finishDay', 'seasonAdd', 'seasonTaste', 'seasonDilute', 'seasonDone', 'coolProduct', 'reduceHeat']);
   function act(name, ...args) {
     if (!session || mode !== 'kitchen') return false;
     if (name === 'finishDay') return finishDay();
