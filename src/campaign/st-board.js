@@ -188,7 +188,7 @@ export const boardMethods = {
 
   _sweepDenied(reason, text) {
     this.setHint(text, 2.2);
-    this._emit('cutDenied', { reason });
+    this._emit('cutDenied', { reason, sweep: true }); // sweep — отказ смаха, а не росчерка: рука-призрак не учит по нему резать
   },
 
   _sweepPointer(it, type, x, z) {
@@ -215,7 +215,8 @@ export const boardMethods = {
       const rules = { ...base, dir: target.dir };
       const v = sweepVerdict({ x: w.x0, z: w.z0 }, { x: w.x, z: w.z }, rules, this.cfg.assist?.on ? this.cfg.assist.k : 1);
       if (!v.ok) {
-        if (v.len > rules.minLen / 3) this._sweepDenied(v.reason, v.reason === 'wrong-way' ? `Смахивай ${target.word}` : SWEEP_HINTS[v.reason]);
+        if (v.len <= rules.minLen / 3) return 'ignored'; // щелчок на месте — не попытка смаха: без подсказки и без звука отказа
+        this._sweepDenied(v.reason, v.reason === 'wrong-way' ? `Смахивай ${target.word}` : SWEEP_HINTS[v.reason]);
         return v.reason;
       }
       const block = this.transferBlock(it);

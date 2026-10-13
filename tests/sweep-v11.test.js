@@ -118,3 +118,15 @@ test('курсор ушёл за окно посреди смаха (pointerUp) 
   assert.equal(s.stepDone('olivier', 'sausage'), false);
   assert.equal(s.board.flat, true);
 });
+
+test('щелчок ножом плашмя на месте — не попытка смаха: без подсказки, без отказа и без звука «нельзя»', () => {
+  const s = cutSausage();
+  s.boardFlat(true);
+  s.drain();
+  const before = s.hint?.text;
+  // main.js играет «нельзя» на 'short' и других отказах ножа — щелчок должен вернуть 'ignored'
+  assert.equal(swipe(s, 0, 0, 0.3, 0, 2), 'ignored');
+  assert.equal(s.drain().some((e) => e.type === 'cutDenied'), false);
+  assert.equal(s.hint?.text, before);
+  assert.equal(s.board.flat, true);
+});

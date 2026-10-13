@@ -38,7 +38,7 @@ export function gestureNow(s) {
   switch (p) {
     case 'board': {
       const it = s.boardCur?.();
-      if (!it) return null;
+      if (!it || s.board?.flat) return null; // нож плашмя смахивает, а не режет: показывать росчерк ножа тут нельзя
       if (it.grater) return 'grate';
       if (it.peel) return 'peel';
       return it.log ? 'round' : 'cut-v';
@@ -160,6 +160,7 @@ export function placeOk(id, s) {
     case 'cut-v':
     case 'cut-h':
     case 'round':
+      return p === 'board' && !!s.boardCur?.() && !s.board?.flat;
     case 'grate':
     case 'peel':
       return p === 'board' && !!s.boardCur?.();
@@ -212,6 +213,7 @@ export function cueOf(e, s) {
     case 'tutorial':
       return TUTORIAL[e.topic] ? first(TUTORIAL[e.topic]) : null;
     case 'cutDenied':
+      if (e.sweep) return null; // отказ смаха ножом плашмя (st-board.js), а не росчерка
       return KNIFE_REFUSALS.has(e.reason) ? refuse(knifeDemo(e.reason, s), e.reason) : null;
     case 'hangDenied':
       return e.why === 'off' || e.why === 'close' ? refuse('toy-drag', e.why) : null;

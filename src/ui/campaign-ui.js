@@ -696,6 +696,10 @@ export class CampaignUI {
 
   hideKitchen() {
     this.ghost?.reset();
+    // отложенная после блюда заметка книги не всплывает поверх итогов дня или меню
+    this.quiet = 0;
+    this.noteLater = null;
+    this.noteT = 0;
     this.el.note?.classList.add('hidden');
     this.el.hud.classList.add('hidden');
     this.el.panel.classList.add('hidden');
@@ -768,6 +772,11 @@ export class CampaignUI {
     const s = this.app.session;
     this.ghost?.repeat(s); // рука показывает жест, который сейчас в руках; текст подсказки — как раньше
     let topic = this.lastTip;
+    // нож плашмя: совет про нарезку тут сбивает — повторяем подсказку смаха (её ставит boardFlat)
+    if (s?.panel === 'board' && s.board.flat) {
+      this.act('boardFlat', true);
+      return;
+    }
     if (s?.panel === 'board') {
       const it = s.boardCur();
       topic = it?.grater ? 'grate' : it?.log ? 'round' : 'cube';

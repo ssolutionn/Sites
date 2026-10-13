@@ -17,7 +17,7 @@ import { gestureNow, paramsFor, placeOk, cueOf, freeSpot, stillRelevant, PressWa
 import { defaultSettings, normalizeSettings, normalizeGhostSeen, pickPreferences } from '../src/settings.js';
 import { emptySave, parseSave, SaveStore, SAVE_KEY } from '../src/campaign/save.js';
 import { SettingsController } from '../src/settings-controller.js';
-import { KitchenSession, arrive, run, take, startBoil } from './helpers-campaign.js';
+import { KitchenSession, arrive, run, take, startBoil, cutCubes } from './helpers-campaign.js';
 
 const U = BOARD_UNIT;
 const G = CAMPAIGN.ghost;
@@ -991,4 +991,25 @@ test('пена убегает: рука покажет крутилку, ждё�
   assert.equal(stillRelevant('cat-wave', s), true);
   assert.equal(stillRelevant('stir', s), false);
   assert.equal(stillRelevant('knob', null), false);
+});
+
+test('нож плашмя: отказ смаха — не урок нарезки, «?» не показывает росчерк ножа (регрессия ревью 0.11)', () => {
+  const s = day(0);
+  arrive(s, 'board');
+  assert.ok(s.boardSelect('olivier:sausage'), s.hint?.text);
+  cutCubes(s);
+  assert.equal(gestureNow(s), 'cut-v', 'нож в руке — показываем росчерк');
+  assert.ok(s.boardFlat(true), s.hint?.text);
+  s.drain();
+  // три коротких смаха подряд: отказы есть, но это не отказы росчерка
+  for (let k = 0; k < 3; k++) {
+    s.pointer('down', 0, 0);
+    s.pointer('move', 4 * U, 0);
+    s.pointer('up', 4 * U, 0);
+  }
+  const denied = s.drain().filter((e) => e.type === 'cutDenied');
+  assert.equal(denied.length, 3);
+  for (const e of denied) assert.notEqual(cueOf(e, s)?.id, 'cut-v');
+  assert.notEqual(gestureNow(s), 'cut-v', 'нож плашмя — не росчерк');
+  assert.equal(placeOk('cut-v', s), false, 'идущий показ ножа уходит, когда нож лёг плашмя');
 });
