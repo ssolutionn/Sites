@@ -451,6 +451,12 @@ async function boot() {
     },
     isMuted: () => sound.muted,
     settings,
+    // «Подсказки рукой» (src/ghost/): включена ли рука-призрак и какие жесты она уже показывала
+    ghost: {
+      enabled: () => save.data.settings.ghostHints !== false,
+      isSeen: (id) => !!save.data.settings.ghostSeen?.[id],
+      markSeen: (id) => settings.markGhostSeen(id),
+    },
     keymap,
     fullscreen,
     toggleMute() {
