@@ -621,7 +621,7 @@ const days = [
       ui(() => s.shubaChoose(comp));
       clickAt(w.dish.x, w.dish.z);
       zig(w.dish.x, w.dish.z, w.dish.r * 1.5, w.dish.r * 1.5, 9);
-      ui(() => s.shubaConfirmLayer());
+      if (w.current) ui(() => s.shubaConfirmLayer()); // обычно слой уже лёг сам при отпускании (0.11)
     }
     think(PACE.inspect);
     ui(() => s.confirmDish('shuba'));

@@ -1360,6 +1360,36 @@ export class CampaignUI {
       if (loc) this.act('stoveDrop', loc.x, loc.z);
       else this.act('stoveDrop', 99, 99);
     });
+    // 0.11 (G2.6): замену украденного берут жестом — зажать фишку и перетащить на доску (из запаса, он «как из холодильника»)
+    p.addEventListener('pointerdown', (e) => {
+      const chip = e.target.closest('[data-drag-repl]');
+      if (!chip || chip.disabled) return;
+      e.preventDefault();
+      this.sound.unlock();
+      const it = this.app.session?.boardCur();
+      this.replDrag = { x0: e.clientX, y0: e.clientY, moved: false, icon: PICON[it?.product] ?? '🍽' };
+    });
+    window.addEventListener('pointermove', (e) => {
+      const d = this.replDrag;
+      if (!d) return;
+      if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 8) {
+        d.moved = true;
+        this.el.ghost.innerHTML = `<span class="toy-ghost">${d.icon}</span>`;
+        this.el.ghost.classList.remove('hidden');
+      }
+      if (d.moved) this._moveGhost(e);
+    });
+    window.addEventListener('pointerup', (e) => {
+      const d = this.replDrag;
+      if (!d) return;
+      this.replDrag = null;
+      this.el.ghost.classList.add('hidden');
+      if (!d.moved) {
+        this.app.session?.setHint('Зажми замену и перетащи на доску', 2);
+        return;
+      }
+      if (this._planeLocal(e, 'board')) this.act('takeReplacement');
+    });
     // перетаскивание блюд на стол
     p.addEventListener('pointerdown', (e) => {
       const card = e.target.closest('[data-dish]');
@@ -1667,7 +1697,7 @@ export class CampaignUI {
           <div class="dock">${backBtn}<div class="dock-items">${chips}</div>
             <div class="dock-main">
               ${it.body ? this._btn(`⟲ <kbd>${esc(this._keyName('left'))}</kbd>`, 'boardTurn', [1], 'ghost turn', busy, `Повернуть доску против часовой (держи ${this._keyName('left')} — плавно)`) + this._btn(`<kbd>${esc(this._keyName('right'))}</kbd> ⟳`, 'boardTurn', [-1], 'ghost turn', busy, `Повернуть доску по часовой (держи ${this._keyName('right')} — плавно)`) : ''}
-              ${it.missing.length ? this._btn('🌭 Взять замену', 'takeReplacement', [], 'danger', busy) : ''}
+              ${it.missing.length ? `<button class="danger prod-chip" data-drag-repl ${busy ? 'disabled' : ''} title="Зажми и перетащи на доску — замена из запаса ляжет рядом"><span class="pi">${PICON[it.product] ?? '🍽'}</span><span class="pn">Замена ⤵</span></button>` : ''}
               ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
               ${(it.grater && !s.practice) || it.peel ? '' : s.practice ? this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : it.cutReady ? 'ready-pulse' : ''), busy, block ?? '') : this._btn(s.board.flat ? `🔪 ${esc(sweepTarget(step.dest, CAMPAIGN.board.sweep).word)} →` : `🔪 Смахнуть ${esc(sweepTarget(step.dest, CAMPAIGN.board.sweep).short)}`, 'boardFlat', [], 'primary big ' + (s.board.flat ? 'active ' : '') + (block ? 'soft-disabled' : it.cutReady && !s.board.flat ? 'ready-pulse' : ''), busy, block ?? 'Нож плашмя: зажми и смахни нарезку одним движением')}
             </div>
@@ -1859,7 +1889,7 @@ export class CampaignUI {
       const exp = s.shubaExpected(id);
       const order = exp.map((c, i) => `<span class="chip ${w.layers[i] ? (w.layers[i].comp === c ? 'ok' : 'bad') : ''}">${i + 1}. ${c === 'mayo' ? 'майонез' : esc(PRODUCTS[c].name.toLowerCase())}</span>`).join(' ');
       const comps = s.shubaComponents(id).map((c) => this._btn(`${PICON[c.product] ?? ''} ${c.comp === 'mayo' ? 'Майонез' : esc(PRODUCTS[c.product].name)}`, 'shubaChoose', [c.comp], w.current?.comp === c.comp ? 'active' : c.available ? '' : 'soft-disabled', busy || !c.available)).join('');
-      extra = `<div class="row small">Порядок: ${order}</div><div class="row tabs">${comps}</div><div class="row">${this._btn('✓ Подтвердить слой', 'shubaConfirmLayer', [], 'primary', busy || !w.current?.placed)}${this._btn('↶ Отменить последний', 'shubaUndo', [], 'ghost', busy || (!w.current && !w.layers.length))}</div>`;
+      extra = `<div class="row small">Порядок: ${order}</div><div class="row tabs">${comps}</div><div class="row">${this._btn('↶ Отменить последний', 'shubaUndo', [], 'ghost', busy || (!w.current && !w.layers.length))}<span class="small live" data-live>${w.current?.placed ? 'Размажь слой шпателем, потом отпусти — слой ляжет сам' : ''}</span></div>`;
     }
     if (lay === 'chicken') {
       const ch = s.dishes.chicken;

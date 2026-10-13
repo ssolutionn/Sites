@@ -427,6 +427,8 @@ export const trayMethods = {
   _shubaPointer(id, w, type, x, z) {
     const cur = w.current;
     const onDish = inCircle(x, z, w.dish, w.dish.r * 0.98);
+    // 0.11 (G2.5): отпустила шпатель, когда слой покрыт как нужно, — слой засчитан сам, кнопки «Подтвердить» нет
+    if (type === 'up' && cur?.placed && !this.action && cur.mask.coverage() >= this.cfg.layer.complete) return this.shubaConfirmLayer() ? 'layer-done' : 'hover';
     if (!cur) {
       if (type === 'down' && onDish) this.setHint('Выбери компонент слоя в панели снизу', 2);
       return 'ignored';

@@ -185,7 +185,7 @@ test('рецепт: шуба — слои по порядку, последни�
   s.pointer('down', w.dish.x, w.dish.z);
   s.pointer('up', 0, 0);
   zigzag(s, w.dish.x, w.dish.z, 0.2, 0.2, 10);
-  assert.ok(s.shubaConfirmLayer());
+  assert.equal(w.layers.length, 1, '0.11: слой лёг сам при отпускании шпателя');
   assert.equal(s.inventory.count('mayo'), 0);
   assert.ok(s.shubaUndo());
   assert.equal(w.layers.length, 0);

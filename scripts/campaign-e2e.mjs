@@ -161,10 +161,19 @@ async function shooCat() {
   await noAction();
   if (previous) await goStation('', previous);
 }
+// 0.11 (G2.6): замена — фишку из дока на доску
+async function dragReplacement() {
+  const chip = page.locator('[data-drag-repl]').first();
+  await chip.waitFor({ state: 'visible', timeout: 8000 });
+  const cb = await chip.boundingBox(), t = await local(0, 0);
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2); await page.mouse.down();
+  await page.mouse.move(t.x, t.y, { steps: 8 });
+  await page.mouse.up(); await wait(200);
+}
 async function guardCat() {
   await dismissTips();
   if (await sess("s.cat.state === 'theft'")) { await shot('d1_cat'); await shooCat(); }
-  if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) { await actBtn('takeReplacement'); await noAction(); }
+  if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) { await dragReplacement(); await noAction(); }
 }
 // The cat's replacement is placed beside the original. Cut its actual bounds,
 // transformed by the current board angle; do not assume the old product centre.
