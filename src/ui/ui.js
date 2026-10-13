@@ -135,7 +135,7 @@ export class UI {
     }
     if (r.phoneTime >= 1) comments.push(`На загрузку фото Верки ушло ${Math.round(r.phoneTime)} с. Фото так и не загрузилось — интернет ушёл на каникулы.`);
     if (r.thefts) comments.push(`Кот утащил колбасу: ${r.thefts} раз(а). Он доволен.`);
-    if (r.spills) comments.push(`Кастрюля выкипела: ${r.spills} раз(а). Пол помоют гости.`);
+    if (r.spills) comments.push(`Кастрюля убежала: ${r.spills} раз(а). Пол помоют гости.`);
     if (r.garlandError) comments.push('Гирлянда так и не загорелась — праздник без огоньков.');
     if (r.radioError) comments.push('Радио осталось сломанным — праздник без музыки.');
     else if (r.radioRepairs) comments.push('Радио починено — музыка вернулась.');

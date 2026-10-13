@@ -67,9 +67,10 @@ test('вода выкипает: огонь 6 — предупреждение, 
   }
   assert.ok(warnAt != null && urgentAt != null && burntAt != null, `warn ${warnAt} urgent ${urgentAt} burnt ${burntAt}`);
   assert.ok(warnAt < urgentAt && urgentAt < burntAt);
-  // калибровка: полная кастрюля на огне 6 выкипает за 40 кухонных минут кипения
+  // калибровка: полная кастрюля на огне 6 выкипает за dryMin кухонных минут кипения (плюс ~8 минут, пока закипает)
   const boilStart = s.stove?.startT ?? 0;
-  assert.ok(burntAt - boilStart > kitchenSec(40) && burntAt - boilStart < kitchenSec(40) + kitchenSec(10), `${burntAt - boilStart}`);
+  const dry = kitchenSec(CAMPAIGN.stove.dryMin);
+  assert.ok(burntAt - boilStart > dry && burntAt - boilStart < dry + kitchenSec(10), `${burntAt - boilStart}`);
   const qty = stepProducts('olivier', s.stepDef('olivier', 'boil'), undefined).potato;
   assert.equal(s.inventory.count('potato'), stock0 - qty, 'картофель не вернулся в запас');
   assert.equal(s.stepDone('olivier', 'boil'), false);
@@ -134,4 +135,47 @@ test('переваренные яйца помечены на доске — н�
   arrive(t, 'board');
   assert.ok(t.boardSelect('olivier:peelEgg'));
   assert.equal(t.boardCur().overcooked, false);
+});
+
+test('пригорела картошка оливье → новую снова можно достать, почистить и сварить (день не застревает)', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.triggers = [];
+  startBoil(s, 'olivier:boil', { burner: 0, heat: 9 });
+  for (let i = 0; i < 6000 && s.burners[0].state !== 'empty'; i++) s.update(0.1);
+  assert.equal(s.burners[0].soot, true, 'пригорело');
+  s.inventory.add('potato', 3); // привезли новую
+  const t = s.fridgeTasks().find((x) => x.product === 'potato');
+  assert.ok(t, 'картофель снова в задачах холодильника');
+  assert.equal(t.dest, 'board', 'сырой — сначала на доску почистить');
+  assert.equal(s.stepDone('olivier', 'peelPotato'), false);
+  s.burners[0].dirty = false;
+  const b = startBoil(s, 'olivier:boil', { burner: 1, heat: 6 });
+  assert.equal(b.state, 'boiling', 'вторая кастрюля стоит');
+});
+
+test('свёкла на обычном огне 6 успевает свариться до того, как выкипит вода (долить воды в игре нельзя)', () => {
+  const s = new KitchenSession({ dayIndex: 4, seed: 1 });
+  s.triggers = [];
+  startBoil(s, 'shuba:boilBeet', { burner: 0, heat: 6 });
+  let readyAt = null, burntAt = null;
+  for (let i = 0; i < 8000 && burntAt == null; i++) {
+    s.update(0.1);
+    const b = s.burners[0];
+    if (readyAt == null && b.state === 'ready') readyAt = s.t;
+    if (b.soot) burntAt = s.t;
+  }
+  assert.ok(readyAt != null, 'свёкла сварилась');
+  assert.ok(burntAt == null || burntAt - readyAt >= kitchenSec(10), `после «готово» есть хотя бы 10 кухонных минут, чтобы снять: ready ${readyAt}, burnt ${burntAt}`);
+});
+
+test('поставила кастрюлю на включённую пустую конфорку → напоминание «горит впустую» снято', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.triggers = [];
+  arrive(s, 'stove');
+  s.setHeat(2, 6);
+  run(s, CAMPAIGN.stove.idleWarn + 2);
+  assert.ok(alertKeys(s).includes('burner2'));
+  startBoil(s, 'olivier:boilEgg', { burner: 2, heat: null });
+  run(s, 1);
+  assert.equal(alertKeys(s).includes('burner2'), false);
 });

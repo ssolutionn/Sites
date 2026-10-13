@@ -1085,7 +1085,7 @@ export class KitchenSession {
       notes.splice(1, 0, q >= 0.999 ? 'Посолено идеально' : q >= 0.7 ? 'Вкус почти в норме' : dish.season.salt > dish.season.target.salt ? 'Пересолено' : 'Пресновато');
     }
     if (dish.penalty.prep && parts.prep != null) parts.prep = Math.max(0, parts.prep - dish.penalty.prep);
-    if (dish.penalty.prepSpill) notes.unshift('Кастрюля выкипела — картофель разварился');
+    if (dish.penalty.prepSpill) notes.unshift('Кастрюля убежала — пена залила плиту');
     if (dish.penalty.overcook) notes.unshift(BOILED[dish.penalty.overcook]?.note ?? 'Переварено');
     if (dish.penalty.burnt) notes.unshift('Кастрюля пригорела — продукт пришлось заказывать заново');
     dish.parts = parts;

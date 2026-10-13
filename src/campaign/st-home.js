@@ -143,6 +143,7 @@ export const homeMethods = {
       const nb = { ...emptyBurnerFields(b.i), state: 'boiling', owner: task.dishId, step: task.stepId, product: task.product, startT: this.t, heat: Math.max(0, Math.min(this.cfg.stove.maxHeat, h0 | 0)) };
       this.burners[b.i] = nb;
       nb.readyAt = this._potEta(nb);
+      this._removeAlert('burner' + b.i); // конфорка больше не горит впустую
       this.carry = null;
       this._emit('potPlaced', { dishId: task.dishId, burner: b.i, product: task.product });
       if (nb.heat === 0) this.setHint('В кастрюле. Включи огонь — поверни крутилку: 7–9 быстро закипит, потом убавь до 4–5', 4.5);
@@ -281,7 +282,7 @@ export const homeMethods = {
         if (this.action?.type === 'reduceHeat') this._cancelAction();
         this._addPuddle('pot', CLAYOUT.potPuddle);
         s.dirty = true; // пеной залило конфорку: после варки её надо вытереть
-        this.penalties.push({ kind: 'spill', points: this.cfg.scoring.order.spillEvent, label: 'Кастрюля выкипела' });
+        this.penalties.push({ kind: 'spill', points: this.cfg.scoring.order.spillEvent, label: 'Кастрюля убежала' });
         const dish = this.dishes[s.owner];
         if (dish && !dish.penalty.prepSpill) {
           dish.penalty.prepSpill = true;
@@ -309,6 +310,9 @@ export const homeMethods = {
     if (dish) {
       dish.penalty.prep += this.cfg.stove.burnPrepPenalty;
       dish.penalty.burnt = (dish.penalty.burnt ?? 0) + 1;
+      // картофель для оливье чистят сырым до варки: новый из холодильника снова идёт через доску, иначе шаг варки недостижим
+      const boil = dish.recipe.steps.find((x) => x.id === step);
+      for (const r of dish.recipe.steps) if (r.type === 'peel' && r.raw && (boil?.requires ?? []).includes(r.id)) dish.steps[r.id] = { done: false, q: null, info: null };
     }
     this.penalties.push({ kind: 'burnt', points: this.cfg.scoring.order.burntPot, label: 'Кастрюля пригорела' });
     this.stats.burnt = (this.stats.burnt ?? 0) + 1;
