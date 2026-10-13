@@ -65,6 +65,7 @@ export function buildStove(THREE, opts = {}) {
     enamel: std(0xf2f0ea, { roughness: 0.34, metalness: 0.04 }),
     panel: std(0xe9e7e1, { roughness: 0.38, metalness: 0.04 }),
     dark: std(0x1f2025, { roughness: 0.7 }),
+    gap: std(0x2f3036, { roughness: 0.8 }), // щели между деталями фасада и по бокам: тёмно-серые, не чёрные
     hob: std(0x14161b, { roughness: 0.14, metalness: 0.35 }),
     iron: std(0x2b2b30, { roughness: 0.5, metalness: 0.55 }),
     chrome: std(0xcfd6dd, { roughness: 0.28, metalness: 0.75 }),
@@ -73,7 +74,7 @@ export function buildStove(THREE, opts = {}) {
     mark: std(0xffffff, { roughness: 0.4, emissive: 0x331100 }),
     rack: std(0x6a7077, { roughness: 0.4, metalness: 0.6 }),
     display: std(0x0c1a10, { roughness: 0.3, emissive: 0x1a6b3a, emissiveIntensity: 0.55 }),
-    glass: std(0x1d2128, { roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.5, depthWrite: false }),
+    glass: std(0x15181d, { roughness: 0.25, metalness: 0, envMapIntensity: 0.2, transparent: true, opacity: 0.62, depthWrite: false }),
     interior: std(0x1c1816, { roughness: 0.9, side: THREE.BackSide }),
   };
 
@@ -105,7 +106,7 @@ export function buildStove(THREE, opts = {}) {
   const shellGeo = new THREE.ExtrudeGeometry(shellShape, { depth: shellZ1 - shellZ0, bevelEnabled: false });
   shellGeo.translate(0, 0, shellZ0);
   // [торцы: тёмные (щели между дверцей, панелью и ящиком), стенки: эмаль]
-  const shell = place(new THREE.Mesh(shellGeo, [M.dark, M.enamel]), 0, 0, 0, 'body', 'shell');
+  const shell = place(new THREE.Mesh(shellGeo, [M.gap, M.enamel]), 0, 0, 0, 'body', 'shell');
   group.add(shell);
   group.add(box(D.w, D.deckY - D.legH, 0.015, M.dark, 0, (D.deckY + D.legH) / 2, -(D.d - 0.0075), 'body', 'back_plate'));
   // внутренность духовки: тёмная коробка, видна сквозь стекло
@@ -142,7 +143,7 @@ export function buildStove(THREE, opts = {}) {
   group.add(box(D.w - 0.06, D.legH, D.d - 0.1, M.dark, 0, D.legH / 2, -(D.d - 0.1) / 2 - 0.05, 'body', 'plinth'));
   for (const sx of [-1, 1]) for (const z of [-0.027, -(D.d - 0.027)]) group.add(cyl(0.02, 0.022, D.legH, M.foot, sx * (hw - 0.04), D.legH / 2, z, 'body', 'leg'));
   // тёмные щели по бокам: между корпусом и соседними шкафами
-  for (const sx of [-1, 1]) group.add(box(0.006, COUNTER_TOP_Y + 0.003, D.d - 0.02, M.dark, sx * (hw + 0.003), (COUNTER_TOP_Y + 0.003) / 2, -(D.d - 0.02) / 2, 'slit', 'slit'));
+  for (const sx of [-1, 1]) group.add(box(0.006, COUNTER_TOP_Y + 0.003, D.d - 0.02, M.gap, sx * (hw + 0.003), (COUNTER_TOP_Y + 0.003) / 2, -(D.d - 0.02) / 2, 'slit', 'slit'));
 
   // ---------- крутилки: ось на игрока, метка вверх при нуле, поворот по rotation.y (по часовой — больше огня) ----------
   const knobs = D.knobX.map((x, i) => {
