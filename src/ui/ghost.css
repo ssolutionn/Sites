@@ -1,0 +1,33 @@
+/* 0.11: «рука-призрак» (src/ui/ghost-hand.js) показывает жест поверх сцены. Подключается после theme.css;
+   цвета — только токены темы, мышь слой не ловит. «Меньше движения» (body.reduce-motion) — стрелка вместо анимации. */
+
+#ghost-hand { position: fixed; inset: 0; z-index: 28; pointer-events: none; animation: gh-in var(--t-med) ease-out; }
+#ghost-hand.hidden { display: none; }
+@keyframes gh-in { from { opacity: 0; } to { opacity: 1; } }
+
+.gh-svg { position: absolute; inset: 0; overflow: visible; }
+
+/* траектория: пунктир — весь путь, жёлтая нить — пройденная часть */
+.gh-route { fill: none; stroke: var(--on-glass); stroke-opacity: 0.7; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 9; filter: drop-shadow(0 0 3px var(--glass-strong)); }
+.gh-trail { fill: none; stroke: var(--gold); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px var(--glass-strong)); }
+.gh-start { fill: var(--gold); stroke: var(--on-glass); stroke-width: 2; opacity: 0.9; filter: drop-shadow(0 0 3px var(--glass-strong)); }
+
+/* рука: кончик пальца — в точке пути */
+.gh-hand { opacity: 0.88; transition: opacity var(--t-med); filter: drop-shadow(0 4px 6px var(--glass-strong)); }
+.gh-body { transform-box: view-box; transform-origin: 0 0; transition: transform var(--t-fast); }
+.gh-palm { fill: var(--paper); stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.gh-folds { fill: none; stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; opacity: 0.65; }
+.gh-ring { fill: none; stroke: var(--gold); stroke-width: 3; opacity: 0; transition: opacity var(--t-fast); }
+.gh-hand.gh-down .gh-ring { opacity: 0.95; }
+.gh-hand.gh-down .gh-body { transform: scale(0.93); }
+.gh-rest .gh-hand { opacity: 0.4; }
+
+/* подпись: что делать рукой */
+.gh-label { position: absolute; transform: translateX(-50%); max-width: min(340px, calc(100vw - 24px)); padding: 6px 14px; border-radius: var(--r-pill); background: var(--glass-strong); color: var(--on-glass); border: 1px solid var(--glass-line); box-shadow: var(--shadow-1); font: 800 13px/1.25 var(--font); text-align: center; white-space: nowrap; }
+
+/* «Меньше движения»: рука стоит в начале, путь — стрелкой */
+.gh-static .gh-route { display: none; }
+.gh-static .gh-trail { stroke-dasharray: 10 8; stroke-width: 4; }
+.gh-head { fill: none; stroke: var(--gold); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px var(--glass-strong)); }
+.gh-static .gh-hand { opacity: 0.8; }
+@media (prefers-reduced-motion: reduce) { #ghost-hand { animation: none; } }

@@ -18,6 +18,7 @@ const EPS = 1e-9;
  * @property {'first'|'refuse'|'repeat'} why  что его вызвало
  * @property {number} dur     сколько секунд длится показ (проходы вместе с паузами)
  * @property {number} loops   сколько раз рука повторяет движение
+ * @property {number} pause   пауза между проходами, с
  * @property {number} speed   во сколько раз путь проигрывается быстрее естественного (отказ ужимает показ до refuseShow)
  */
 
@@ -47,7 +48,7 @@ export class GhostTrigger {
 
   _show(id, why, dur, loops = 1) {
     const natural = this.demos[id].dur;
-    return { id, why, dur, loops, speed: natural > 0 ? (natural * loops) / (dur - (loops - 1) * this.cfg.loopPause) : 1 };
+    return { id, why, dur, loops, pause: this.cfg.loopPause, speed: natural > 0 ? (natural * loops) / (dur - (loops - 1) * this.cfg.loopPause) : 1 };
   }
 
   // Показ с loops проходами: между ними пауза loopPause.

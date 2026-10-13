@@ -65,6 +65,7 @@ export function settingsHTML({ settings, muted, keymap, fs, reduce }) {
           ${switchRow('assist', 'Мягкие жесты', settings.assist, { hint: 'Допуски шире: для тачпада и неуверенной руки.' })}
           ${segRow('ts', 'Размер текста', TEXT_SCALES.map((s) => ({ value: s, label: `${scalePercent(s)} %` })), settings.textScale)}
           ${switchRow('motion', 'Меньше движения', reduce, { hint: 'Камера без качки, искр вдвое меньше.' })}
+          ${switchRow('ghost', 'Подсказки рукой', settings.ghostHints, { hint: 'Рука показывает жест при первой встрече и после неудач.' })}
         </section>
       </div>
       <div class="st-col">
@@ -124,6 +125,7 @@ export function bindSettings(root, { ctl, fs, sound, keymap, onBack, onKeys }) {
     setSwitch('muted', sound.muted);
     setSwitch('assist', s.assist);
     setSwitch('motion', reduceNow());
+    setSwitch('ghost', s.ghostHints);
     setSwitch('fullscreen', fs.active);
     setSeg('ts', s.textScale);
     setSeg('q', s.quality);
@@ -204,6 +206,7 @@ export function bindSettings(root, { ctl, fs, sound, keymap, onBack, onKeys }) {
       if (id === 'muted') ctl.setMuted(!sound.muted);
       else if (id === 'assist') ctl.setAssist(!ctl.s.assist);
       else if (id === 'motion') ctl.setReduceMotion(!reduceNow());
+      else if (id === 'ghost') ctl.setGhostHints(!ctl.s.ghostHints);
       else if (id === 'fullscreen') {
         const ok = await ctl.requestFullscreen(!fs.active);
         if (!ok) msg('Окно не дало включить полный экран. Попробуй клавишу F11.', 'warn');

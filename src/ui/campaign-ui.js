@@ -11,6 +11,7 @@ import { formatFreq } from '../campaign/st-radio.js';
 import { inCavity } from '../campaign/st-dishwasher.js';
 import { PICON } from './icons.js';
 import { tipClosedBy } from './tip-done.js';
+import { GhostCoach } from './ghost-coach.js';
 import { pts, tsp, tspText, gramsText, kitchenMin } from '../campaign/words.js';
 const kmin = (sec) => kitchenMin(sec, CAMPAIGN.kitchenScale); // время готовки — в кухонных минутах (0.11)
 import { Keymap, keyName } from '../keymap.js';
@@ -145,6 +146,8 @@ export class CampaignUI {
     this._bindPanel();
     this._bindPhone();
     this._bindRecipe();
+    // 0.11: рука-призрак показывает жесты при первой встрече, после неудач и по «?» (src/ghost/, ghost-coach.js)
+    this.ghost = new GhostCoach({ view, host: $('#app'), prefs: app.ghost, reduceMotion: () => document.body.classList.contains('reduce-motion') });
     // заметка из кулинарной книги: «как на самом деле», «зачем», факт
     this.el.note = document.createElement('div');
     this.el.note.id = 'lesson-note';
@@ -680,6 +683,7 @@ export class CampaignUI {
     this.toasts = [];
     this.lastTip = null;
     this.ticketSig = null;
+    this.ghost?.reset();
   }
 
   // Всплывающая надпись по центру (как в аркадных кухнях): «Идеально!», «Пересолено» и т. п.
@@ -696,6 +700,7 @@ export class CampaignUI {
   }
 
   hideKitchen() {
+    this.ghost?.reset();
     this.el.note?.classList.add('hidden');
     this.el.hud.classList.add('hidden');
     this.el.panel.classList.add('hidden');
@@ -766,6 +771,7 @@ export class CampaignUI {
 
   repeatTip() {
     const s = this.app.session;
+    this.ghost?.repeat(s); // рука показывает жест, который сейчас в руках; текст подсказки — как раньше
     let topic = this.lastTip;
     if (s?.panel === 'board') {
       const it = s.boardCur();
@@ -778,6 +784,7 @@ export class CampaignUI {
 
   onEvent(e, s) {
     this._tipDone(e.type);
+    this.ghost?.onEvent(e, s);
     switch (e.type) {
       case 'tutorial':
         this.tip(e.topic);
@@ -1028,6 +1035,7 @@ export class CampaignUI {
 
   // ---------- кадр ----------
   render(s, dt, mode) {
+    this.ghost?.frame(s, dt, mode);
     for (const t of this.toasts) {
       t.t -= dt;
       if (t.t <= 0) t.el.remove();

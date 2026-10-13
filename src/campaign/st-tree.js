@@ -320,6 +320,7 @@ export const treeMethods = {
 
   _hangHint(why) {
     this.setHint(why === 'limit' ? `На ёлке уже ${this.cfg.tree.maxToys} игрушек — сними лишние` : HANG_HINT[why], 1.8);
+    this._emit('hangDenied', { why }); // рука-призрак (src/ghost/): три одинаковых отказа — покажет, как вешать
   },
 
   // Повесить игрушку из руки в точку at (проверка — в hangCheck). true — повешена.

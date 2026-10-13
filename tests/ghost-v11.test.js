@@ -13,6 +13,7 @@ import { Stirrer, Waver, Grater } from '../src/campaign/mechanics.js';
 import { GHOST_IDS, isGhostId } from '../src/ghost/ghost-ids.js';
 import { DEMOS, DEMO_IDS, demoPath, demoStation, sampleAt } from '../src/ghost/ghost-demos.js';
 import { GhostTrigger } from '../src/ghost/ghost-trigger.js';
+import { gestureNow, paramsFor, placeOk, cueOf, freeSpot, PressWatch, PROGRESS } from '../src/ghost/ghost-cues.js';
 import { defaultSettings, normalizeSettings, normalizeGhostSeen, pickPreferences } from '../src/settings.js';
 import { emptySave, parseSave, SaveStore, SAVE_KEY } from '../src/campaign/save.js';
 import { SettingsController } from '../src/settings-controller.js';
@@ -577,4 +578,315 @@ test('CAMPAIGN.ghost: числа из задания лежат в данных,
   assert.equal(G.refuseWindow, 20);
   assert.equal(G.refuseGap, 20);
   assert.equal(G.refuseShow, 1.5);
+});
+
+// ======================= что показывать и когда: события настоящей сессии =======================
+
+// Все события сессии с накопленного момента
+const events = (s) => s.drain();
+const cues = (s) => events(s).map((e) => cueOf(e, s)).filter(Boolean);
+
+test('первая встреча с ножом: выбор шага на доске даёт событие, из него — показ cut-v один раз', () => {
+  const s = day(0);
+  arrive(s, 'board');
+  events(s);
+  assert.ok(s.boardSelect('olivier:carrot'));
+  assert.deepEqual(cues(s), [{ kind: 'first', id: 'cut-v' }]);
+  assert.ok(s.boardSelect('olivier:sausage'));
+  assert.deepEqual(cues(s), [], 'тема уже показана — сессия сама не повторяет');
+  const { trg } = rig();
+  assert.equal(trg.first('cut-v').why, 'first');
+  assert.equal(trg.first('cut-v'), null);
+});
+
+test('первая встреча: тёрка, кружочки, кот, корм, удочка, мишура, игрушка — каждое своим событием', () => {
+  assert.ok(cues(practiceBoard('grate', 'cheese')).some((c) => c.id === 'grate'));
+  assert.ok(cues(practiceBoard('rounds', 'sausage')).some((c) => c.id === 'round'));
+
+  const s = day(1);
+  s._startCatTheft('sausage');
+  assert.deepEqual(cues(s).filter((c) => c.id === 'cat-wave'), [{ kind: 'first', id: 'cat-wave' }], 'кот: рука над котом при первом catStart');
+  s.shoo();
+  run(s, 1);
+
+  arrive(s, 'catbowl');
+  events(s);
+  s.catPick('kibble');
+  assert.deepEqual(cues(s), [{ kind: 'first', id: 'cat-kibble' }]);
+  s.catPick('kibble');
+  events(s);
+  s.catPick('wand');
+  assert.deepEqual(cues(s), [{ kind: 'first', id: 'cat-wand' }]);
+
+  const t = day(1);
+  arrive(t, 'tree');
+  t.addTinselRoll('gold');
+  const uid = t.addToy('bell');
+  events(t);
+  t.tinselPick('gold');
+  assert.deepEqual(cues(t), [{ kind: 'first', id: 'tinsel' }]);
+  t.pickToy(uid);
+  assert.deepEqual(cues(t), [{ kind: 'first', id: 'toy-drag' }]);
+});
+
+test('первая встреча: подарок — бант, потом бумага, потом крышка; посудомойка — дверца, потом посуда', () => {
+  const s = day(0);
+  arrive(s, 'tree');
+  events(s);
+  s.startGift(0);
+  assert.deepEqual(cues(s), [{ kind: 'first', id: 'gift-bow' }]);
+  replay(s, demoPath('gift-bow'));
+  assert.deepEqual(cues(s), [{ kind: 'first', id: 'gift-paper' }]);
+  for (let k = 0; k < 4 && s.gift?.stage === 'paper'; k++) replay(s, demoPath('gift-paper'));
+  assert.ok(cues(s).some((c) => c.id === 'gift-lid'), 'после бумаги — крышка');
+
+  const d = day(0);
+  arrive(d, 'dishwasher');
+  assert.ok(cues(d).some((c) => c.id === 'washer-door'));
+  replay(d, demoPath('washer-door'));
+  assert.ok(cues(d).some((c) => c.id === 'washer-drag'), 'дверца открылась — теперь посуда');
+});
+
+test('нож: мимо продукта на доске и любой отказ кружочков — отказ жеста, «слишком близко» и «кусков хватит» — нет', () => {
+  const s = practiceBoard('cubes', 'carrot');
+  events(s);
+  s.pointer('down', -0.1, -0.15);
+  s.pointer('move', 0.1, -0.15);
+  s.pointer('up', 0.1, -0.15);
+  assert.deepEqual(cues(s), [{ kind: 'refuse', id: 'cut-v', reason: 'outside' }], 'росчерк прошёл мимо моркови');
+  assert.deepEqual(cueOf({ type: 'cutDenied', reason: 'too-close' }, s), null);
+  assert.deepEqual(cueOf({ type: 'cutDenied', reason: 'limit' }, s), null);
+
+  const rounds = practiceBoard('rounds', 'sausage');
+  const { d } = boxOf(rounds.boardCur());
+  const got = (fn) => {
+    events(rounds);
+    fn();
+    run(rounds, 0.4);
+    return cues(rounds);
+  };
+  const drag = (pts) => () => {
+    rounds.pointer('down', ...pts[0]);
+    for (const p of pts.slice(1)) rounds.pointer('move', ...p);
+    rounds.pointer('up', ...pts.at(-1));
+  };
+  assert.deepEqual(got(drag([[0, 0], [0, 0.002]])), [{ kind: 'refuse', id: 'round', reason: 'short' }], 'короткий росчерк');
+  assert.deepEqual(got(drag([[-0.06, 0], [0.06, 0]])), [{ kind: 'refuse', id: 'round', reason: 'rounds-only' }], 'вдоль колбасы кружочки не режут');
+  assert.deepEqual(got(drag([[0, -d * U], [0.002, d * U], [0, -d * U], [0.002, d * U], [0, -d * U], [0.002, d * U]])), [{ kind: 'refuse', id: 'round', reason: 'wobbly' }], 'рука дрожит');
+  assert.equal(cueOf({ type: 'cutDenied', reason: 'diagonal' }, rounds).id, 'round', 'на колбасе-цилиндре любой отказ — про кружочки');
+});
+
+test('сквозной случай: три росчерка мимо продукта подряд из настоящей сессии показывают призрака ровно на третьем', () => {
+  const s = practiceBoard('cubes', 'carrot');
+  const { trg } = rig({ seen: ['cut-v'] });
+  const shows = [];
+  for (let k = 0; k < 3; k++) {
+    events(s);
+    s.pointer('down', -0.1, -0.15);
+    s.pointer('move', 0.1, -0.15);
+    s.pointer('up', 0.1, -0.15);
+    run(s, 2);
+    for (const e of events(s)) {
+      const c = cueOf(e, s);
+      if (c?.kind === 'refuse') shows.push(trg.refuse(c.id, c.reason, s.t));
+    }
+  }
+  assert.equal(shows.length, 3, 'три отказа');
+  assert.deepEqual(shows.map((x) => x?.why ?? null), [null, null, 'refuse']);
+});
+
+test('перенос игрушки: клик мимо ёлки и слишком тесно — отказ с причиной (событие hangDenied), лимит и лежащая ёлка — нет', () => {
+  const s = day(1);
+  arrive(s, 'tree');
+  const a = s.addToy('bell'), b = s.addToy('ballRed');
+  s.pickToy(a);
+  const spot = freeSpot(s);
+  assert.ok(spot, 'свободное место на ёлке нашлось');
+  assert.equal(s.hangCheck(spot).ok, true);
+  assert.equal(s.dropToy(spot), true);
+  events(s);
+  s.pickToy(b);
+  assert.equal(s.treeClick(null), false, 'клик мимо ёлки с игрушкой в руке');
+  const miss = events(s).filter((e) => e.type === 'hangDenied');
+  assert.deepEqual(miss.map((e) => e.why), ['off']);
+  assert.deepEqual(cueOf(miss[0], s), { kind: 'refuse', id: 'toy-drag', reason: 'off' });
+  assert.equal(s.dropToy({ x: spot.x, y: spot.y, z: spot.z }), false);
+  const tight = events(s).filter((e) => e.type === 'hangDenied');
+  assert.deepEqual(tight.map((e) => e.why), ['close'], 'вплотную к соседней');
+  assert.deepEqual(cueOf(tight[0], s), { kind: 'refuse', id: 'toy-drag', reason: 'close' });
+  assert.equal(cueOf({ type: 'hangDenied', why: 'limit' }, s), null);
+  assert.equal(cueOf({ type: 'hangDenied', why: 'down' }, s), null);
+  // свободное место учитывает уже висящие игрушки: следующая точка — другая
+  const next = freeSpot(s);
+  assert.ok(next && (next.x !== spot.x || next.y !== spot.y || next.z !== spot.z));
+});
+
+test('посудомойка: «дверца закрыта» и промах мимо проёма дают отказ жеста', () => {
+  const s = day(0);
+  arrive(s, 'dishwasher');
+  s.equipment.bowl.clean = false;
+  events(s);
+  s.dwPick('bowl');
+  s.dwDrop('bowl', 0, 0);
+  assert.deepEqual(cues(s), [{ kind: 'refuse', id: 'washer-door', reason: 'closed' }]);
+  s._dwSetDoor(true);
+  events(s);
+  s.dwPick('bowl');
+  run(s, 2);
+  s.dwDrop('bowl', 5, 5);
+  assert.deepEqual(cues(s), [{ kind: 'refuse', id: 'washer-drag', reason: 'miss' }]);
+});
+
+test('gestureNow: какой жест в руках — по станции и инструменту', () => {
+  assert.equal(gestureNow(null), null);
+  assert.equal(gestureNow(practiceBoard('cubes', 'carrot')), 'cut-v');
+  assert.equal(gestureNow(practiceBoard('rounds', 'sausage')), 'round');
+  assert.equal(gestureNow(practiceBoard('grate', 'cheese')), 'grate');
+  const s = day(1);
+  assert.equal(gestureNow(s), null, 'в обзоре без кота показывать нечего');
+  s._startCatTheft('sausage');
+  assert.equal(gestureNow(s), 'cat-wave');
+  s.shoo();
+  run(s, 1);
+  arrive(s, 'catbowl');
+  assert.equal(gestureNow(s), null, 'ничего не взято');
+  s.catPick('kibble');
+  assert.equal(gestureNow(s), 'cat-kibble');
+  s.catPick('kibble');
+  s.catPick('wand');
+  assert.equal(gestureNow(s), 'cat-wand');
+  arrive(s, 'tree');
+  assert.equal(gestureNow(s), null);
+  s.startGift(0);
+  assert.equal(gestureNow(s), 'gift-bow');
+  s.gift.stage = 'paper';
+  assert.equal(gestureNow(s), 'gift-paper');
+  s.gift.stage = 'lid';
+  assert.equal(gestureNow(s), 'gift-lid');
+  s.leaveGift();
+  s.addTinselRoll('gold');
+  s.tinselPick('gold');
+  assert.equal(gestureNow(s), 'tinsel');
+  const w = day(0);
+  arrive(w, 'dishwasher');
+  assert.equal(gestureNow(w), 'washer-door');
+  w._dwSetDoor(true);
+  assert.equal(gestureNow(w), 'washer-drag');
+  const p = day(0);
+  p._addPuddle('spill', CLAYOUT.spillPuddle);
+  arrive(p, 'puddle');
+  assert.equal(gestureNow(p), 'wipe');
+});
+
+test('кот безобразничает, а игрок в крупном плане: жест остаётся станционным, мах ждёт обзора', () => {
+  const b = practiceBoard('cubes', 'carrot');
+  b._startCatTheft('sausage');
+  assert.equal(gestureNow(b), 'cut-v');
+  assert.equal(placeOk('cat-wave', b), false, 'мах из крупного плана не сработает — рука ждёт обзора');
+  b.closePanel();
+  assert.equal(placeOk('cat-wave', b), true);
+});
+
+test('placeOk: рука показывается только там, где жест имеет смысл', () => {
+  const s = day(0);
+  assert.equal(placeOk('stir', s), false);
+  arrive(s, 'bowl');
+  assert.equal(placeOk('stir', s), true);
+  assert.equal(placeOk('cut-v', s), false);
+  assert.equal(placeOk('nonsense', s), false);
+  assert.equal(placeOk('stir', null), false);
+  arrive(s, 'stove');
+  assert.equal(placeOk('knob', s), true);
+  assert.equal(placeOk('wipe', s), true);
+  for (const id of GHOST_IDS) assert.equal(typeof placeOk(id, s), 'boolean');
+});
+
+test('paramsFor: размеры продукта с учётом поворота доски, зона чистки, огонь и конфорка', () => {
+  const s = practiceBoard('cubes', 'carrot');
+  const it = s.boardCur();
+  const flat = paramsFor('cut-v', s);
+  near(flat.w, 13, 1e-9);
+  near(flat.d, 3.4, 1e-6);
+  it.angle = Math.PI / 2;
+  const turned = paramsFor('cut-v', s);
+  near(turned.w, 3.4, 1e-6);
+  near(turned.d, 13, 1e-6);
+  assert.deepEqual(paramsFor('round', practiceBoard('rounds', 'sausage')), { w: 10, d: 3.6 });
+  assert.deepEqual(paramsFor('stir', s), {}, 'у остальных — по умолчанию');
+  assert.deepEqual(paramsFor('cut-v', null), {});
+
+  const st = day(0);
+  st.burners[2].dirty = true;
+  arrive(st, 'stove');
+  assert.deepEqual(paramsFor('wipe', st), { where: 'stove', burner: 2 });
+  st.burners[1].state = 'boiling';
+  st.burners[1].heat = 6;
+  assert.deepEqual(paramsFor('knob', st), { burner: 1, heat: 6 });
+
+  const pt = day(0);
+  take(pt, 'olivier:peelPotato');
+  arrive(pt, 'board');
+  pt.boardSelect('olivier:peelPotato');
+  const peel = paramsFor('peel', pt);
+  assert.deepEqual(peel.zone, { ...pt.boardCur().peel.zones[0] });
+  assert.equal(peel.hand, false);
+});
+
+test('PressWatch: водила дольше minTime и дальше minTravel без прогресса — отказ; ровно на границе — тоже; чуть меньше — нет', () => {
+  const cfg = G.press;
+  const mk = () => new PressWatch({ cfg });
+  const press = (w, { t = cfg.minTime, travel = cfg.minTravel, ev = null, id = 'stir' } = {}) => {
+    w.down(id, 10, 0.5, 0.5);
+    w.move(0.5 + travel, 0.5);
+    if (ev) w.event(ev);
+    return w.up(10 + t);
+  };
+  assert.deepEqual(press(mk()), { id: 'stir', reason: 'idle' }, 'ровно на границе');
+  assert.equal(press(mk(), { t: cfg.minTime * 0.9 }), null, 'слишком коротко');
+  assert.equal(press(mk(), { travel: cfg.minTravel * 0.9 }), null, 'почти не двигала рукой');
+  assert.equal(press(mk(), { ev: 'stir' }), null, 'прогресс был — не отказ');
+  assert.deepEqual(press(mk(), { ev: 'grate' }), { id: 'stir', reason: 'idle' }, 'чужое событие не в счёт');
+  assert.equal(press(mk(), { id: 'washer-door' }), null, 'у посудомойки свои отказы');
+  assert.equal(press(mk(), { id: null }), null, 'жеста нет — считать нечего');
+  assert.deepEqual(press(mk(), { id: 'cut-v' }), { id: 'cut-v', reason: 'idle' }, 'надрез, не отделивший кусок, — тоже впустую');
+  assert.equal(press(mk(), { id: 'cut-v', ev: 'cut' }), null, 'кусок отделился — всё получилось');
+  assert.equal(press(mk(), { id: 'round' }), null, 'у кружочков отказ приходит от самой игры (cutDenied)');
+  const w = mk();
+  assert.equal(w.up(5), null, 'отпускание без нажатия');
+  w.down('stir', 0, 0, 0);
+  w.cancel();
+  assert.equal(w.up(9), null);
+  for (const id of Object.keys(PROGRESS)) assert.ok(GHOST_IDS.includes(id), `${id} — известный жест`);
+});
+
+test('сквозной случай: мелкие круги ложкой три раза за 20 с — призрак; нормальные круги — нет', () => {
+  const trg = rig({ seen: ['stir'] }).trg;
+  const s = new KitchenSession({ practice: { activity: 'mix' }, seed: 1 });
+  Object.assign(s.heroine, { x: CLAYOUT.stations.bowl.stand.x, z: CLAYOUT.stations.bowl.stand.z, station: 'bowl' });
+  s._openPanel('bowl');
+  s.bowl.owner = 'practice';
+  s.bowl.contents = [{ product: 'carrot', kind: 'pieces', pieces: Array(14) }];
+  assert.equal(gestureNow(s), 'stir');
+  const attempt = (r) => {
+    const w = new PressWatch();
+    w.down(gestureNow(s), s.t, 0.5, 0.5);
+    events(s);
+    s.pointer('down', r, 0);
+    for (let i = 1; i <= 40; i++) {
+      s.update(0.05);
+      s.pointer('move', Math.cos(i * 0.4) * r, Math.sin(i * 0.4) * r);
+      w.move(0.5 + i * 0.004, 0.5);
+    }
+    s.pointer('up', 0, 0);
+    for (const e of events(s)) w.event(e.type);
+    return w.up(s.t);
+  };
+  const shows = [];
+  for (let k = 0; k < 3; k++) {
+    const miss = attempt(0.008); // радиус меньше mix.minRadius
+    assert.deepEqual(miss, { id: 'stir', reason: 'idle' }, 'мелкие круги не засчитаны');
+    shows.push(trg.refuse(miss.id, miss.reason, s.t));
+  }
+  assert.deepEqual(shows.map((x) => x?.why ?? null), [null, null, 'refuse']);
+  assert.equal(attempt(0.09), null, 'нормальные круги — прогресс есть, отказа нет');
 });
