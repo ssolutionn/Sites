@@ -138,8 +138,9 @@ async function tourShot(id, { near = null, frac = 0.55, where = '' } = {}) {
   const inside = !!g?.tip && g.tip.x >= 0 && g.tip.x <= 1280 && g.tip.y >= 0 && g.tip.y <= 720;
   check(`обход: ${id}${where ? ` (${where})` : ''} — рука пошла, кончик в окне, путь виден`, !!g && g.gesture === id && inside && g.route > 20, g ? `tip ${Math.round(g.tip.x)},${Math.round(g.tip.y)} «${g.label}»` : 'руки нет');
   if (near && g?.tip) {
-    const d = Math.hypot(g.tip.x - near.x, g.tip.y - near.y);
-    check(`обход: ${id} — кончик у цели (${Math.round(d)} px)`, d < (near.r ?? 120));
+    const target = typeof near === 'function' ? await near() : near; // цель, что двигается (кот), меряем уже после заморозки руки
+    const d = Math.hypot(g.tip.x - target.x, g.tip.y - target.y);
+    check(`обход: ${id} — кончик у цели (${Math.round(d)} px)`, d < (target.r ?? 120));
   }
   if (g?.tip) {
     const clip = { x: Math.max(0, Math.min(1280 - 760, g.tip.x - 380)), y: Math.max(0, Math.min(720 - 480, g.tip.y - 240)), width: 760, height: 480 };
@@ -353,7 +354,7 @@ try {
     await S(() => window.__sueta.session._startCatTheft('crab'));
     await waitFor(() => window.__sueta.session.cat.state === 'theft', 5000);
     await wait(600);
-    await tourShot('cat-wave', { near: { ...(await catScreen()), r: 150 }, where: 'обзор' });
+    await tourShot('cat-wave', { near: async () => ({ ...(await catScreen()), r: 170 }), where: 'обзор' });
     await unfreeze();
     await S(() => window.__sueta.session.shoo());
     await wait(1200);
@@ -411,8 +412,8 @@ try {
     await tourShot('toy-drag', { where: 'игрушка в руке', frac: 0.7 });
     await unfreeze();
     await S(() => { const s = window.__sueta.session; s.treeHand = null; s.tinsel.tool = null; s.startGift(0); });
-    await waitFor(() => window.__sueta.sv.camT >= 0.95, 60000);
-    await wait(1200);
+    await waitFor(() => /^c-gift/.test(window.__sueta.sv.camMode) && window.__sueta.sv.camT >= 0.95, 90000);
+    await wait(900);
     const gift = await station('tree', 0, 0);
     await tourShot('gift-bow', { near: { ...gift, r: 140 }, frac: 0.6 });
     await tourShot('gift-paper', { near: { ...gift, r: 140 } });
