@@ -1,5 +1,5 @@
 // Интерфейс кампании (DOM). Читает состояние и отправляет команды через act().
-import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS, TINSEL } from '../campaign/data.js';
+import { DAYS, RECIPES, PRODUCTS, CAMPAIGN, DISH_ORDER, TOYS, TOY_SETS, TINSEL, cartItem } from '../campaign/data.js';
 import { PhoneUI, saveRecipeCard } from './phone.js';
 import { LESSONS } from '../campaign/lessons.js';
 import { CLAYOUT, TABLE_SLOTS, CLOSEUP_STATIONS, STOVE } from '../campaign/layout.js';
@@ -950,7 +950,7 @@ export class CampaignUI {
         this.toast('Ёлка снова стоит 🎄', 'good');
         break;
       case 'tinselBought':
-        this.toast(`${TINSEL[e.color].icon} ${esc(TINSEL[e.color].name)}: моток ${String(e.roll).replace('.', ',')} м у ёлки`, 'good', 3);
+        if (e.source !== 'delivery') this.toast(`${TINSEL[e.color].icon} ${esc(TINSEL[e.color].name)}: моток ${String(e.roll).replace('.', ',')} м у ёлки`, 'good', 3);
         this.tipWhenFree('tinsel');
         break;
       case 'setComplete':
@@ -1002,7 +1002,8 @@ export class CampaignUI {
         this.confirmCollect();
         break;
       case 'delivered':
-        this.toast(`🛍 Привезли: ${e.items.map((it) => `${(PRODUCTS[it.id].name).toLowerCase()} ×${it.qty}`).join(', ')}`, 'good', 4);
+        this.toast(`🛍 Привезли: ${e.items.map((it) => `${(cartItem(it.id)?.name ?? it.id).toLowerCase()} ×${it.qty}`).join(', ')}`, 'good', 4);
+        if (e.items.some((it) => cartItem(it.id)?.kind === 'toy')) this.tipWhenFree('treeDecor'); // игрушки ждут в коробке у ёлки
         break;
       case 'ovenEarly':
         this.toast('Курица ещё сырая — верни её в духовку', 'bad', 3);

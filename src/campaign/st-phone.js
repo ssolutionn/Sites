@@ -1,5 +1,5 @@
 // Телефон: сообщения, список покупок, заказ доставки, получение за кадром.
-import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR, kitchenSec } from './data.js';
+import { stepProducts, PRODUCTS, CATALOG, BONUS, DECOR, kitchenSec, cartItem } from './data.js';
 import { CLAYOUT } from './layout.js';
 import { FEED_POSTS, FEED_BY_ID, FEED_AUTHORS, MY_POST, FEED_TUNE, COMMENT_REPLIES, COMMENT_REACTIONS, repliedVerb } from './feed-data.js';
 import { CHAT_REPLIES, CHAT_REACTIONS, CROWD_COMMENTS } from './chatter.js';
@@ -327,7 +327,13 @@ export const phoneMethods = {
 
   draftSet(id, qty) {
     if (this.delivery.order) return false;
-    if (!PRODUCTS[id]) return false;
+    const item = cartItem(id);
+    if (!item) return false;
+    // 0.11: игрушки и мишуру привозят только в кампании: в испытании, практике и дне с чатом ёлки нет
+    if (item.kind !== 'product' && (this.practice || this.challenge)) {
+      this.setHint('Украшения заказывают в кампании', 2);
+      return false;
+    }
     const q = Math.max(0, Math.min(6, Math.round(qty)));
     if (q === 0) delete this.delivery.draft[id];
     else this.delivery.draft[id] = q;
@@ -447,8 +453,14 @@ export const phoneMethods = {
     this.heroine.x = CLAYOUT.exit.x;
     this.heroine.z = CLAYOUT.exit.z;
     // 0.11: привезённое сразу в запасе — пакет разбирать не нужно («зачем из пакета сначала в холодильник, если можно сразу использовать»)
+    // 0.11: игрушки и мотки мишуры из доставки уходят в коробку у ёлки (очки не списываются — платили рублями)
     const items = Object.entries(o.items).map(([id, qty]) => ({ id, qty }));
-    for (const it of items) this.inventory.add(it.id, it.qty);
+    for (const it of items) {
+      const c = cartItem(it.id);
+      if (c?.kind === 'toy') for (let i = 0; i < it.qty; i++) this.addToy(c.id, { source: 'delivery' });
+      else if (c?.kind === 'tinsel') for (let i = 0; i < it.qty; i++) this.addTinselRoll(c.id, { source: 'delivery' });
+      else this.inventory.add(it.id, it.qty);
+    }
     this.delivery.order = null;
     this.delivery.dropped = { items, until: this.t + this.cfg.delivery.bagShow }; // пакет на столешнице — только для вида
     this._emit('delivered', { items });

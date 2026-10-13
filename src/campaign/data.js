@@ -303,6 +303,19 @@ export const STORE_EXTRAS = [
 // Каталог доставки: всё, что можно заказать.
 export const CATALOG = Object.keys(PRODUCTS).filter((id) => !['skewer'].includes(id));
 
+/**
+ * 0.11: позиция корзины доставки. Ключ — id продукта, 'toy:<id>' (ёлочная игрушка) или 'tinsel:<цвет>' (моток мишуры).
+ * Возвращает { kind: 'product' | 'toy' | 'tinsel', id, name, icon, price } (price — рубли) или null, если такой позиции нет.
+ */
+export function cartItem(key) {
+  if (typeof key !== 'string') return null;
+  const [head, tail] = key.split(':');
+  if (tail === undefined) return PRODUCTS[key] ? { kind: 'product', id: key, name: PRODUCTS[key].name, icon: null, price: PRODUCTS[key].price ?? 0 } : null;
+  if (head === 'toy' && TOYS[tail]) return { kind: 'toy', id: tail, name: TOYS[tail].name, icon: TOYS[tail].icon, price: TOYS[tail].rub };
+  if (head === 'tinsel' && TINSEL[tail]) return { kind: 'tinsel', id: tail, name: TINSEL[tail].name, icon: TINSEL[tail].icon, price: TINSEL[tail].rub };
+  return null;
+}
+
 
 // --- Рецепты ---
 // Шаг: id, type, станция выводится из типа, requires — id шагов-предпосылок.
