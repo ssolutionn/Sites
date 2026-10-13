@@ -481,7 +481,7 @@ async function boot() {
     testVote(cmd) {
       stream?.testVote(cmd);
     },
-    // пауза чата стримера: окно и голоса стоят, события не выходят (клавиша STREAM_KEYS.pauseChat и кнопка на плашке)
+    // пауза чата стримера: окно и голоса стоят, события не выходят (клавиша «Пауза чата» в keymap.js, по умолчанию P, и кнопка на плашке)
     toggleChatPause() {
       if (stream && session?.live) stream.setPaused(!stream.paused);
     },
@@ -853,6 +853,8 @@ async function boot() {
 
   window.addEventListener('keydown', (e) => {
     if (typing(e)) return;
+    // сочетания с Ctrl, Alt, Cmd — системные (Ctrl+F, Ctrl+R, Cmd+Q…): игра их не перехватывает
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const key = keymap.actionOf(e.code); // действие по настройкам клавиш (keymap.js)
     // пробел не должен «нажимать» кнопку, на которой остался фокус после клика мышью
     if (key === 'interact' && mode === 'kitchen') e.preventDefault();

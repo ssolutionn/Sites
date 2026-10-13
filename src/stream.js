@@ -8,12 +8,6 @@ import { createSource, STATUS_TEXT } from './stream-sources.js';
 import { cleanChannel, parseVoteCommand } from './stream-parse.js';
 import { sanitizeNick, isRealNick } from './stream-nick.js';
 
-/**
- * Горячие клавиши режима стримера. src/keymap.js в этой ветке ещё нет, поэтому клавиша объявлена здесь:
- * при слиянии с раскладкой клавиш перенести в неё (main.js читает STREAM_KEYS.pauseChat).
- */
-export const STREAM_KEYS = { pauseChat: 'KeyP' };
-
 // Имена зрителей в тестовом чате: настоящие ники в нём не нужны, а на экране должны выглядеть как живые.
 const TEST_NAMES = ['Нико', 'Мила', 'Артём', 'Зоя', 'Богдан', 'Ляля', 'Сава', 'Ника', 'Тимур', 'Лиса'];
 

@@ -28,3 +28,15 @@
 - Проверено без находок: `tree-geo.js` (знаковое расстояние, нормаль, луч→конус, миграция slot→at) совпадает с 3D-ёлкой
   в `kitchen.js`; `TREE_EVENTS` покрывает все события, меняющие сохранение (`toyReturned`/`treeUp` его не меняют);
   `st-cat.js`, `cat-gestures.js`; `takeReplacement`/`_stealFromBoard`; доставка украшений.
+
+## S6–S7 Настройки и стрим
+
+- **F10** 🟡 `main.js` keydown — сочетания с Ctrl/Alt/Cmd перехватывались игрой: Ctrl+F (поиск) открывал «поиск» в Electron
+  и одновременно срабатывало действие клавиши F, Cmd+Q в macOS гасил звук через M и т. п. **Исправлено**: с модификатором
+  игра клавишу не обрабатывает.
+- **F11** 🟡 `stream.js` — мёртвый экспорт `STREAM_KEYS` с устаревшим комментарием (клавиша паузы чата давно в `keymap.js`).
+  **Убран.**
+- Проверено без находок: `settings.js`, `settings-controller.js`, `keymap.js`, `fullscreen.js`, `settings-ui.js`, `sound.js`
+  (шины громкости); `overlay-server.cjs` (только 127.0.0.1, проверка Host, только GET, защита от `../`, CSP, белый список
+  полей), `stream-parse.js`, `stream-nick.js`, `stream-sources.js`, `stream-rules.js`, `st-stream.js`, `desktop/stream-ipc.cjs`
+  (IPC только со страницы `app://game/`, канал через `cleanChannel`), `desktop/main.cjs`, `preload.cjs`.
