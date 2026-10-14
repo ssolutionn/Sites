@@ -319,6 +319,13 @@ try {
     await freeze(0.2); // первая встреча с ножом идёт сама — даём ей отыграть, потом показываем поперечный росчерк
     await unfreeze();
     await tourShot('cut-h', { where: 'морковь, поперёк' });
+    // нож плашмя: показ смаха к миске (для показа флаг ставим напрямую — резать морковь до готовности тут незачем)
+    await unfreeze();
+    await S(() => { window.__sueta.session.board.flat = true; });
+    const brd = await station('board', 0, 0);
+    await tourShot('sweep', { near: { ...brd, r: 260 }, where: 'нож плашмя, к миске' });
+    await unfreeze();
+    await S(() => { window.__sueta.session.board.flat = false; });
     // чистка картофеля: достать из холодильника, принести на доску
     await unfreeze();
     await goStation('fridge');

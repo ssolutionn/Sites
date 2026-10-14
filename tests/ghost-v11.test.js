@@ -1013,3 +1013,49 @@ test('нож плашмя: отказ смаха — не урок нарезк�
   assert.notEqual(gestureNow(s), 'cut-v', 'нож плашмя — не росчерк');
   assert.equal(placeOk('cut-v', s), false, 'идущий показ ножа уходит, когда нож лёг плашмя');
 });
+
+test('смах ножом плашмя: показанный путь ссыпает нарезку в миску в настоящей сессии, к подносу — влево', async () => {
+  const { waitAction } = await import('./helpers-campaign.js');
+  const s = day(0);
+  arrive(s, 'board');
+  assert.ok(s.boardSelect('olivier:sausage'), s.hint?.text);
+  cutCubes(s);
+  assert.ok(s.boardFlat(true), s.hint?.text);
+  const params = paramsFor('sweep', s);
+  assert.deepEqual(params, { dir: CAMPAIGN.board.sweep.dir }, 'оливье — в миску, вправо');
+  replay(s, demoPath('sweep', params));
+  waitAction(s);
+  assert.ok(s.stepDone('olivier', 'sausage'), s.hint?.text);
+  // канапе: хлеб уходит на поднос — рука показывает смах влево, и он засчитывается
+  const c = day(5);
+  arrive(c, 'board');
+  assert.ok(c.boardSelect('canape:bread'), c.hint?.text);
+  cutCubes(c);
+  assert.ok(c.boardFlat(true), c.hint?.text);
+  const pc = paramsFor('sweep', c);
+  assert.ok(pc.dir.x < 0, 'на поднос — влево');
+  replay(c, demoPath('sweep', pc));
+  waitAction(c);
+  assert.ok(c.stepDone('canape', 'bread'), c.hint?.text);
+});
+
+test('смах ножом плашмя: первая встреча — когда нож лёг плашмя; короткий и «не туда» — отказ жеста; «?» показывает смах', () => {
+  const s = day(0);
+  arrive(s, 'board');
+  assert.ok(s.boardSelect('olivier:sausage'), s.hint?.text);
+  cutCubes(s);
+  s.drain();
+  assert.ok(s.boardFlat(true), s.hint?.text);
+  const flat = s.drain().find((e) => e.type === 'flat');
+  assert.deepEqual(cueOf(flat, s), { kind: 'first', id: 'sweep' });
+  assert.equal(gestureNow(s), 'sweep');
+  assert.equal(placeOk('sweep', s), true);
+  assert.equal(placeOk('cut-v', s), false);
+  assert.deepEqual(cueOf({ type: 'cutDenied', reason: 'short', sweep: true }, s), { kind: 'refuse', id: 'sweep', reason: 'short' });
+  assert.deepEqual(cueOf({ type: 'cutDenied', reason: 'wrong-way', sweep: true }, s), { kind: 'refuse', id: 'sweep', reason: 'wrong-way' });
+  assert.equal(cueOf({ type: 'cutDenied', reason: 'blocked', sweep: true }, s), null, '«нельзя переносить» — не про жест');
+  s.boardFlat(false);
+  assert.equal(cueOf({ type: 'flat', on: false }, s), null);
+  assert.equal(gestureNow(s), 'cut-v', 'нож снова режет');
+  assert.equal(placeOk('sweep', s), false);
+});

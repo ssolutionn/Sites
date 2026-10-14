@@ -274,6 +274,16 @@ function peel(p) {
   return chain(taps, stroke(1.4, verts, { lead: 0.1, tail: 0.1, away: { x: 0.07, z: -0.05 } }));
 }
 
+// ---------- нож плашмя: смах нарезки (плоскость доски, метры) ----------
+function sweep(p) {
+  // зажать у нарезки и одним движением увести к миске (вправо) или к подносу (влево): путь в 1,6 раза длиннее board.sweep.minLen
+  const r = CAMPAIGN.board.sweep;
+  const dir = p?.dir ?? r.dir; // null у «готовое остаётся на доске» — показываем к миске, любое направление засчитается
+  const n = Math.hypot(dir.x, dir.z) || 1, ux = dir.x / n, uz = dir.z / n;
+  const back = 0.05, len = r.minLen * 1.6;
+  return stroke(1.6, [{ x: -ux * back, z: -uz * back }, { x: ux * (len - back), z: uz * (len - back) }], { lead: 0.2, tail: 0.15, away: { x: 0.04, z: -0.06 } });
+}
+
 // ---------- реестр ----------
 /** Описание демонстрации по умолчанию: подпись для плашки, где живёт, сколько идёт (1,5–2,5 с). */
 const demo = (id, label, space, station, path, extra = {}) => {
@@ -294,6 +304,7 @@ export const DEMOS = {
     return stroke(2.2, [{ x: 0, z: top }, { x: 0.006, z: bottom }, { x: -0.006, z: top }, { x: 0.006, z: bottom }, { x: 0, z: top }], { lead: 0.12, tail: 0.1, away: { x: 0.09, z: -0.04 } });
   }),
   peel: demo('peel', 'Зажми и води ножом по продукту', 'plane', 'board', peel),
+  sweep: demo('sweep', 'Нож плашмя: зажми и смахни нарезку одним движением', 'plane', 'board', sweep),
   stir: demo('stir', 'Зажми и води ложку по кругу', 'plane', 'bowl', stir),
   salt: demo('salt', 'Зажми и потряси солонку над миской', 'plane', 'bowl', salt),
   pour: demo('pour', 'Зажми и води над миской', 'plane', 'bowl', pour),

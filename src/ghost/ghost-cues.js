@@ -8,6 +8,7 @@
 import { CAMPAIGN, TINSEL } from '../campaign/data.js';
 import { CLOSEUP_STATIONS, TREE } from '../campaign/layout.js';
 import { outerRadius, snapToTree } from '../campaign/tree-geo.js';
+import { sweepTarget } from '../campaign/sweep.js';
 
 /** Тема подсказки первой встречи на доске → жест. */
 const TUTORIAL = { cube: 'cut-v', round: 'round', grate: 'grate', peel: 'peel' };
@@ -38,7 +39,8 @@ export function gestureNow(s) {
   switch (p) {
     case 'board': {
       const it = s.boardCur?.();
-      if (!it || s.board?.flat) return null; // нож плашмя смахивает, а не режет: показывать росчерк ножа тут нельзя
+      if (!it) return null;
+      if (s.board?.flat) return 'sweep'; // нож плашмя смахивает, а не режет: показываем смах, а не росчерк
       if (it.grater) return 'grate';
       if (it.peel) return 'peel';
       return it.log ? 'round' : 'cut-v';
@@ -110,6 +112,11 @@ export function paramsFor(id, s) {
       const it = s.boardCur?.();
       return it ? boardExtents(it) : {};
     }
+    case 'sweep': {
+      const it = s.boardCur?.();
+      if (!it) return {};
+      return { dir: sweepTarget(s.stepDef?.(it.dishId, it.stepId)?.dest, CAMPAIGN.board.sweep).dir };
+    }
     case 'peel': {
       const it = s.boardCur?.();
       if (!it?.peel) return {};
@@ -164,6 +171,8 @@ export function placeOk(id, s) {
     case 'grate':
     case 'peel':
       return p === 'board' && !!s.boardCur?.();
+    case 'sweep':
+      return p === 'board' && !!s.boardCur?.() && !!s.board?.flat;
     case 'stir':
     case 'salt':
     case 'pour':
@@ -213,7 +222,7 @@ export function cueOf(e, s) {
     case 'tutorial':
       return TUTORIAL[e.topic] ? first(TUTORIAL[e.topic]) : null;
     case 'cutDenied':
-      if (e.sweep) return null; // отказ смаха ножом плашмя (st-board.js), а не росчерка
+      if (e.sweep) return e.reason === 'short' || e.reason === 'wrong-way' ? refuse('sweep', e.reason) : null; // отказ смаха ножом плашмя (st-board.js), а не росчерка
       return KNIFE_REFUSALS.has(e.reason) ? refuse(knifeDemo(e.reason, s), e.reason) : null;
     case 'hangDenied':
       return e.why === 'off' || e.why === 'close' ? refuse('toy-drag', e.why) : null;
@@ -223,6 +232,8 @@ export function cueOf(e, s) {
       if (/^Потяни ручку ниже|^Дверца закрыта/.test(t)) return refuse('washer-door', 'closed');
       return null;
     }
+    case 'flat': // взяла нож плашмя — первая встреча со смахом
+      return e.on ? first('sweep') : null;
     case 'catStart':
       return first('cat-wave');
     case 'catPick':
