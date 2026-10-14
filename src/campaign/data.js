@@ -8,7 +8,7 @@ export const KITCHEN_SCALE = 15;
 export const kitchenSec = (min) => (min * 60) / KITCHEN_SCALE;
 
 export const CAMPAIGN = {
-  version: '0.11.0',
+  version: '0.11.1',
   saveVersion: 1,
 
   // --- Время и общие параметры ---

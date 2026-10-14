@@ -78,6 +78,28 @@ export function voteSig(v) {
   return [v.phase, v.paused ? 1 : 0, Math.ceil(v.left), v.statusText, v.test ? 1 : 0, v.options.map((o) => o.n).join(','), v.waiting?.why ?? '', v.last?.text ?? ''].join('|');
 }
 
+/**
+ * Подпись состава плашки: меняется — разметку собирают заново. Секунды, голоса и шкала сюда не входят — их правят на месте
+ * (votesLive), иначе кнопки («+», «Пауза чата») пересоздавались бы раз в секунду и клик на смене секунды терялся.
+ */
+export function voteShapeSig(v) {
+  return [v.phase, v.paused ? 1 : 0, v.statusText, v.status, v.channel ?? '', v.test ? 1 : 0, v.options.map((o) => o.cmd + ':' + o.side).join(','), v.waiting?.cmd ?? '', v.waiting?.why ?? '', v.last?.text ?? '', v.last?.kind ?? ''].join('|');
+}
+
+/** Что в плашке меняется на месте: строка фазы с секундами, голоса и ширина полосок, шкала «хаос ↔ помощь». */
+export function votesLive(v) {
+  const max = Math.max(1, ...v.options.map((o) => o.n));
+  const m = v.meter;
+  return {
+    phase: phaseText(v),
+    rows: v.options.map((o) => ({ n: String(o.n), w: `${(o.n / max) * 100}%` })),
+    chaos: `хаос ${m.chaos}`,
+    help: `помощь ${m.help}`,
+    chaosW: `${Math.round((1 - m.share) * 100)}%`,
+    helpW: `${Math.round(m.share * 100)}%`,
+  };
+}
+
 /** Плашка голосования во время дня. Кнопки «+» — только в тестовом чате. */
 export function votesHtml(v) {
   const max = Math.max(1, ...v.options.map((o) => o.n));

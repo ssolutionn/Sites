@@ -191,9 +191,13 @@ export class PhoneUI {
       feedSig += `|${s.feedUnread()}|${[...s.typingFrom()].join()}|${this.sub ? s.commentTyping(this.sub) ?? '' : ''}`;
     }
     const o = s.delivery.order;
-    const sig = [this.app, this.sub, this.tab, clockText(new Date()), s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), this.app === 'timers' ? Math.floor(s.t) : '', s.kitchenTimers.length, s.alerts.filter(a => a.urgent).slice(0, 1).map(a => a.text).join(), feedSig, this.app === 'home' ? [s.phone.unread, s.burners.map(b => b.state).join(), s.kitchenTimers.map(x => +(s.t >= x.end)).join()].join(':') : ''].join('§');
-    if (sig === this.sig) return;
+    const sig = [this.app, this.sub, this.tab, clockText(new Date()), s.phone.messages.length, JSON.stringify(s.delivery.draft), s.delivery.usePoints, o?.status, s.wallet.spent, s.bonus.points, s.decor.join(), s.phone.posts.map((p) => p.dishId + s.postLikes(p)).join(), Object.values(s.dishes).map((d) => +d.done).join(''), s.kitchenTimers.length, s.alerts.filter(a => a.urgent).slice(0, 1).map(a => a.text).join(), feedSig, this.app === 'home' ? [s.phone.unread, s.burners.map(b => b.state).join(), s.kitchenTimers.map(x => +(s.t >= x.end)).join()].join(':') : ''].join('§');
+    if (sig === this.sig) {
+      this._liveTimers(s); // секунды таймеров — на месте, кнопки «5 / 10 / 25 / 45 мин» и «✕» не пересоздаются
+      return;
+    }
     this.sig = sig;
+    this._timersHtml = null;
     // Прокрутка того же экрана сохраняется при перерисовке (новый пост, рост лайков).
     const view = [this.app, this.sub, this.tab].join('|');
     const active = this.root.ownerDocument.activeElement;
@@ -510,7 +514,27 @@ export class PhoneUI {
   }
 
   // ---------- Таймеры ----------
+  // Список таймеров меняется каждую секунду игры: обновляем только его (в нём нет кнопок), а не весь экран телефона —
+  // иначе кнопки пересоздаются раз в секунду и клик, попавший на смену секунды, теряется.
+  _liveTimers(s) {
+    if (this.app !== 'timers') return;
+    const el = this.root.querySelector('.tmr-list');
+    if (!el) return;
+    const html = this._timerRows(s);
+    if (html === this._timersHtml) return;
+    this._timersHtml = html;
+    el.innerHTML = html;
+  }
+
   _timers(s) {
+    this._timersHtml = this._timerRows(s);
+    return `${this._head('Таймеры кухни', 'всё, что варится и остывает')}<div class="app-body timers">
+      <div class="tmr-list">${this._timersHtml}</div>
+      <h4>Поставить таймер</h4><div class="trow">${[5, 10, 25, 45].map((m) => btn(`${m} мин`, 'setKitchenTimer', [m], 'mini')).join('')}</div>
+      <p class="fine">Таймеры идут по часам кухни: яйца варятся 10 минут, картофель — 25. Часы телефона показывают твоё местное время.</p></div>`;
+  }
+
+  _timerRows(s) {
     const ring = (left, total, label, icon, cls = '') => {
       const k = total > 0 ? Math.max(0, Math.min(1, 1 - left / total)) : 1;
       return `<div class="tmr ${cls}"><div class="ring" style="--k:${k}"><span>${icon}</span></div><div><b>${esc(label)}</b><small>${left > 0 ? kitchenMin(left, s.cfg.kitchenScale) : 'готово!'}</small></div></div>`;
@@ -523,10 +547,7 @@ export class PhoneUI {
     for (const x of s.hotList()) rows.push(ring(x.left, s.cfg.cool.time, `${PRODUCTS[x.product].name} остывает`, '🔥', 'hot'));
     if (s.oven.state === 'baking') rows.push(ring(s.oven.readyAt - s.t, s.cfg.oven.bake, 'Духовка', '🍗'));
     for (const x of s.kitchenTimers) rows.push(`${ring(x.end - s.t, x.total, `Таймер ${x.min} мин`, '⏲', s.t >= x.end ? 'done' : '')}`);
-    return `${this._head('Таймеры кухни', 'всё, что варится и остывает')}<div class="app-body timers">
-      ${rows.join('') || '<div class="empty">Сейчас ничего не варится.</div>'}
-      <h4>Поставить таймер</h4><div class="trow">${[5, 10, 25, 45].map((m) => btn(`${m} мин`, 'setKitchenTimer', [m], 'mini')).join('')}</div>
-      <p class="fine">Таймеры идут по часам кухни: яйца варятся 10 минут, картофель — 25. Часы телефона показывают твоё местное время.</p></div>`;
+    return rows.join('') || '<div class="empty">Сейчас ничего не варится.</div>';
   }
 }
 

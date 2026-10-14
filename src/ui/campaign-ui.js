@@ -18,7 +18,7 @@ const kmin = (sec) => kitchenMin(sec, CAMPAIGN.kitchenScale); // время го
 import { Keymap, keyName } from '../keymap.js';
 import { settingsHTML, bindSettings, systemReduceMotion } from './settings-ui.js';
 import { effectiveReduceMotion } from '../settings.js';
-import { settingsHtml, votesHtml, voteSig, nowLine } from './stream-ui.js';
+import { settingsHtml, votesHtml, voteSig, voteShapeSig, votesLive, nowLine } from './stream-ui.js';
 import { tableGuests, streamSettings } from '../campaign/stream-rules.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -622,7 +622,28 @@ export class CampaignUI {
     const sig = voteSig(v);
     if (sig === this._votesSig) return;
     this._votesSig = sig;
-    el.innerHTML = votesHtml(v);
+    const shape = voteShapeSig(v);
+    if (shape !== this._votesShape) {
+      this._votesShape = shape;
+      el.innerHTML = votesHtml(v);
+      return;
+    }
+    // состав тот же — правим секунды, голоса и полоски на месте: кнопки не пересоздаются и клики по ним не теряются
+    const live = votesLive(v);
+    const put = (node, text) => node && node.textContent !== text && (node.textContent = text);
+    const width = (node, w) => node && node.style.width !== w && (node.style.width = w);
+    put(el.querySelector('.v-phase'), live.phase);
+    el.querySelectorAll('.vote-row').forEach((row, i) => {
+      const r = live.rows[i];
+      if (!r) return;
+      put(row.querySelector('b'), r.n);
+      width(row.querySelector('.vbar i'), r.w);
+    });
+    const meter = el.querySelectorAll('.v-meter > span');
+    put(meter[0], live.chaos);
+    put(meter[2], live.help);
+    width(el.querySelector('.v-meter .mbar i'), live.chaosW);
+    width(el.querySelector('.v-meter .mbar u'), live.helpW);
   }
 
   // Плашка не прячет док станции: если док открыт и они пересекаются по ширине, плашка встаёт над ним.

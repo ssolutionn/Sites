@@ -2,7 +2,7 @@
 // Главное: чужой текст в разметку не попадает ни при каких входных данных.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { settingsHtml, votesHtml, voteSig, phaseText, nowLine, esc } from '../src/ui/stream-ui.js';
+import { settingsHtml, votesHtml, voteSig, voteShapeSig, votesLive, phaseText, nowLine, esc } from '../src/ui/stream-ui.js';
 import { overlayState } from '../src/stream-overlay-state.js';
 import { VoteRound, streamSettings } from '../src/campaign/stream-rules.js';
 import { CAMPAIGN } from '../src/campaign/data.js';
@@ -58,6 +58,25 @@ test('подпись плашки меняется вместе со време�
   assert.notEqual(voteSig(view({ phase: 'cooldown' })), a);
   assert.notEqual(voteSig(view({ last: { text: 'Победило', kind: 'win' } })), a);
   assert.notEqual(voteSig(view({ paused: true })), a);
+});
+
+test('секунды и голоса не меняют состав плашки — кнопки не пересоздаются раз в секунду (регрессия ревью 0.11)', () => {
+  const a = view({ test: true });
+  const shape = voteShapeSig(a);
+  // идёт время, приходят голоса — подпись меняется (плашку надо обновить), состав — нет (правим на месте)
+  const later = { ...a, left: a.left - 3, options: a.options.map((o, i) => ({ ...o, n: o.n + i })), meter: { ...a.meter, chaos: a.meter.chaos + 2 } };
+  assert.notEqual(voteSig(later), voteSig(a));
+  assert.equal(voteShapeSig(later), shape);
+  // фаза, пауза, строка результата, тестовый чат — новый состав
+  assert.notEqual(voteShapeSig({ ...a, phase: 'cooldown' }), shape);
+  assert.notEqual(voteShapeSig({ ...a, paused: true }), shape);
+  assert.notEqual(voteShapeSig({ ...a, last: { text: 'Победило', kind: 'win' } }), shape);
+  assert.notEqual(voteShapeSig({ ...a, test: false }), shape);
+  // то, что правится на месте, совпадает с тем, что нарисовала бы разметка
+  const live = votesLive(later), html = votesHtml(later);
+  assert.equal(live.phase, phaseText(later));
+  assert.ok(html.includes(`<b>${live.rows[1].n}</b>`) && html.includes(`width:${live.rows[1].w}`));
+  assert.ok(html.includes(live.chaos) && html.includes(live.help) && html.includes(`width:${live.chaosW}`));
 });
 
 test('экран настроек: умолчания — режим выключен, «Включить», сила чата «Нормально», ники включены, оверлей только в версии для компьютера', () => {

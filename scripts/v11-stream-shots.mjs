@@ -59,7 +59,10 @@ async function enterDay() {
 /** Пройти «тихие» первые секунды дня, чтобы события чата были разрешены. */
 const pastQuiet = () => S((q) => window.__sueta.session.fastForward(q + 5), CAMPAIGN.stream.startQuiet);
 const votesOf = () => S(() => Object.fromEntries([...document.querySelectorAll('#votes .vote-row')].map((r) => [r.querySelector('.v-cmd').textContent, Number(r.querySelector('b').textContent)])));
-const clickVote = async (cmd, n = 1) => { for (let i = 0; i < n; i++) { await page.click(`#votes [data-vote="${cmd}"]`, { timeout: 5000 }); await wait(60); } };
+// Клик мышью по центру кнопки плашки. Не page.click: тот ждёт «стабильности» два кадра подряд, а кадр SwiftShader с моделями
+// длится секунды. Плашка не пересоздаёт кнопки (правится на месте), поэтому клик по координатам доходит до той же кнопки.
+const clickAt = async (sel) => { const b = await page.locator(sel).first().boundingBox({ timeout: 30000 }); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); };
+const clickVote = async (cmd, n = 1) => { for (let i = 0; i < n; i++) { await clickAt(`#votes [data-vote="${cmd}"]`); await wait(60); } };
 const endWindow = () => S(() => { window.__sueta.stream.round.left = 0.05; });
 
 try {
@@ -119,7 +122,7 @@ try {
     await clickVote('!гирлянда', 1);
     check('на паузе голоса не принимаются', (await votesOf())['!гирлянда'] === 0);
     await shot('votes_paused');
-    await page.click('#votes .v-pause'); await wait(300);
+    await clickAt('#votes .v-pause'); await wait(300);
     check('кнопка снимает паузу', !(await text('#votes .v-phase')).includes('паузе'));
     // раньше срока (тихие первые секунды) победитель ждёт
     await endWindow(); await wait(500);
