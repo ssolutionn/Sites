@@ -543,7 +543,9 @@ export const homeMethods = {
         dish.work = null;
         dish.burnt = (dish.burnt ?? 0) + 1;
         this.penalties.push({ kind: 'burnt', points: 5, label: 'Курица сгорела' });
-        this.setHint('Сгоревшую курицу — в мусор. Помой форму, возьми новую курицу и замаринуй', 5);
+        // 0.11: запасной курицы нет — честно отправляем в телефон, а не «возьми»
+        const lack = this.shopping().some((x) => (x.id === 'chicken' || x.id === 'marinade') && x.lack > 0);
+        this.setHint(lack ? 'Сгоревшую курицу — в мусор. Закажи новую в телефоне и помой форму' : 'Сгоревшую курицу — в мусор. Помой форму, возьми новую курицу и замаринуй', 5);
         this._emit('chickenSpoiled');
         return;
       }

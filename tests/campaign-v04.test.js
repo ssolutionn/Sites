@@ -421,6 +421,7 @@ test('время: духовка — готовность, окно, перег�
   assert.equal(s.equipment.form.clean, false);
   assert.equal(s.inventory.available('chicken'), 0); // 0.11: сгоревшую курицу заменяет только доставка
   assert.equal(s.shopping().find((x) => x.id === 'chicken')?.lack, 1);
+  assert.match(s.hint.text, /Закажи новую/, 'запасной курицы нет — совет заказать, а не «возьми»');
 });
 
 // ---------- 7. Доставка ----------
