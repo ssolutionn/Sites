@@ -277,7 +277,11 @@ async function boardProduct(stepId, name, how = {}) {
   check(`${name}: кубики 1 см${how.chop ? ' рубкой' : how.rotate === false ? ' без поворота' : ' с поворотом доски (D)'}`, q.score > 0.6 && (how.rotate === false || Math.abs(Math.abs(ang) - Math.PI / 2) < 0.05), `${Math.round(q.score * 100)} %, кубиков ${q.neat}, доска ${Math.round((ang * 180) / Math.PI)}°`);
   await shot(`d1_board_${stepId}_cubes`);
   await sweepToBowl(); await wait(300);
-  if (!(await sess(`s.stepDone('olivier','${stepId}')`))) { viaApi.push(`boardTransfer(${stepId})`); await S(() => window.__sueta.session.boardTransfer()); await wait(300); }
+  if (!(await sess(`s.stepDone('olivier','${stepId}')`))) {
+    const why = await sess('JSON.stringify({ hint: s.hint?.text ?? null, flat: s.board.flat, block: s.boardCur() ? s.transferBlock(s.boardCur()) : "нет на доске", missing: s.boardCur()?.missing?.length ?? 0 })');
+    viaApi.push(`boardTransfer(${stepId}) — смах не прошёл: ${why}`);
+    await S(() => window.__sueta.session.boardTransfer()); await wait(300);
+  }
 }
 // Чистка: зигзаг ножом поверх продукта, пока кожура не снята (каждый проход чуть сдвинут).
 async function peelProduct(stepId, name) {
@@ -463,7 +467,8 @@ try {
   check('морковь в миске', await sess("s.stepDone('olivier','carrot')"));
   await boardProduct('sausage', 'Колбаса');
   await boardProduct('pickle', 'Солёные огурцы × 2', { chop: true });
-  check('морковь, колбаса, солёные огурцы нарезаны, пока варится', await sess("['carrot','sausage','pickle'].every(k => s.stepDone('olivier', k))"));
+  check('морковь, колбаса, солёные огурцы нарезаны, пока варится', await sess("['carrot','sausage','pickle'].every(k => s.stepDone('olivier', k))"),
+    await sess("JSON.stringify({ done: ['carrot','sausage','pickle'].map(k => k + ':' + s.stepDone('olivier', k)), items: Object.values(s.board.items).map(it => ({ k: it.key, missing: it.missing?.length ?? 0, block: s.transferBlock(it) })), hint: s.hint?.text ?? null, stock: s.inventory.available('sausage') })"));
   // яйца: сварились → горячие → остудить у раковины → резать
   await S(() => { const s = window.__sueta.session; s.fastForward(200, () => s.burners[1].state === 'ready'); });
   check('плита (яйца готовы)', await goStation('Плита', 'stove'));

@@ -217,8 +217,10 @@ try {
     await page.keyboard.up('KeyI');
     const z1 = await S(() => window.__sueta.session.heroine.z);
     check('новая I ведёт героиню вглубь кухни', z1 < z0 - 0.1, `${z0.toFixed(2)} → ${z1.toFixed(2)}`);
+    // сначала героиня останавливается после I (кадр в SwiftShader долгий), потом проверяем, что W не двигает
+    await waitFor(() => !window.__sueta.session.heroine.moving, 8000);
     await page.keyboard.down('KeyW');
-    await wait(150);
+    await wait(1500);
     check('W больше не ходит (освобождена)', !(await S(() => window.__sueta.session.heroine.moving)));
     await page.keyboard.up('KeyW');
     await page.keyboard.down('ArrowUp');

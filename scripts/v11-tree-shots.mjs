@@ -102,8 +102,9 @@ try {
     const hung = await sess('s.toys.filter((t) => t.at).map((t) => t.at)');
     check('повешено три игрушки', hung.length === 3, `${hung.length}`);
     check('каждая — в той точке, куда отпустили (±1 см)', placed.every((p) => hung.some((h) => near(h, p, 0.011))), JSON.stringify([placed, hung]));
-    check('в сохранении те же точки', await S((n) => window.__sueta.save.data.toys.filter((t) => t.at).length === n, 3));
-    check('счётчик «на ёлке 3»', await S(() => /на ёлке 3/.test(document.querySelector('#panel h2')?.textContent ?? '')));
+    // сохранение и док обновляются на следующем кадре (в SwiftShader он долгий) — ждём условие, а не время
+    check('в сохранении те же точки', await waitFor((n) => window.__sueta.save.data.toys.filter((t) => t.at).length === n, 30000, 3));
+    check('счётчик «на ёлке 3»', await waitFor(() => /на ёлке 3/.test(document.querySelector('#panel h2')?.textContent ?? ''), 30000));
     await wait(2800);
     await shot('hung');
     // тесно: отпустить вплотную к уже висящей — игрушка возвращается в коробку
@@ -116,12 +117,28 @@ try {
     // перевесить: зажать висящую и отпустить в другом месте
     const from = await S((p) => window.__sueta.view.tree.pointScreen(p), hung[1]);
     const to = await hitAt(0.62, 0.52);
-    const toyPx = await S((p) => { const v = window.__sueta.view.tree.pointScreen({ x: p.x, y: p.y - 0.1, z: p.z }); return v; }, hung[1]);
+    // целимся в саму игрушку: центр её меша на экране (точка «ниже крючка по поверхности» у игрушки сбоку уезжает мимо)
+    const toyPx = await S((p) => {
+      const s = window.__sueta.session, T = window.__sueta.view.tree;
+      const toy = s.toys.find((t) => t.at && Math.hypot(t.at.x - p.x, t.at.y - p.y, t.at.z - p.z) < 1e-6);
+      const m = T.meshes.get(toy.uid);
+      const box = new (window.__sueta.sv.camera.position.constructor)();
+      m.updateMatrixWorld(true);
+      const b = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+      m.traverse((o) => { if (!o.isMesh) return; o.geometry.computeBoundingBox(); const g = o.geometry.boundingBox; for (const x of [g.min.x, g.max.x]) for (const y of [g.min.y, g.max.y]) for (const z of [g.min.z, g.max.z]) { box.set(x, y, z).applyMatrix4(o.matrixWorld); ['x', 'y', 'z'].forEach((k, i) => { b.min[i] = Math.min(b.min[i], box[k]); b.max[i] = Math.max(b.max[i], box[k]); }); } });
+      box.set((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2).project(window.__sueta.sv.camera);
+      const c = document.querySelector('#scene').getBoundingClientRect();
+      return { x: c.left + (box.x * 0.5 + 0.5) * c.width, y: c.top + (-box.y * 0.5 + 0.5) * c.height };
+    }, hung[1]);
     await page.mouse.move(toyPx.x, toyPx.y);
+    await wait(600);
+    const pickInfo = await S((q) => { const c = document.querySelector('#scene').getBoundingClientRect(); const T = window.__sueta.view.tree; return JSON.stringify({ toyAt: T.toyAt({ x: ((q.x - c.left) / c.width) * 2 - 1, y: -((q.y - c.top) / c.height) * 2 + 1 }), anim: [...T.anim.keys()], hover: T.hoverToy, hand: window.__sueta.session.treeHand, tool: window.__sueta.session.tinsel.tool }); }, toyPx);
     await page.mouse.down();
+    await waitFor(() => window.__sueta.session.treeHand != null, 15000);
+    console.log('перевес: под курсором', pickInfo, 'в руке после нажатия', await sess('s.treeHand'));
     await page.mouse.move(to.x, to.y, { steps: 8 });
     await page.mouse.up();
-    await wait(400);
+    await waitFor((p) => window.__sueta.session.toys.some((t) => t.at && Math.hypot(t.at.x - p.x, t.at.y - p.y, t.at.z - p.z) < 0.011), 15000, to.p);
     const moved = await sess('s.toys.filter((t) => t.at).map((t) => t.at)');
     check('перевесила висящую игрушку в другое место', moved.length === 3 && moved.some((m) => near(m, to.p, 0.011)) && !moved.some((m) => near(m, hung[1], 0.011)), JSON.stringify(moved));
     void from;
@@ -152,7 +169,7 @@ try {
     await page.locator('#phone .toy-set:last-of-type .decor button').first().click();
     await waitFor((n) => window.__sueta.session.bonus.points < n, 20000, before);
     check('купила моток золотой мишуры за очки', (await sess('s.tinselLeft("gold")')) === 2 && (await sess('s.bonus.points')) < before, await sess('s.bonus.points'));
-    check('покупка в сохранении (моток и очки)', await S(() => window.__sueta.save.data.tinselRolls?.gold === 2 && window.__sueta.save.data.bonus < 300));
+    check('покупка в сохранении (моток и очки)', await waitFor(() => window.__sueta.save.data.tinselRolls?.gold === 2 && window.__sueta.save.data.bonus < 300, 30000));
     await page.locator('#phone .toy-set:last-of-type .decor button').nth(2).click(); await wait(300);
     await S(() => window.__sueta.session.closePanel()); await wait(600);
     await station('tree');
@@ -168,8 +185,10 @@ try {
     check('все точки пути на ёлке', path.every(Boolean));
     await page.mouse.move(path[0].x, path[0].y);
     await page.mouse.down();
-    for (const q of path.slice(1)) await page.mouse.move(q.x, q.y, { steps: 3 });
-    check('пока ведёшь — нитка растёт', (await sess('s.tinsel.draw?.thread.pts.length')) > 5, await sess('s.tinsel.draw?.thread.pts.length'));
+    // моток 2 м кончается раньше конца змейки — «растёт» проверяем на середине пути
+    for (const q of path.slice(1, 6)) await page.mouse.move(q.x, q.y, { steps: 3 });
+    check('пока ведёшь — нитка растёт', await waitFor(() => window.__sueta.session.tinsel.draw?.thread.pts.length > 5, 15000), await sess('s.tinsel.draw?.thread.pts.length'));
+    for (const q of path.slice(6)) await page.mouse.move(q.x, q.y, { steps: 3 });
     await wait(300);
     await shot('tinsel_drawing');
     await page.mouse.up();

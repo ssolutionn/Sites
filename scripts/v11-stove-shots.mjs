@@ -74,7 +74,8 @@ try {
     await closeTip(); await wait(300);
     const placed = await S(() => {
       const s = window.__sueta.session;
-      const t = s.stoveTasks()[0];
+      // 0.11: в руки берут задачу холодильника (у неё есть boilStep); яйца варят без чистки
+      const t = s.fridgeTasks().find((x) => x.product === 'egg' && x.boilStep) ?? s.fridgeTasks().find((x) => x.boilStep);
       if (!t) return null;
       s.carry = { product: t.product, qty: t.qty, dishId: t.dishId, stepId: t.stepId, boilStep: t.boilStep, peeled: false };
       return s.placePot(0, null, 0);
@@ -82,9 +83,10 @@ try {
     await waitFor(() => !window.__sueta.session.action, 20000); await wait(400);
     // вторая конфорка с яйцами (передняя левая) и пустая включённая справа — видно и крутилки, и огонь
     await S(() => { const s = window.__sueta.session; s.setHeat(0, 5); });
-    await wait(1800);
+    // кадр в SwiftShader бывает дольше секунды — ждём сам поворот, а не фиксированное время
+    await waitFor(() => Math.abs(window.__sueta.view.k.stoveKnobs[0].rotation.y) > 0.3, 30000);
     check('кастрюля стоит на плите', placed === true && (await sess('s.burners[0].state === "boiling"')), `placed=${placed}`);
-    check('крутилка 0 повёрнута', Math.abs(await S(() => window.__sueta.view.k.stoveKnobs[0].rotation.y)) > 0.3);
+    check('крутилка 0 повёрнута', Math.abs(await S(() => window.__sueta.view.k.stoveKnobs[0].rotation.y)) > 0.3, await S(() => `огонь ${window.__sueta.session.burners[0].heat}, поворот ${window.__sueta.view.k.stoveKnobs[0].rotation.y.toFixed(2)}, ${window.__sueta.session.hint?.text ?? ''}`));
     await shot('closeup');
     await hideUi(true); await wait(200); await shot('closeup_clean'); await hideUi(false);
   }
