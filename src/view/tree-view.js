@@ -20,6 +20,18 @@ const GRAVITY = 9.8;
 const ROLL_R = 0.08; // «радиус» игрушки на полу для раската, м
 const RED = new THREE.Color(0xff5a4a);
 
+// Модель игрушки ушла насовсем (новый день, разбилась, заменена): у каждой игрушки свои геометрии и материалы (toys.js) —
+// освобождаем их, иначе за неделю на видеокарте копятся сотни мешей. Переезд с ёлки на пол сюда не относится.
+function dropToy(m) {
+  if (!m) return;
+  m.removeFromParent();
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    o.geometry?.dispose();
+    o.material?.dispose?.();
+  });
+}
+
 // Луч попал в видимый объект: Raycaster сам видимость не проверяет
 const shown = (o) => {
   for (let q = o; q; q = q.parent) if (q.visible === false) return false;
@@ -58,8 +70,10 @@ export class TreeView {
   }
 
   reset() {
-    for (const m of this.meshes.values()) m.removeFromParent();
-    for (const m of this.dying.values()) m.removeFromParent();
+    for (const m of this.meshes.values()) dropToy(m);
+    for (const m of this.dying.values()) dropToy(m);
+    dropToy(this.ghost);
+    this.ghost = null;
     this.meshes.clear();
     this.dying.clear();
     this.anim.clear();
@@ -329,7 +343,7 @@ export class TreeView {
       const col = TOYS[m.userData.id]?.color ?? 0xffffff;
       P.emit(w, col, 16, { spread: 0.1, up: 1.2, life: 1, size: 0.008, gravity: 3.5 });
       P.emit(w, 0xffffff, 8, { spread: 0.08, up: 1.0, life: 0.8, size: 0.006, gravity: 3.5 });
-      m.removeFromParent();
+      dropToy(m);
       this.dying.delete(uid);
     }
   }
@@ -349,7 +363,7 @@ export class TreeView {
       live.add(toy.uid);
       let m = this.meshes.get(toy.uid);
       if (!m || m.userData.id !== toy.id) {
-        m?.removeFromParent();
+        dropToy(m);
         m = toyModel(toy.id);
         m.userData.id = toy.id;
         m.userData.uid = toy.uid;
@@ -420,7 +434,7 @@ export class TreeView {
     // игрушки, которых в игре уже нет (разбиты; новая игра)
     for (const [uid, m] of this.meshes)
       if (!live.has(uid)) {
-        m.removeFromParent();
+        dropToy(m);
         this.meshes.delete(uid);
         this.anim.delete(uid);
         this.floor.delete(uid);
@@ -470,7 +484,7 @@ export class TreeView {
     const show = !!hand && s.panel === 'tree' && !!this.hover && !s.treeFall.down;
     if (show) {
       if (this.ghost?.userData.id !== hand.id) {
-        this.ghost?.removeFromParent();
+        dropToy(this.ghost);
         this.ghost = ghostify(toyModel(hand.id));
         this.ghost.userData.id = hand.id;
         this.ghost.scale.setScalar(TOY_SCALE);

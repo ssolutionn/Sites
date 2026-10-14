@@ -94,7 +94,9 @@ try {
   await page.mouse.up();
   await waitFor(() => window.__sueta.session.dishwasher.loaded.includes('bowl'), 8000);
   check('миска в машине после перетаскивания', await sess('s.dishwasher.loaded.includes("bowl")'));
-  await wait(500);
+  // док перерисуется на следующем кадре (в SwiftShader кадр долгий) — иначе фишку возьмём по старой раскладке
+  await waitFor(() => !document.querySelector('[data-drag-dw="bowl"]'), 20000);
+  await wait(300);
   for (const id of ['knife', 'tray']) {
     c = await chip(id);
     if (!c) { check(`есть фишка ${id}`, false); continue; }
@@ -102,6 +104,8 @@ try {
     await page.mouse.up();
     await waitFor((id) => window.__sueta.session.dishwasher.loaded.includes(id), 6000, id);
     check(`${id} в машине`, await sess(`s.dishwasher.loaded.includes("${id}")`));
+    await waitFor((id) => !document.querySelector(`[data-drag-dw="${id}"]`), 20000, id);
+    await wait(300);
   }
   await wait(800);
   await shot('07_loaded');

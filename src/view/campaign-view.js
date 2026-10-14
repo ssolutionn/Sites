@@ -155,8 +155,10 @@ export class CampaignView {
     this.root.add(this.foam);
     this.washDirt = null;
 
-    // посудомойка под столешницей между гирляндой и раковиной (dishwasher-model.js)
+    // посудомойка под столешницей между гирляндой и раковиной (dishwasher-model.js). Фасады шкафов стоят впереди её дверцы —
+    // вырезаем из них объём машины по раме (как плиту), иначе дверцы шкафов закрывают посудомойку и видны в открытом проёме
     this.dishwasherView = new DishwasherView(this.root, tag);
+    k.addCut?.({ x0: DISHWASHER.x - DISHWASHER.w / 2 - 0.02, x1: DISHWASHER.x + DISHWASHER.w / 2 + 0.02, y0: DISHWASHER.y - DISHWASHER.h / 2, y1: DISHWASHER.y + DISHWASHER.h / 2 + 0.02, z0: DISHWASHER.zFront - 0.62, z1: DISHWASHER.zFront + 0.1 });
 
     // духовка: свечение — внутри модели плиты, за стеклом дверцы; клик по дверце ведёт в духовку, курица стоит на решётке внутри
     const sm = k.stoveModel, sp = k.stoveGroup.position, oh = sm.oven.hit, oc = sm.oven.chicken;

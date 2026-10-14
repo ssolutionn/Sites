@@ -27,6 +27,35 @@ function tag(obj, station) {
  * Кухня. bakedOrnaments — «запечённые» шары на ёлке: нужны только классической странице (scene.js), в кампании (0.11)
  * ёлка на старте голая, игрушки вешает игрок (campaign-view.js).
  */
+// Вырезы под встроенные приборы (0.11): общие для всех материалов шкафов задней столешницы uniform-ы — фрагмент внутри
+// любой из коробок отбрасывается. Тени не режутся (как и у отсечения плиты: clipShadows выключен).
+const CUT_MAX = 4;
+const CUT = {
+  n: { value: 0 },
+  min: { value: Array.from({ length: CUT_MAX }, () => new THREE.Vector3()) },
+  max: { value: Array.from({ length: CUT_MAX }, () => new THREE.Vector3()) },
+};
+function cutBoxShader(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uCutN = CUT.n;
+    sh.uniforms.uCutMin = CUT.min;
+    sh.uniforms.uCutMax = CUT.max;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCutWorld;')
+      .replace(
+        '#include <project_vertex>',
+        '#include <project_vertex>\nvec4 cutW = vec4( transformed, 1.0 );\n#ifdef USE_INSTANCING\ncutW = instanceMatrix * cutW;\n#endif\nvCutWorld = ( modelMatrix * cutW ).xyz;',
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vCutWorld;\nuniform int uCutN;\nuniform vec3 uCutMin[ ${CUT_MAX} ];\nuniform vec3 uCutMax[ ${CUT_MAX} ];`)
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>\nfor ( int i = 0; i < ${CUT_MAX}; i ++ ) {\n  if ( i >= uCutN ) break;\n  if ( all( greaterThan( vCutWorld, uCutMin[ i ] ) ) && all( lessThan( vCutWorld, uCutMax[ i ] ) ) ) discard;\n}`,
+      );
+  };
+  m.customProgramCacheKey = () => 'cutbox' + CUT_MAX;
+}
+
 export function buildKitchen(scene, { bakedOrnaments = false } = {}) {
   const k = { stations: {}, rings: {}, clickables: [] };
   const woodMat = toon(0xffffff, { map: tex.wood });
@@ -131,6 +160,7 @@ export function buildKitchen(scene, { bakedOrnaments = false } = {}) {
         const c = m.clone();
         c.clippingPlanes = planes;
         c.clipIntersection = true;
+        cutBoxShader(c); // остальные встроенные приборы (посудомойка) — через k.addCut
         return c;
       });
       o.material = Array.isArray(o.material) ? out : out[0];
@@ -138,6 +168,18 @@ export function buildKitchen(scene, { bakedOrnaments = false } = {}) {
     for (const r of backParts) cut(r);
     k.stoveClip = planes;
   }
+  /**
+   * 0.11: вырезать из шкафов задней столешницы ещё один объём под встроенный прибор (посудомойку). Коробка в мировых метрах
+   * { x0, x1, y0, y1, z0, z1 }. Плиту вырезает отсечение three.js (оно умеет одну коробку на материал), остальное — шейдер.
+   */
+  k.addCut = (box) => {
+    const i = CUT.n.value;
+    if (i >= CUT_MAX) return false;
+    CUT.min.value[i].set(box.x0, box.y0, box.z0);
+    CUT.max.value[i].set(box.x1, box.y1, box.z1);
+    CUT.n.value = i + 1;
+    return true;
+  };
   k.stoveKnobs = stoveModel.knobs; // белая метка на крутилке показывает, на сколько повёрнута
   k.stoveModel = stoveModel;
   k.stoveGroup = stove;
