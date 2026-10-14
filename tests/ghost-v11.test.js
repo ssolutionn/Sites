@@ -1059,3 +1059,54 @@ test('смах ножом плашмя: первая встреча — когд
   assert.equal(gestureNow(s), 'cut-v', 'нож снова режет');
   assert.equal(placeOk('sweep', s), false);
 });
+
+test('духовка: ручка вниз открывает, форма из дока ложится в проём, готовую курицу рука вытаскивает — настоящими жестами', async () => {
+  const { waitAction } = await import('./helpers-campaign.js');
+  const { OVEN } = await import('../src/campaign/layout.js');
+  const { inOvenCavity } = await import('../src/campaign/st-oven.js');
+  const s = day(6);
+  const d = s.dishes.chicken;
+  d.steps.marinade = { done: true, q: 1, info: null };
+  d.work = d.work ?? { inOven: false, baked: 0 }; // как в oven-gesture-v11: поднос с курицей уже собран
+  s.tray.owner = 'chicken';
+  s.equipment.tray.owner = 'chicken';
+  arrive(s, 'oven');
+  assert.equal(gestureNow(s), 'oven-door');
+  const door = demoPath('oven-door');
+  const first = down(door)[0];
+  assert.ok(Math.abs(first.x) <= OVEN.grab.x && first.z >= OVEN.grab.z0 && first.z <= OVEN.grab.z1, 'ручку берут там, где её хватает игра');
+  replay(s, door);
+  assert.equal(s.ovenDoor.door, 'open');
+  assert.equal(gestureNow(s), 'oven-drop');
+  const end = down(demoPath('oven-drop')).at(-1);
+  assert.ok(inOvenCavity(end.x, end.z, CAMPAIGN.oven.drop), 'форму отпускают в проёме');
+  assert.notEqual(s.ovenDrop(end.x, end.z), false, s.hint?.text);
+  waitAction(s);
+  assert.notEqual(s.oven.state, 'empty', 'форма в духовке');
+  assert.equal(gestureNow(s), null, 'пока запекается — показывать нечего');
+  run(s, CAMPAIGN.oven.bake + 1);
+  assert.equal(s.oven.state, 'ready');
+  assert.equal(gestureNow(s), 'oven-take');
+  if (s.ovenDoor.door !== 'open') replay(s, door);
+  replay(s, demoPath('oven-take'));
+  waitAction(s);
+  assert.equal(s.oven.state, 'empty', s.hint?.text);
+  assert.ok(DEMOS['oven-drop'].startDom, 'форма берётся из дока');
+});
+
+test('духовка: первая встреча — у закрытой дверцы; открыла — форма в проём; отказы — по фразам OVEN_HINTS', async () => {
+  const { OVEN_HINTS } = await import('../src/campaign/st-oven.js');
+  const s = day(6);
+  s.dishes.chicken.steps.marinade = { done: true, q: 1, info: null };
+  arrive(s, 'oven');
+  assert.deepEqual(cueOf({ type: 'open', station: 'oven' }, s), { kind: 'first', id: 'oven-door' });
+  assert.equal(placeOk('oven-door', s), true);
+  assert.equal(placeOk('oven-drop', s), false);
+  s.ovenDoor.door = 'open';
+  assert.deepEqual(cueOf({ type: 'ovenDoor', open: true }, s), { kind: 'first', id: 'oven-drop' });
+  assert.equal(placeOk('oven-drop', s), true);
+  assert.deepEqual(cueOf({ type: 'ovenDeny', text: OVEN_HINTS['not-open'] }, s), { kind: 'refuse', id: 'oven-door', reason: 'closed' });
+  assert.deepEqual(cueOf({ type: 'ovenDeny', text: OVEN_HINTS.miss }, s), { kind: 'refuse', id: 'oven-drop', reason: 'miss' });
+  assert.deepEqual(cueOf({ type: 'ovenDeny', text: OVEN_HINTS.stay }, s), { kind: 'refuse', id: 'oven-take', reason: 'stay' });
+  assert.equal(cueOf({ type: 'ovenDeny', text: 'В духовке уже есть форма — достань её' }, s), null);
+});

@@ -9,6 +9,7 @@ import { CAMPAIGN, TINSEL } from '../campaign/data.js';
 import { CLOSEUP_STATIONS, TREE } from '../campaign/layout.js';
 import { outerRadius, snapToTree } from '../campaign/tree-geo.js';
 import { sweepTarget } from '../campaign/sweep.js';
+import { OVEN_HINTS } from '../campaign/st-oven.js';
 
 /** Тема подсказки первой встречи на доске → жест. */
 const TUTORIAL = { cube: 'cut-v', round: 'round', grate: 'grate', peel: 'peel' };
@@ -67,9 +68,19 @@ export function gestureNow(s) {
       return null;
     case 'dishwasher':
       return s.dishwasher.door === 'open' ? 'washer-drag' : 'washer-door';
+    case 'oven':
+      return ovenGesture(s);
     default:
       return null;
   }
+}
+
+/** Жест у духовки: закрыта — ручка; открыта и пустая (есть что ставить) — форма в проём; готово — курицу наружу. */
+function ovenGesture(s) {
+  if (!s.ovenDoor) return null;
+  if (s.ovenDoor.door !== 'open') return 'oven-door';
+  if (s.oven.state === 'empty') return s.dishes?.chicken && !s.dishes.chicken.done ? 'oven-drop' : null;
+  return s.oven.state === 'baking' ? null : 'oven-take'; // запекается — трогать незачем
 }
 
 /** Первая конфорка с кастрюлей (на ней крутят огонь), иначе первая. */
@@ -200,6 +211,10 @@ export function placeOk(id, s) {
     case 'washer-door':
     case 'washer-drag':
       return p === 'dishwasher';
+    case 'oven-door':
+    case 'oven-drop':
+    case 'oven-take':
+      return p === 'oven' && ovenGesture(s) === id;
     default:
       return false;
   }
@@ -255,6 +270,7 @@ export function cueOf(e, s) {
         return s?.burners.some((b) => b.dirty) ? first('wipe') : null;
       }
       if (e.station === 'dishwasher') return first('washer-door');
+      if (e.station === 'oven') return s?.ovenDoor?.door === 'closed' ? first('oven-door') : null;
       return null;
     case 'potBoil': // пена поднимается — пора убавить огонь крутилкой
       return first('knob');
@@ -264,6 +280,20 @@ export function cueOf(e, s) {
       return refuse('stove-pot', 'stay');
     case 'dwDoor':
       return e.open ? first('washer-drag') : null;
+    case 'ovenDoor': {
+      if (!e.open) return null;
+      const g = s ? ovenGesture(s) : null;
+      return g === 'oven-drop' || g === 'oven-take' ? first(g) : null;
+    }
+    case 'ovenReady': // курица готова: у открытой духовки — показать, как достать
+      return s?.panel === 'oven' && s.ovenDoor?.door === 'open' ? first('oven-take') : null;
+    case 'ovenDeny': {
+      const t = String(e.text ?? '');
+      if (t === OVEN_HINTS['not-open'] || t === OVEN_HINTS.closed) return refuse('oven-door', 'closed');
+      if (t === OVEN_HINTS.miss) return refuse('oven-drop', 'miss');
+      if (t === OVEN_HINTS.stay) return refuse('oven-take', 'stay');
+      return null;
+    }
     case 'giftStart':
       return first({ bow: 'gift-bow', paper: 'gift-paper', lid: 'gift-lid' }[e.stage] ?? 'gift-bow');
     case 'giftBow':

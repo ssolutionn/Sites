@@ -12,7 +12,7 @@
 // lift — высота руки над плоскостью, м (кастрюля стоит выше конфорки); startDom — фишка в доке, откуда жест начинается.
 // Все числа берутся из данных станций (CAMPAIGN, BOWL, STOVE, PUDDLE, DISHWASHER, TREE, PRODUCTS), а не «на глаз».
 import { CAMPAIGN, PRODUCTS } from '../campaign/data.js';
-import { BOWL, STOVE, PUDDLE, DISHWASHER, TREE } from '../campaign/layout.js';
+import { BOWL, STOVE, PUDDLE, DISHWASHER, TREE, OVEN } from '../campaign/layout.js';
 import { BOARD_UNIT } from '../campaign/st-board.js';
 import { outerRadius, snapToTree } from '../campaign/tree-geo.js';
 import { GHOST_IDS } from './ghost-ids.js';
@@ -254,6 +254,23 @@ function washerDrag() {
   return stroke(2, [{ x: c.x * 0.5, z: DISHWASHER.closeFrom + 0.32 }, { x: 0.02, z: zc }], { lead: 0.14, tail: 0.14, away: { x: 0.05, z: 0.06 } });
 }
 
+// ---------- духовка (плоскость дверцы, как у посудомойки: x вправо, z вниз) ----------
+function ovenDoor() {
+  const h = OVEN.handle, travel = CAMPAIGN.oven.door.travel;
+  return stroke(1.8, [{ x: h.x, z: h.z }, { x: h.x, z: h.z + travel * 1.12 }], { lead: 0.2, tail: 0.15, away: { x: 0.1, z: -0.08 } });
+}
+
+function ovenDrop() {
+  // форма из дока (фишка внизу) — в середину проёма открытой духовки
+  return stroke(2, [{ x: OVEN.cavity.x * 0.4, z: OVEN.closeFrom + 0.3 }, { x: 0.02, z: (OVEN.cavity.z0 + OVEN.cavity.z1) / 2 }], { lead: 0.14, tail: 0.14, away: { x: 0.05, z: 0.06 } });
+}
+
+function ovenTake() {
+  // курицу в проёме — зажать и вытащить вниз, ниже проёма на oven.takeOut с запасом
+  const zc = (OVEN.cavity.z0 + OVEN.cavity.z1) / 2;
+  return stroke(1.8, [{ x: 0, z: zc }, { x: 0.02, z: OVEN.cavity.z1 + CAMPAIGN.oven.takeOut + 0.1 }], { lead: 0.2, tail: 0.15, away: { x: 0.06, z: -0.06 } });
+}
+
 // ---------- чистка ----------
 function peel(p) {
   // нож зигзагом по продукту; params.zone — { x, z, rx, rz } из it.peel.zones (метры), иначе картофелина по умолчанию
@@ -322,6 +339,9 @@ export const DEMOS = {
   'stove-pot': demo('stove-pot', 'Зажми кастрюлю и оттащи в сторону', 'plane', 'stove', stovePot, { lift: 0.1 }),
   'washer-door': demo('washer-door', 'Зажми ручку и потяни вниз', 'plane', 'dishwasher', washerDoor),
   'washer-drag': demo('washer-drag', 'Зажми посуду и перетащи в проём', 'plane', 'dishwasher', washerDrag, { startDom: '[data-drag-dw]' }),
+  'oven-door': demo('oven-door', 'Зажми ручку духовки и потяни вниз', 'plane', 'oven', ovenDoor),
+  'oven-drop': demo('oven-drop', 'Зажми форму и опусти в проём духовки', 'plane', 'oven', ovenDrop, { startDom: '[data-drag-oven]' }),
+  'oven-take': demo('oven-take', 'Зажми курицу и вытащи вниз, на стол', 'plane', 'oven', ovenTake),
 };
 
 /** Номера по порядку GHOST_IDS: каждый жест реестра описан, лишнего нет. */
