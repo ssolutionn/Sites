@@ -46,6 +46,15 @@ export function makeMapper(view, id, params = {}, doc = document) {
       const base = toPx((c.x * 0.5 + 0.5) * canvas.clientWidth, (-c.y * 0.5 + 0.5) * canvas.clientHeight);
       return (p) => ({ x: base.x + p.x * rect.height, y: base.y + p.z * rect.height });
     }
+    case 'hold': {
+      // рука держит погасшую лампочку гирлянды или звезду: якорь — её точка на экране, единицы пути — высота окна
+      const w = view.holdAnchor?.(params.kind);
+      if (!w) return null;
+      const c = w.clone().project(view.sv.camera);
+      if (c.z >= 1) return null;
+      const base = toPx((c.x * 0.5 + 0.5) * canvas.clientWidth, (-c.y * 0.5 + 0.5) * canvas.clientHeight);
+      return (p) => ({ x: base.x + p.x * rect.height, y: base.y + p.z * rect.height });
+    }
     case 'knob': {
       const el = doc.querySelector(`[data-knob="${params.burner ?? 0}"]`);
       if (!el) return null;

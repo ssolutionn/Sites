@@ -491,6 +491,8 @@ try {
   for (const i of await sess('s.burners.filter(b => b.overflow).map(b => b.i)')) await turnKnob(i, 4);
   // достаём именно яйца (картошка за это время тоже могла свариться)
   await takePotByDrag(1); await noAction();
+  // 0.11: конфорка сама не гаснет — огонь выключают крутилкой
+  if ((await sess('s.burners[1].heat')) > 0) await turnKnob(1, 0);
   check('сняты яйца, огонь под ними выключен', (await sess('s.burners[1].state')) === 'empty' && (await sess('s.burners[1].heat')) === 0);
   await goStation('Доска', 'board');
   await actBtn('boardSelect', '"olivier:peelEgg"'); await wait(300);
@@ -508,6 +510,7 @@ try {
   check('плита (картофель готов)', await goStation('Плита', 'stove'));
   for (const i of await sess('s.burners.filter(b => b.overflow).map(b => b.i)')) await turnKnob(i, 4);
   await takePotByDrag(0); await noAction();
+  if ((await sess('s.burners[0].heat')) > 0) await turnKnob(0, 0); // огонь выключают сами (0.11)
   await goStation('Раковина', 'sink'); await coolUnderTap('potato');
   check('доска (картофель)', await goStation('Доска', 'board'));
   await boardProduct('potato', 'Картофель × 2');

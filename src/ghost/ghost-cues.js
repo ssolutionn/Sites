@@ -60,9 +60,12 @@ export function gestureNow(s) {
       if (s.stoveWipe || s.burners.some((b) => b.dirty)) return 'wipe';
       if (s.burners.some((b) => b.state === 'ready')) return 'stove-pot';
       return s.burners.some((b) => b.state !== 'empty') ? 'knob' : null;
+    case 'garland':
+      return s.garland?.broken ? 'hold' : null;
     case 'tree':
       if (s.gift) return { bow: 'gift-bow', paper: 'gift-paper', lid: 'gift-lid' }[s.gift.stage] ?? null;
       if (s.treeFall?.down) return null;
+      if (s.star?.broken) return 'hold'; // погасшая звезда — срочнее игрушек
       if (TINSEL[s.tinsel?.tool]) return 'tinsel';
       if (s.treeHand != null || s.toysInBox?.().length) return 'toy-drag';
       return null;
@@ -151,6 +154,8 @@ export function paramsFor(id, s) {
       const to = freeSpot(s);
       return to ? { to } : {};
     }
+    case 'hold':
+      return { kind: s.panel === 'garland' ? 'garland' : 'star' };
     case 'stove-place':
       return { burner: (s.usableBurners?.() ?? s.burners).find((b) => b.state === 'empty' && !b.dirty)?.i ?? 0 };
     case 'stove-pot':
@@ -215,6 +220,8 @@ export function placeOk(id, s) {
     case 'oven-drop':
     case 'oven-take':
       return p === 'oven' && ovenGesture(s) === id;
+    case 'hold':
+      return (p === 'garland' && !!s.garland?.broken) || (p === 'tree' && !!s.star?.broken && !s.gift && !s.treeFall?.down);
     default:
       return false;
   }
@@ -271,7 +278,13 @@ export function cueOf(e, s) {
       }
       if (e.station === 'dishwasher') return first('washer-door');
       if (e.station === 'oven') return s?.ovenDoor?.door === 'closed' ? first('oven-door') : null;
+      if (e.station === 'garland') return s?.garland?.broken ? first('hold') : null;
+      if (e.station === 'tree') return s?.star?.broken && !s.treeFall?.down ? first('hold') : null;
       return null;
+    case 'garlandOff': // погасло, пока игрок рядом
+      return s?.panel === 'garland' ? first('hold') : null;
+    case 'starOff':
+      return s?.panel === 'tree' && !s.treeFall?.down ? first('hold') : null;
     case 'potBoil': // пена поднимается — пора убавить огонь крутилкой
       return first('knob');
     case 'stoveMiss':

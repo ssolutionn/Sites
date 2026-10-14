@@ -1053,6 +1053,16 @@ export class CampaignView {
     return null;
   }
 
+  /** Мировая точка, которую держат, чтобы починить (рука-призрак): средняя лампочка гирлянды или звезда на ёлке. */
+  holdAnchor(kind) {
+    if (kind === 'garland') {
+      const bulbs = this.k.garland?.bulbs ?? [];
+      const b = bulbs[Math.floor(bulbs.length / 2)];
+      return b ? b.getWorldPosition(new THREE.Vector3()) : null;
+    }
+    return this.k.tree?.star ? this.k.tree.star.getWorldPosition(new THREE.Vector3()) : null;
+  }
+
   /** Конфорка, на которой стоит кастрюля под курсором (за ручку или бок), или null: 3D-тело выше плоскости плиты, плоскостью его не поймать. */
   potAt(ndc) {
     if (!ndc || !this.pots) return null;

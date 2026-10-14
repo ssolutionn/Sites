@@ -191,11 +191,11 @@ export class GhostHand {
     if (this.arrow) this.arrow.style.display = 'none';
   }
 
-  // Подпись над началом жеста, в пределах окна
+  // Подпись над началом жеста, в пределах окна; у верхнего края (гирлянда над окном) — под рукой, а не под часами HUD
   _labelAt(p) {
     const w = this.label.offsetWidth || 220;
     const x = Math.max(w / 2 + 12, Math.min(innerWidth - w / 2 - 12, p.x));
-    const y = Math.max(44, p.y - 62);
+    const y = p.y - 62 >= 96 ? p.y - 62 : p.y + 60 * this._scale() + 16;
     this.label.style.left = `${x.toFixed(0)}px`;
     this.label.style.top = `${y.toFixed(0)}px`;
   }

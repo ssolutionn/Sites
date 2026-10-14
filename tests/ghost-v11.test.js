@@ -71,7 +71,7 @@ test('реестр: у каждого жеста из списка есть де
     assert.ok(isGhostId(id));
     assert.ok(d.label.length > 5 && d.label.length <= 70, `${id}: подпись «${d.label}»`);
     assert.doesNotMatch(d.label, /ошибк|неверн|[a-z]{3}/i, `${id}: ни упрёка, ни английских слов`);
-    assert.ok(['plane', 'tree', 'cat', 'knob'].includes(d.space), `${id}: пространство ${d.space}`);
+    assert.ok(['plane', 'tree', 'cat', 'knob', 'hold'].includes(d.space), `${id}: пространство ${d.space}`);
     assert.equal(typeof d.station, 'string');
     assert.equal(typeof d.path, 'function');
   }
@@ -1109,4 +1109,34 @@ test('духовка: первая встреча — у закрытой две
   assert.deepEqual(cueOf({ type: 'ovenDeny', text: OVEN_HINTS.miss }, s), { kind: 'refuse', id: 'oven-drop', reason: 'miss' });
   assert.deepEqual(cueOf({ type: 'ovenDeny', text: OVEN_HINTS.stay }, s), { kind: 'refuse', id: 'oven-take', reason: 'stay' });
   assert.equal(cueOf({ type: 'ovenDeny', text: 'В духовке уже есть форма — достань её' }, s), null);
+});
+
+test('удержание: у погасшей гирлянды и звезды рука показывает «зажми и держи»; лежащая ёлка и подарок — нет', () => {
+  const g = day(0);
+  arrive(g, 'garland');
+  g.garland.broken = true;
+  assert.equal(gestureNow(g), 'hold');
+  assert.deepEqual(paramsFor('hold', g), { kind: 'garland' });
+  assert.equal(placeOk('hold', g), true);
+  assert.deepEqual(cueOf({ type: 'open', station: 'garland' }, g), { kind: 'first', id: 'hold' });
+  assert.deepEqual(cueOf({ type: 'garlandOff' }, g), { kind: 'first', id: 'hold' });
+  g.garland.broken = false;
+  assert.equal(gestureNow(g), null);
+  assert.equal(placeOk('hold', g), false);
+
+  const t = day(0);
+  arrive(t, 'tree');
+  t.star.broken = true;
+  assert.equal(gestureNow(t), 'hold', 'погасшая звезда срочнее игрушек');
+  assert.deepEqual(paramsFor('hold', t), { kind: 'star' });
+  assert.deepEqual(cueOf({ type: 'starOff' }, t), { kind: 'first', id: 'hold' });
+  t.treeFall.down = true;
+  assert.equal(gestureNow(t), null, 'ёлка лежит — звезду не чинят');
+  assert.equal(placeOk('hold', t), false);
+  assert.equal(cueOf({ type: 'starOff' }, t), null);
+
+  // путь: рука стоит на месте и держит кнопку дольше секунды
+  const d = down(demoPath('hold'));
+  assert.ok(d.at(-1).t - d[0].t >= 1, 'держит дольше секунды');
+  for (const p of d) assert.ok(Math.hypot(p.x, p.z) < 0.01, 'не уводит руку с лампочки');
 });

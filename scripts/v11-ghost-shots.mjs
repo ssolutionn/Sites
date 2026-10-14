@@ -402,6 +402,12 @@ try {
     await wait(700);
     await tourShot('stove-pot', { where: 'кастрюля готова', frac: 0.6 });
     check('есть готовая кастрюля, жест не пропал', await sessS("s.burners.some((b) => b.state === 'ready')"));
+    // удержание: погасла гирлянда — рука держит среднюю лампочку
+    await unfreeze();
+    await S(() => { window.__sueta.session.garland.broken = true; });
+    await goStation('garland');
+    const bulb = await S(() => { const v = window.__sueta.view; const w = v.holdAnchor('garland').project(v.sv.camera); const r = v.sv.canvas.getBoundingClientRect(); return { x: r.left + (w.x * 0.5 + 0.5) * r.width, y: r.top + (-w.y * 0.5 + 0.5) * r.height }; });
+    await tourShot('hold', { near: { ...bulb, r: 60 }, where: 'погасла гирлянда', frac: 0.5 });
   }
 
   // ======================= обход: ёлка, подарок, посудомойка =======================
