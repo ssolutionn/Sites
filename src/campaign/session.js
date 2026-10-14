@@ -569,6 +569,7 @@ export class KitchenSession {
     this.catPlay = null;
     this.catWand = null;
     if (this.gift) this.leaveGift();
+    this._handBack(); // игрушку из руки — на место или в коробку: с собой по кухне её не носят
     this.giftShow = null;
     this._cancelAction();
     this._releaseHolds();
@@ -646,6 +647,7 @@ export class KitchenSession {
       this.leaveGift();
       return;
     }
+    this._handBack();
     this._cancelAction();
     this._releaseHolds();
     this.pointerUp();

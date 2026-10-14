@@ -7,6 +7,8 @@ import { CAMPAIGN } from '../src/campaign/data.js';
 import { VIEWER_REACTIONS, FEED_AUTHORS } from '../src/campaign/feed-data.js';
 import { createRng } from '../src/game/rng.js';
 import { canFire } from '../src/campaign/stream-rules.js';
+import { STOVE } from '../src/campaign/layout.js';
+import { outerRadius } from '../src/campaign/tree-geo.js';
 
 const H = CAMPAIGN.stream.help;
 
@@ -218,6 +220,41 @@ test('состояние для canFire: пока нож зажат или ид�
   assert.equal(s.streamState().gesture, true, 'подарок в руках');
   s.gift = null;
   assert.equal(s.streamState().gesture, false);
+});
+
+test('руки свободны: недотёртая конфорка и игрушка, с которой ушла от ёлки, не держат чат в «руки заняты»', () => {
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.live = true;
+  s.burners[1].dirty = true;
+  arrive(s, 'stove');
+  const p = STOVE.burners[1];
+  s.pointer('down', p.x, p.z);
+  for (let k = 0; k < 4; k++) s.pointer('move', p.x + (k % 2 ? 0.04 : -0.04), p.z);
+  assert.equal(s.streamState().gesture, true, 'пока трёт — руки заняты');
+  s.pointer('up', p.x, p.z);
+  assert.ok(s.stoveWipe?.scrub.progress > 0, 'прогресс вытирания сохранён');
+  assert.equal(s.streamState().gesture, false, 'отпустила — руки свободны');
+
+  const t = new KitchenSession({ dayIndex: 1, seed: 1 });
+  t.live = true;
+  const box = t.addToy('bell');
+  const hung = t.addToy('ballRed');
+  arrive(t, 'tree');
+  const r = outerRadius(0.9);
+  const spot = { x: Math.sin(0.2) * r, y: 0.9, z: Math.cos(0.2) * r };
+  assert.ok(t.hangCheck(spot).ok, 'точка на ёлке');
+  assert.ok(t.pickToy(hung) && t.treeClick(spot), 'повесила');
+  assert.ok(t.treeClick(t.toys.find((x) => x.uid === hung).at, hung), 'сняла с ёлки — в руке');
+  arrive(t, 'board');
+  assert.equal(t.treeHand, null, 'ушла от ёлки — в руке ничего');
+  assert.ok(t.toys.find((x) => x.uid === hung).at, 'снятая игрушка вернулась на своё место');
+  assert.equal(t.streamState().gesture, false);
+  arrive(t, 'tree');
+  assert.ok(t.pickToy(box));
+  t.closePanel();
+  assert.equal(t.treeHand, null, '«назад» с игрушкой из коробки — она снова в коробке');
+  assert.equal(t.toys.find((x) => x.uid === box).at, null);
+  assert.equal(t.streamState().gesture, false);
 });
 
 test('состояние для canFire: оценка конца дня по темпу, готовый день — тишина', () => {

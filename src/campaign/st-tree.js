@@ -291,6 +291,15 @@ export const treeMethods = {
     this.treeFrom = null;
   },
 
+  /** Ушла от ёлки или «назад» с игрушкой в руке: снятая с ёлки — обратно на своё место (если свободно), иначе — в коробку. */
+  _handBack() {
+    if (this.treeHand == null) return;
+    if (this.treeFrom && this._hangHand(this.treeFrom, true)) return;
+    const t = this.toys.find((x) => x.uid === this.treeHand);
+    this._handToBox();
+    if (t) this._emit('toyReturned', { uid: t.uid, id: t.id });
+  },
+
   /** Взять игрушку из коробки в руку (повторно — положить обратно). */
   pickToy(uid) {
     if (!this._isIdleAt('tree') || this.gift) return false;

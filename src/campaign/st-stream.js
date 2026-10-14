@@ -51,7 +51,7 @@ export const streamMethods = {
       phase: this.phase,
       t: this.t,
       remaining: estimateRemaining({ t: this.t, done, total, phase: this.phase }),
-      gesture: !!(this.pointerDown || this.action || this.gift || this.treeHand != null || this.tray?.drag || this.stoveWipe || Object.values(this.holds).some(Boolean)),
+      gesture: !!(this.pointerDown || this.action || this.gift || this.treeHand != null || this.tray?.drag || Object.values(this.holds).some(Boolean)),
     };
   },
 
