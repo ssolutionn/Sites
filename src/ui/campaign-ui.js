@@ -1455,7 +1455,8 @@ export class CampaignUI {
       this.replDrag = null;
       this.el.ghost.classList.add('hidden');
       if (!d.moved) {
-        this.app.session?.setHint('Зажми замену и перетащи на доску', 2);
+        const s = this.app.session, it = s?.boardCur();
+        s?.setHint(it && s.inventory.available(it.product) < 1 ? 'Запаса нет — закажи замену в телефоне' : 'Зажми замену и перетащи на доску', 2);
         return;
       }
       if (this._planeLocal(e, 'board')) this.act('takeReplacement');
