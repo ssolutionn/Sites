@@ -19,3 +19,14 @@ test('подсказка про пожелание закрывается, ко�
   assert.equal(tipClosedBy('gifts', 'giftOpened'), true);
   assert.equal(tipClosedBy('нет-такой', 'cut'), false);
 });
+
+test('советы 0.11 описывают жест, а не исчезнувшие кнопки: плита, звезда, радио, шуба', () => {
+  assert.doesNotMatch(TIPS.stove, /Положить сюда/, 'кнопки «Положить сюда» в 0.11 нет');
+  assert.match(TIPS.stove, /перетащи на конфорку/);
+  assert.match(TIPS.stove, /унеси с конфорки/, 'снимают кастрюлю жестом');
+  assert.doesNotMatch(TIPS.stove, /~25 с/, 'время закипания — в кухонных минутах');
+  assert.doesNotMatch(TIPS.star, /Поправить звезду/, 'кнопки «Поправить звезду» в 0.11 нет');
+  assert.match(TIPS.star, /зажми звезду/);
+  assert.doesNotMatch(TIPS.radioTune, /◀|▶/, 'кнопок соседней станции у радио нет — только ручка и колёсико');
+  assert.doesNotMatch(TIPS['tray:shuba'], /подтверди слой/, 'с 0.11 слой ложится сам, когда отпустила лопатку');
+});
