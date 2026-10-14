@@ -415,6 +415,7 @@ export const homeMethods = {
     if (g > 0) this._emit('wipe', { cov: w.scrub.progress, burner: w.i });
     if (w.scrub.complete) {
       this.burners[w.i].dirty = false;
+      this.burners[w.i].soot = false; // вытерла — копоти нет: следующее пятно (убежавшая пена) будет пеной, а не сажей
       this.stoveWipe = null;
       this._emit('stoveClean', { burner: w.i });
       this.setHint('Конфорка чистая', 1.5);

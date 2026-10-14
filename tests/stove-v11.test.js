@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KitchenSession, arrive, waitAction, run, startBoil } from './helpers-campaign.js';
 import { CAMPAIGN, kitchenSec, KITCHEN_SCALE, stepProducts } from '../src/campaign/data.js';
+import { STOVE } from '../src/campaign/layout.js';
 
 function potOn(heat, key = 'olivier:boil') {
   const s = new KitchenSession({ dayIndex: 0, seed: 1 });
@@ -135,6 +136,20 @@ test('переваренные яйца помечены на доске — н�
   arrive(t, 'board');
   assert.ok(t.boardSelect('olivier:peelEgg'));
   assert.equal(t.boardCur().overcooked, false);
+});
+
+test('вытерла пригоревшую конфорку — копоть ушла вместе с грязью (следующее пятно не будет чёрным)', () => {
+  const s = potOn(6);
+  for (let k = 0; k < 20000 && !(s.burners[0].state === 'empty' && s.burners[0].dirty); k++) s.update(0.05);
+  assert.equal(s.burners[0].soot, true, 'пригорело — копоть');
+  assert.ok(s.setHeat(0, 0));
+  arrive(s, 'stove');
+  const p = STOVE.burners[0];
+  s.pointer('down', p.x, p.z);
+  for (let k = 0; k < 200 && s.burners[0].dirty; k++) s.pointer('move', p.x + (k % 2 ? 0.05 : -0.05), p.z);
+  s.pointer('up', p.x, p.z);
+  assert.equal(s.burners[0].dirty, false, 'конфорка вытерта');
+  assert.equal(s.burners[0].soot, false, 'копоти больше нет');
 });
 
 test('пригорела картошка оливье → новую снова можно достать, почистить и сварить (день не застревает)', () => {
