@@ -206,7 +206,23 @@ async function holdOnScene(label, station, expr) {
 async function guardCat() {
   await dismissTips();
   if (await sess("s.cat.state === 'theft'")) { await shot('d1_cat'); await shooCat(); }
-  if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) { await dragReplacement(); await noAction(); }
+  if (await sess('(s.boardCur()?.missing?.length ?? 0) > 0')) {
+    // 0.11: запаса нет — замену заказывают в телефоне и ждут курьера (сценарий телефон не водит — честно пишем обход)
+    const product = await sess('s.boardCur().product');
+    if ((await sess(`s.inventory.available('${product}')`)) < 1) {
+      check('кот унёс кусок, запаса нет — доска просит заказать замену', /закажи замену/.test(await sess('s.transferBlock()')), await sess('s.transferBlock()'));
+      viaApi.push(`заказ замены (${product}) через session`);
+      const stepKey = await sess('s.board.current');
+      await S((p) => { const s = window.__sueta.session; s.draftSet(p, 1); s.confirmOrder('standard'); }, product);
+      await S(() => { const s = window.__sueta.session; s.fastForward(900, () => s.delivery.order?.status === 'arrived'); });
+      await S(() => window.__sueta.session.collectOrder(true));
+      await S((p) => { const s = window.__sueta.session; s.fastForward(300, () => !s.heroine.away && !s.heroine.target && s.inventory.available(p) >= 1); }, product);
+      check('замену привезли', (await sess(`s.inventory.available('${product}')`)) >= 1);
+      await goStation('Доска', 'board');
+      await actBtn('boardSelect', `"${stepKey}"`); await wait(500);
+    }
+    await dragReplacement(); await noAction();
+  }
 }
 // The cat's replacement is placed beside the original. Cut its actual bounds,
 // transformed by the current board angle; do not assume the old product centre.

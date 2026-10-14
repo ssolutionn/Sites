@@ -485,7 +485,8 @@ export const boardMethods = {
     if (!it) return 'На доске пусто';
     if (it.peel) return `Почисти до конца: ${Math.round(it.peel.coverage() * 100)} из ${Math.round(this.cfg.peel.complete * 100)} %`;
     if (it.grater) return it.grater.complete ? this._destBlock(it) : `Натри до конца: ${it.grater.done} из ${it.grater.cycles} движений`;
-    if (it.missing.length) return 'Кот утащил кусок — возьми замену';
+    // 0.11: запаса нет — замену сначала заказывают (как в подсказке после кражи), «возьми» обманывало бы
+    if (it.missing.length) return this.inventory.available(it.product) >= 1 ? 'Кот утащил кусок — возьми замену' : 'Кот утащил кусок — закажи замену в телефоне';
     if (it.cuts < 1) return 'Сначала сделай хотя бы один разрез';
     if (it.log && roundSlices(it.log).length < 3) return 'Нарежь хотя бы несколько кружочков';
     if (this._freshLeft(it)) return 'Замену нужно дорезать';

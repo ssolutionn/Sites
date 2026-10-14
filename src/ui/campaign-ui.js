@@ -873,7 +873,7 @@ export class CampaignUI {
         this.tipWhenFree('star');
         break;
       case 'catStole':
-        this.toast(`Кот утащил кусок (${esc(PRODUCTS[e.product ?? 'sausage'].name.toLowerCase())})! ${s.inventory.available(e.product ?? 'sausage') >= 1 ? 'На доске — «Взять замену»' : 'Запаса нет — закажи в телефоне'}`, 'bad', 3.5);
+        this.toast(`Кот утащил кусок (${esc(PRODUCTS[e.product ?? 'sausage'].name.toLowerCase())})! ${s.inventory.available(e.product ?? 'sausage') >= 1 ? 'На доске — фишка «Замена»' : 'Запаса нет — закажи в телефоне'}`, 'bad', 3.5);
         this.popup('🐈 Утащил!', 'bad');
         break;
       case 'catHungry':
@@ -1767,7 +1767,7 @@ export class CampaignUI {
           <div class="dock">${backBtn}<div class="dock-items">${chips}</div>
             <div class="dock-main">
               ${it.body ? this._btn(`⟲ <kbd>${esc(this._keyName('left'))}</kbd>`, 'boardTurn', [1], 'ghost turn', busy, `Повернуть доску против часовой (держи ${this._keyName('left')} — плавно)`) + this._btn(`<kbd>${esc(this._keyName('right'))}</kbd> ⟳`, 'boardTurn', [-1], 'ghost turn', busy, `Повернуть доску по часовой (держи ${this._keyName('right')} — плавно)`) : ''}
-              ${it.missing.length ? `<button class="danger prod-chip" data-drag-repl ${busy ? 'disabled' : ''} title="Зажми и перетащи на доску — замена из запаса ляжет рядом"><span class="pi">${PICON[it.product] ?? '🍽'}</span><span class="pn">Замена ⤵</span></button>` : ''}
+              ${it.missing.length ? (s.inventory.available(it.product) >= 1 ? `<button class="danger prod-chip" data-drag-repl ${busy ? 'disabled' : ''} title="Зажми и перетащи на доску — замена из запаса ляжет рядом"><span class="pi">${PICON[it.product] ?? '🍽'}</span><span class="pn">Замена ⤵</span></button>` : `<button class="prod-chip soft-disabled" data-drag-repl title="Запаса нет — закажи замену в телефоне, она будет первой в корзине"><span class="pi">${PICON[it.product] ?? '🍽'}</span><span class="pn">Замена — заказать</span></button>`) : ''}
               ${s.practice ? this._btn('↺ Заново', 'resetPracticeItem', [], '') : ''}
               ${(it.grater && !s.practice) || it.peel ? '' : s.practice ? this._btn(destLabel, 'boardTransfer', [], 'primary big ' + (block ? 'soft-disabled' : it.cutReady ? 'ready-pulse' : ''), busy, block ?? '') : this._btn(s.board.flat ? `🔪 ${esc(sweepTarget(step.dest, CAMPAIGN.board.sweep).word)} →` : `🔪 Смахнуть ${esc(sweepTarget(step.dest, CAMPAIGN.board.sweep).short)}`, 'boardFlat', [], 'primary big ' + (s.board.flat ? 'active ' : '') + (block ? 'soft-disabled' : it.cutReady && !s.board.flat ? 'ready-pulse' : ''), busy, block ?? 'Нож плашмя: зажми и смахни нарезку одним движением')}
             </div>

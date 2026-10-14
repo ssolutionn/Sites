@@ -146,3 +146,21 @@ test('заказ с игрушками нельзя оплатить сверх 
   assert.equal(s.delivery.order, null);
   assert.equal(s.toysInBox().length, 0);
 });
+
+test('кот утащил кусок, запаса нет — доска говорит «закажи замену в телефоне», а не «возьми» (регрессия ревью 0.11)', async () => {
+  const { KitchenSession, arrive, cutCubes } = await import('./helpers-campaign.js');
+  const s = new KitchenSession({ dayIndex: 0, seed: 1 });
+  s.triggers = [];
+  arrive(s, 'board');
+  assert.ok(s.boardSelect('olivier:sausage'), s.hint?.text);
+  cutCubes(s);
+  const it = s.boardCur();
+  it.missing.push({ id: -1 }); // кусок унёс кот
+  // свободного запаса нет (всё, что лежит, зарезервировано под шаги)
+  s.inventory.stock.sausage = s.inventory.reservedOf('sausage');
+  assert.equal(s.inventory.available('sausage'), 0);
+  assert.match(s.transferBlock(it), /закажи замену в телефоне/);
+  // привезли замену — теперь её берут на доске
+  s.inventory.stock.sausage += 1;
+  assert.match(s.transferBlock(it), /возьми замену/);
+});
